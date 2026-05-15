@@ -171,4 +171,100 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
         db.Lines.Remove(line);
         await db.SaveChangesAsync();
     }
+
+    // Group
+    public async Task<IEnumerable<GroupDto>> GetGroupsAsync(Guid? companyId = null, CancellationToken cancellationToken = default)
+    {
+        var q = db.Groups.AsNoTracking().AsQueryable();
+        if (companyId.HasValue)
+            q = q.Where(x => x.CompanyId == companyId.Value);
+
+        return await q
+            .OrderBy(x => x.NameEn)
+            .Select(x => new GroupDto(x.Id, x.CompanyId, x.NameEn, x.NameBn))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Guid> CreateGroupAsync(GroupDto dto)
+    {
+        var group = new Group
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = dto.CompanyId,
+            NameEn = dto.NameEn,
+            NameBn = dto.NameBn,
+            CreatedAt = DateTime.UtcNow,
+        };
+        db.Groups.Add(group);
+        await db.SaveChangesAsync();
+        return group.Id;
+    }
+
+    public async Task UpdateGroupAsync(GroupDto dto)
+    {
+        var group = await db.Groups.FindAsync(dto.Id);
+        if (group == null) return;
+
+        group.NameEn = dto.NameEn;
+        group.NameBn = dto.NameBn;
+        group.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+    }
+
+    public async Task DeleteGroupAsync(Guid id)
+    {
+        var group = await db.Groups.FindAsync(id);
+        if (group == null) return;
+
+        db.Groups.Remove(group);
+        await db.SaveChangesAsync();
+    }
+
+    // Floor
+    public async Task<IEnumerable<FloorDto>> GetFloorsAsync(Guid? companyId = null, CancellationToken cancellationToken = default)
+    {
+        var q = db.Floors.AsNoTracking().AsQueryable();
+        if (companyId.HasValue)
+            q = q.Where(x => x.CompanyId == companyId.Value);
+
+        return await q
+            .OrderBy(x => x.NameEn)
+            .Select(x => new FloorDto(x.Id, x.CompanyId, x.NameEn, x.NameBn))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Guid> CreateFloorAsync(FloorDto dto)
+    {
+        var floor = new Floor
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = dto.CompanyId,
+            NameEn = dto.NameEn,
+            NameBn = dto.NameBn,
+            CreatedAt = DateTime.UtcNow,
+        };
+        db.Floors.Add(floor);
+        await db.SaveChangesAsync();
+        return floor.Id;
+    }
+
+    public async Task UpdateFloorAsync(FloorDto dto)
+    {
+        var floor = await db.Floors.FindAsync(dto.Id);
+        if (floor == null) return;
+
+        floor.NameEn = dto.NameEn;
+        floor.NameBn = dto.NameBn;
+        floor.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+    }
+
+    public async Task DeleteFloorAsync(Guid id)
+    {
+        var floor = await db.Floors.FindAsync(id);
+        if (floor == null) return;
+
+        db.Floors.Remove(floor);
+        await db.SaveChangesAsync();
+    }
 }

@@ -9,6 +9,7 @@
     "PayrollDb": "Server=localhost;Database=PayrollServiceDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
     "NotificationDb": "Server=localhost;Database=NotificationServiceDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
     "PunchDataDb": "Server=localhost;Database=PunchDataDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "ImportExportDb": "Server=localhost;Database=ImportExportDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
     "Redis": "localhost:6379"
   }
 }

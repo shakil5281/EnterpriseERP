@@ -160,4 +160,62 @@ public class OrganogramController(IOrganogramService organogramService) : Contro
         await organogramService.DeleteLineAsync(id);
         return Ok(ApiResponse<string>.Ok("Line deleted successfully", HttpContext.TraceIdentifier));
     }
+
+    // Groups
+    [HttpGet("groups")]
+    public async Task<IActionResult> GetGroups([FromQuery] Guid? companyId, CancellationToken cancellationToken)
+    {
+        var data = await organogramService.GetGroupsAsync(companyId, cancellationToken);
+        return Ok(ApiResponse<IEnumerable<GroupDto>>.Ok(data, HttpContext.TraceIdentifier));
+    }
+
+    [HttpPost("groups")]
+    public async Task<IActionResult> CreateGroup(GroupDto dto)
+    {
+        var id = await organogramService.CreateGroupAsync(dto);
+        return Ok(ApiResponse<Guid>.Ok(id, HttpContext.TraceIdentifier));
+    }
+
+    [HttpPut("groups")]
+    public async Task<IActionResult> UpdateGroup(GroupDto dto)
+    {
+        await organogramService.UpdateGroupAsync(dto);
+        return Ok(ApiResponse<string>.Ok("Group updated successfully", HttpContext.TraceIdentifier));
+    }
+
+    [HttpDelete("groups/{id}")]
+    public async Task<IActionResult> DeleteGroup(Guid id)
+    {
+        await organogramService.DeleteGroupAsync(id);
+        return Ok(ApiResponse<string>.Ok("Group deleted successfully", HttpContext.TraceIdentifier));
+    }
+
+    // Floors
+    [HttpGet("floors")]
+    public async Task<IActionResult> GetFloors([FromQuery] Guid? companyId, CancellationToken cancellationToken)
+    {
+        var data = await organogramService.GetFloorsAsync(companyId, cancellationToken);
+        return Ok(ApiResponse<IEnumerable<FloorDto>>.Ok(data, HttpContext.TraceIdentifier));
+    }
+
+    [HttpPost("floors")]
+    public async Task<IActionResult> CreateFloor(FloorDto dto)
+    {
+        var id = await organogramService.CreateFloorAsync(dto);
+        return Ok(ApiResponse<Guid>.Ok(id, HttpContext.TraceIdentifier));
+    }
+
+    [HttpPut("floors")]
+    public async Task<IActionResult> UpdateFloor(FloorDto dto)
+    {
+        await organogramService.UpdateFloorAsync(dto);
+        return Ok(ApiResponse<string>.Ok("Floor updated successfully", HttpContext.TraceIdentifier));
+    }
+
+    [HttpDelete("floors/{id}")]
+    public async Task<IActionResult> DeleteFloor(Guid id)
+    {
+        await organogramService.DeleteFloorAsync(id);
+        return Ok(ApiResponse<string>.Ok("Floor deleted successfully", HttpContext.TraceIdentifier));
+    }
 }

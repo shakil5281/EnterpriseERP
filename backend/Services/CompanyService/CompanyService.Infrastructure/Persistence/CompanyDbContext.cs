@@ -11,7 +11,9 @@ public sealed class CompanyDbContext(DbContextOptions<CompanyDbContext> options)
     public DbSet<Section> Sections => Set<Section>();
     public DbSet<Designation> Designations => Set<Designation>();
     public DbSet<Line> Lines => Set<Line>();
-    
+    public DbSet<Group> Groups => Set<Group>();
+    public DbSet<Floor> Floors => Set<Floor>();
+
     // Address master data
     public DbSet<Country> Countries => Set<Country>();
     public DbSet<Division> Divisions => Set<Division>();
@@ -80,6 +82,24 @@ public sealed class CompanyDbContext(DbContextOptions<CompanyDbContext> options)
             b.Property(x => x.NameEn).HasMaxLength(100).IsRequired();
             b.Property(x => x.NameBn).HasMaxLength(100).IsRequired();
             b.HasOne(x => x.Section).WithMany().HasForeignKey(x => x.SectionId);
+        });
+
+        modelBuilder.Entity<Group>(b =>
+        {
+            b.ToTable("Groups");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.NameEn).HasMaxLength(100).IsRequired();
+            b.Property(x => x.NameBn).HasMaxLength(100).IsRequired();
+            b.HasOne(x => x.Company).WithMany().HasForeignKey(x => x.CompanyId);
+        });
+
+        modelBuilder.Entity<Floor>(b =>
+        {
+            b.ToTable("Floors");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.NameEn).HasMaxLength(100).IsRequired();
+            b.Property(x => x.NameBn).HasMaxLength(100).IsRequired();
+            b.HasOne(x => x.Company).WithMany().HasForeignKey(x => x.CompanyId);
         });
 
         // Addresses

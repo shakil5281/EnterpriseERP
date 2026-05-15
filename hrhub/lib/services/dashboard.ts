@@ -1,4 +1,5 @@
 import api from '@/lib/api';
+import { unwrapApiData } from '@/lib/api-response';
 
 export interface DashboardSummary {
   totalWorkforce: number;
@@ -37,26 +38,26 @@ export interface UpcomingEvent {
 }
 
 export const getDashboardSummary = async () => {
-  const response = await api.get<DashboardSummary>('/dashboard/summary');
-  return response.data;
+  const response = await api.get<unknown>('/dashboard/summary');
+  return unwrapApiData<DashboardSummary>(response.data);
 };
 
 export const getAttendanceStats = async () => {
-  const response = await api.get<AttendanceStat[]>('/dashboard/attendance-stats');
-  return response.data;
+  const response = await api.get<unknown>('/dashboard/attendance-stats');
+  return unwrapApiData<AttendanceStat[]>(response.data);
 };
 
 export const getDepartmentStats = async () => {
-  const response = await api.get<DepartmentStat[]>('/dashboard/department-stats');
-  return response.data;
+  const response = await api.get<unknown>('/dashboard/department-stats');
+  return unwrapApiData<DepartmentStat[]>(response.data);
 };
 
 export const getRecentHires = async () => {
-  const response = await api.get<RecentHire[]>('/dashboard/recent-hires');
-  return response.data;
+  const response = await api.get<unknown>('/dashboard/recent-hires');
+  return unwrapApiData<RecentHire[]>(response.data);
 };
 
 export const getUpcomingEvents = async () => {
-  const response = await api.get<UpcomingEvent[]>('/dashboard/upcoming-events');
-  return response.data;
+  const response = await api.get<unknown>('/dashboard/upcoming-events');
+  return unwrapApiData<UpcomingEvent[]>(response.data);
 };

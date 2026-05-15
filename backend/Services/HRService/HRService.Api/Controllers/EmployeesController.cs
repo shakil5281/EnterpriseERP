@@ -31,6 +31,15 @@ public sealed class EmployeesController(
         return Ok(ApiResponse<PagedResult<ManpowerListItemDto>>.Ok(data, HttpContext.TraceIdentifier));
     }
 
+    [HttpGet("manpower/summary")]
+    public async Task<ActionResult<ApiResponse<ManpowerSummaryDto>>> ManpowerSummary(
+        [FromQuery] ManpowerSummaryQuery query,
+        CancellationToken cancellationToken)
+    {
+        var data = await employees.ManpowerSummaryAsync(query, cancellationToken);
+        return Ok(ApiResponse<ManpowerSummaryDto>.Ok(data, HttpContext.TraceIdentifier));
+    }
+
     [HttpGet("{id}")]
     public async Task<ActionResult<ApiResponse<EmployeeDetailsDto>>> Get(
         Guid id,

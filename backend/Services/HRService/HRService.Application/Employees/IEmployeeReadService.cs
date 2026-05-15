@@ -7,6 +7,7 @@ public interface IEmployeeReadService
     Task<PagedResult<EmployeeListItemDto>> ListAsync(EmployeeListQuery query, CancellationToken cancellationToken = default);
     Task<EmployeeDetailsDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<PagedResult<ManpowerListItemDto>> ManpowerListAsync(ManpowerListQuery query, CancellationToken cancellationToken = default);
+    Task<ManpowerSummaryDto> ManpowerSummaryAsync(ManpowerSummaryQuery query, CancellationToken cancellationToken = default);
 }
 
 public class EmployeeListQuery : PagedRequest
@@ -20,6 +21,33 @@ public class ManpowerListQuery : EmployeeListQuery
 {
     public Guid? SectionId { get; set; }
     public Guid? DesignationId { get; set; }
+}
+
+public class ManpowerSummaryQuery : ManpowerListQuery
+{
+    public string? Gender { get; set; }
+    public DateTime? JoinDateFrom { get; set; }
+    public DateTime? JoinDateTo { get; set; }
+}
+
+public sealed class ManpowerSummaryDto
+{
+    public int TotalEmployees { get; init; }
+    public int ActiveEmployees { get; init; }
+    public int OnLeaveEmployees { get; init; }
+    public int InactiveEmployees { get; init; }
+    public IReadOnlyList<SummaryBucketDto> DepartmentSummary { get; init; } = [];
+    public IReadOnlyList<SummaryBucketDto> DesignationSummary { get; init; } = [];
+    public IReadOnlyList<SummaryBucketDto> GenderSummary { get; init; } = [];
+    public IReadOnlyList<SummaryBucketDto> StatusSummary { get; init; } = [];
+}
+
+public sealed class SummaryBucketDto
+{
+    public Guid? Id { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public int Count { get; init; }
+    public decimal Percentage { get; init; }
 }
 
 public sealed class EmployeeListItemDto

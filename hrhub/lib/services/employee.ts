@@ -1,5 +1,11 @@
 import api from '../api';
 import { unwrapApiData } from '@/lib/api-response';
+import { companyService } from '@/lib/services/company';
+import {
+    resolveDepartmentGuid,
+    resolveDesignationGuid,
+    resolveSectionGuid,
+} from '@/lib/services/organogram';
 
 /** HR service `EmployeeListItemDto` (camelCase JSON). */
 interface HrEmployeeListItem {
@@ -56,6 +62,40 @@ function mapHrListItemToMini(row: HrEmployeeListItem): EmployeeMini {
         id: stableIntFromGuid(row.id),
         employeeId: row.employeeCode,
         fullNameEn: row.fullName,
+    };
+}
+
+/** HR `ManpowerListItemDto` from GET /hr/Employees/manpower */
+interface HrManpowerListItem {
+    id: string;
+    employeeCode: string;
+    fullName: string;
+    designationName?: string | null;
+    departmentName?: string | null;
+    sectionName?: string | null;
+    joinDate: string;
+    status: string;
+    phone?: string | null;
+    grossSalary: number;
+}
+
+function mapHrManpowerToEmployee(row: HrManpowerListItem): Employee {
+    return {
+        id: stableIntFromGuid(row.id),
+        employeeId: row.employeeCode,
+        fullNameEn: row.fullName,
+        departmentId: 0,
+        designationId: 0,
+        departmentName: row.departmentName ?? undefined,
+        sectionName: row.sectionName ?? undefined,
+        designationName: row.designationName ?? undefined,
+        status: row.status,
+        joinDate: row.joinDate,
+        phoneNumber: row.phone ?? undefined,
+        grossSalary: row.grossSalary,
+        isActive: row.status === 'Active',
+        isOtEnabled: false,
+        createdAt: '',
     };
 }
 
@@ -260,6 +300,114 @@ export interface SummaryItem {
     name: string;
     count: number;
     percentage: number;
+}
+
+export type ManpowerFilterParams = {
+    departmentId?: number;
+    sectionId?: number;
+    designationId?: number;
+    lineId?: number;
+    shiftId?: number;
+    groupId?: number;
+    floorId?: number;
+    status?: string;
+    searchTerm?: string;
+    companyId?: number;
+    companyName?: string;
+    joinDateFrom?: string;
+    joinDateTo?: string;
+    gender?: string;
+    religion?: string;
+};
+
+interface HrSummaryBucket {
+    id?: string | null;
+    name: string;
+    count: number;
+    percentage: number;
+}
+
+interface HrManpowerSummary {
+    totalEmployees: number;
+    activeEmployees: number;
+    onLeaveEmployees: number;
+    inactiveEmployees: number;
+    departmentSummary: HrSummaryBucket[];
+    designationSummary: HrSummaryBucket[];
+    genderSummary: HrSummaryBucket[];
+    statusSummary: HrSummaryBucket[];
+}
+
+function mapSummaryBucket(row: HrSummaryBucket): SummaryItem {
+    return {
+        id: row.id ?? row.name,
+        name: row.name,
+        count: row.count,
+        percentage: Number(row.percentage),
+    };
+}
+
+async function buildManpowerQueryParams(
+    params?: ManpowerFilterParams,
+    options?: { paging?: boolean; summary?: boolean },
+): Promise<Record<string, string | number>> {
+    void params?.lineId;
+    void params?.shiftId;
+    void params?.groupId;
+    void params?.floorId;
+    void params?.companyName;
+    void params?.religion;
+
+    const query: Record<string, string | number> = {};
+
+    if (options?.paging !== false) {
+        query.page = 1;
+        query.pageSize = 500;
+    }
+
+    if (params?.searchTerm?.trim()) {
+        query.search = params.searchTerm.trim();
+    }
+
+    if (params?.status && params.status.toLowerCase() !== 'all') {
+        query.status = params.status;
+    }
+
+    if (params?.companyId !== undefined) {
+        const company = (await companyService.getAll()).find((c) => c.id === params.companyId);
+        if (company?.entityId) {
+            query.companyId = company.entityId;
+        }
+    }
+
+    if (params?.departmentId !== undefined) {
+        const departmentId = await resolveDepartmentGuid(params.departmentId);
+        if (departmentId) query.departmentId = departmentId;
+    }
+
+    if (params?.sectionId !== undefined) {
+        const sectionId = await resolveSectionGuid(params.sectionId);
+        if (sectionId) query.sectionId = sectionId;
+    }
+
+    if (params?.designationId !== undefined) {
+        const designationId = await resolveDesignationGuid(params.designationId);
+        if (designationId) query.designationId = designationId;
+    }
+
+    if (options?.summary) {
+        if (params?.gender && params.gender.toLowerCase() !== 'all') {
+            query.gender = params.gender;
+        }
+        if (params?.joinDateFrom) {
+            query.joinDateFrom = params.joinDateFrom;
+        }
+        if (params?.joinDateTo) {
+            query.joinDateTo = params.joinDateTo;
+        }
+    }
+
+    return query;
 }
 
 export interface UpdateEmployeeDto extends CreateEmployeeDto {
@@ -489,45 +637,27 @@ export const employeeService = {
         return response.data;
     },
 
-    getManpower: async (params?: {
-        departmentId?: number;
-        sectionId?: number;
-        designationId?: number;
-        lineId?: number;
-        shiftId?: number;
-        groupId?: number;
-        floorId?: number;
-        status?: string;
-        searchTerm?: string;
-        companyId?: number;
-        companyName?: string;
-        joinDateFrom?: string;
-        joinDateTo?: string;
-        gender?: string;
-        religion?: string;
-    }) => {
-        const response = await api.get<Employee[]>('/manpower', { params });
-        return response.data;
+    getManpower: async (params?: ManpowerFilterParams) => {
+        const query = await buildManpowerQueryParams(params, { paging: true });
+        const response = await api.get<unknown>('hr/Employees/manpower', { params: query });
+        const page = unwrapApiData<PagedResult<HrManpowerListItem>>(response.data);
+        return (page.items ?? []).map(mapHrManpowerToEmployee);
     },
 
-    getManpowerSummary: async (params?: {
-        departmentId?: number;
-        sectionId?: number;
-        designationId?: number;
-        lineId?: number;
-        shiftId?: number;
-        groupId?: number;
-        floorId?: number;
-        status?: string;
-        companyId?: number;
-        companyName?: string;
-        joinDateFrom?: string;
-        joinDateTo?: string;
-        gender?: string;
-        religion?: string;
-    }) => {
-        const response = await api.get<ManpowerSummary>('/manpower/summary', { params });
-        return response.data;
+    getManpowerSummary: async (params?: ManpowerFilterParams) => {
+        const query = await buildManpowerQueryParams(params, { paging: false, summary: true });
+        const response = await api.get<unknown>('hr/Employees/manpower/summary', { params: query });
+        const data = unwrapApiData<HrManpowerSummary>(response.data);
+        return {
+            totalEmployees: data.totalEmployees,
+            activeEmployees: data.activeEmployees,
+            onLeaveEmployees: data.onLeaveEmployees,
+            inactiveEmployees: data.inactiveEmployees,
+            departmentSummary: (data.departmentSummary ?? []).map(mapSummaryBucket),
+            designationSummary: (data.designationSummary ?? []).map(mapSummaryBucket),
+            genderSummary: (data.genderSummary ?? []).map(mapSummaryBucket),
+            statusSummary: (data.statusSummary ?? []).map(mapSummaryBucket),
+        };
     },
 };
 

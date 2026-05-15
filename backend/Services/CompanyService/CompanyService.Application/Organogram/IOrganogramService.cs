@@ -28,9 +28,23 @@ public interface IOrganogramService
     Task<Guid> CreateLineAsync(LineDto dto);
     Task UpdateLineAsync(LineDto dto);
     Task DeleteLineAsync(Guid id);
+
+    // Group
+    Task<IEnumerable<GroupDto>> GetGroupsAsync(Guid? companyId = null, CancellationToken cancellationToken = default);
+    Task<Guid> CreateGroupAsync(GroupDto dto);
+    Task UpdateGroupAsync(GroupDto dto);
+    Task DeleteGroupAsync(Guid id);
+
+    // Floor
+    Task<IEnumerable<FloorDto>> GetFloorsAsync(Guid? companyId = null, CancellationToken cancellationToken = default);
+    Task<Guid> CreateFloorAsync(FloorDto dto);
+    Task UpdateFloorAsync(FloorDto dto);
+    Task DeleteFloorAsync(Guid id);
 }
 
 public record DepartmentDto(Guid? Id, Guid CompanyId, string NameEn, string NameBn, string? Code);
 public record SectionDto(Guid? Id, Guid DepartmentId, string NameEn, string NameBn, string? Code);
 public record DesignationDto(Guid? Id, Guid SectionId, string NameEn, string NameBn, string? Code);
 public record LineDto(Guid? Id, Guid SectionId, string NameEn, string NameBn, string? Code);
+public record GroupDto(Guid? Id, Guid CompanyId, string NameEn, string NameBn);
+public record FloorDto(Guid? Id, Guid CompanyId, string NameEn, string NameBn);

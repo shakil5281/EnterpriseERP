@@ -18,7 +18,15 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
-import { addressService, Country, Division, District, Thana, PostOffice } from "@/lib/services/address"
+import {
+    addressService,
+    parseOptionalEntityId,
+    Country,
+    Division,
+    District,
+    Thana,
+    PostOffice,
+} from "@/lib/services/address"
 import { toast } from "sonner"
 import { NativeSelect } from "@/components/ui/native-select"
 import { Label } from "@/components/ui/label"
@@ -97,19 +105,19 @@ export default function AddressManagementPage() {
         const fetchRelated = async () => {
             try {
                 if (activeTab === "division") {
-                    const cId = selectedCountryId === "all" ? undefined : parseInt(selectedCountryId)
+                    const cId = parseOptionalEntityId(selectedCountryId)
                     const data = await addressService.getDivisions(cId)
                     setDivisions(data)
                 } else if (activeTab === "district") {
-                    const dId = selectedDivisionId === "all" ? undefined : parseInt(selectedDivisionId)
+                    const dId = parseOptionalEntityId(selectedDivisionId)
                     const data = await addressService.getDistricts(dId)
                     setDistricts(data)
                 } else if (activeTab === "thana") {
-                    const dId = selectedDistrictId === "all" ? undefined : parseInt(selectedDistrictId)
+                    const dId = parseOptionalEntityId(selectedDistrictId)
                     const data = await addressService.getThanas(dId)
                     setThanas(data)
                 } else if (activeTab === "postoffice") {
-                    const dId = selectedDistrictId === "all" ? undefined : parseInt(selectedDistrictId)
+                    const dId = parseOptionalEntityId(selectedDistrictId)
                     const data = await addressService.getPostOffices(dId != null ? { districtId: dId } : undefined)
                     setPostOffices(data)
                 }
@@ -127,13 +135,14 @@ export default function AddressManagementPage() {
         const formData = new FormData(e.currentTarget)
         const nameEn = formData.get("nameEn") as string
         const nameBn = formData.get("nameBn") as string
+        const code = (formData.get("code") as string).trim().toUpperCase()
 
         try {
             if (editingItem) {
-                await addressService.updateCountry(editingItem.id, { nameEn, nameBn })
+                await addressService.updateCountry(editingItem.id, { nameEn, nameBn, code })
                 toast.success("Country updated")
             } else {
-                await addressService.createCountry({ nameEn, nameBn })
+                await addressService.createCountry({ nameEn, nameBn, code })
                 toast.success("Country created")
             }
             setIsCountryModalOpen(false)
@@ -151,7 +160,7 @@ export default function AddressManagementPage() {
         const formData = new FormData(e.currentTarget)
         const nameEn = formData.get("nameEn") as string
         const nameBn = formData.get("nameBn") as string
-        const countryId = parseInt(formData.get("countryId") as string)
+        const countryId = formData.get("countryId") as string
 
         try {
             if (editingItem) {
@@ -176,7 +185,7 @@ export default function AddressManagementPage() {
         const formData = new FormData(e.currentTarget)
         const nameEn = formData.get("nameEn") as string
         const nameBn = formData.get("nameBn") as string
-        const divisionId = parseInt(formData.get("divisionId") as string)
+        const divisionId = formData.get("divisionId") as string
 
         try {
             if (editingItem) {
@@ -187,7 +196,7 @@ export default function AddressManagementPage() {
                 toast.success("District created")
             }
             setIsDistrictModalOpen(false)
-            const data = await addressService.getDistricts(selectedDivisionId === "all" ? undefined : parseInt(selectedDivisionId))
+            const data = await addressService.getDistricts(parseOptionalEntityId(selectedDivisionId))
             setDistricts(data)
         } catch (error) {
             toast.error("Failed to save district")
@@ -202,7 +211,7 @@ export default function AddressManagementPage() {
         const formData = new FormData(e.currentTarget)
         const nameEn = formData.get("nameEn") as string
         const nameBn = formData.get("nameBn") as string
-        const districtId = parseInt(formData.get("districtId") as string)
+        const districtId = formData.get("districtId") as string
 
         try {
             if (editingItem) {
@@ -213,7 +222,7 @@ export default function AddressManagementPage() {
                 toast.success("Thana created")
             }
             setIsThanaModalOpen(false)
-            const data = await addressService.getThanas(selectedDistrictId === "all" ? undefined : parseInt(selectedDistrictId))
+            const data = await addressService.getThanas(parseOptionalEntityId(selectedDistrictId))
             setThanas(data)
         } catch (error) {
             toast.error("Failed to save thana")
@@ -228,20 +237,21 @@ export default function AddressManagementPage() {
         const formData = new FormData(e.currentTarget)
         const nameEn = formData.get("nameEn") as string
         const nameBn = formData.get("nameBn") as string
-        const code = formData.get("code") as string
-        const districtId = parseInt(formData.get("districtId") as string)
+        const postalCode = formData.get("postalCode") as string
+        const upazilaId = formData.get("upazilaId") as string
 
         try {
             if (editingItem) {
-                await addressService.updatePostOffice(editingItem.id, { nameEn, nameBn, code, districtId })
+                await addressService.updatePostOffice(editingItem.id, { nameEn, nameBn, postalCode, upazilaId })
                 toast.success("Post Office updated")
             } else {
-                await addressService.createPostOffice({ nameEn, nameBn, code, districtId })
+                await addressService.createPostOffice({ nameEn, nameBn, postalCode, upazilaId })
                 toast.success("Post Office created")
             }
             setIsPostOfficeModalOpen(false)
+            const filterDistrictId = parseOptionalEntityId(selectedDistrictId)
             const data = await addressService.getPostOffices(
-                selectedDistrictId === "all" ? undefined : { districtId: parseInt(selectedDistrictId) },
+                filterDistrictId ? { districtId: filterDistrictId } : undefined,
             )
             setPostOffices(data)
         } catch (error) {
@@ -267,16 +277,18 @@ export default function AddressManagementPage() {
                 fetchData();
             }
             else if (type === "district") {
-                const data = await addressService.getDistricts(selectedDivisionId === "all" ? undefined : parseInt(selectedDivisionId))
+                const data = await addressService.getDistricts(parseOptionalEntityId(selectedDivisionId))
                 setDistricts(data)
             }
             else if (type === "thana") {
-                const data = await addressService.getThanas(selectedDistrictId === "all" ? undefined : parseInt(selectedDistrictId))
+                const data = await addressService.getThanas(parseOptionalEntityId(selectedDistrictId))
                 setThanas(data)
             }
             else if (type === "postoffice") {
                 const data = await addressService.getPostOffices(
-                    selectedDistrictId === "all" ? undefined : { districtId: parseInt(selectedDistrictId) },
+                    parseOptionalEntityId(selectedDistrictId)
+                        ? { districtId: parseOptionalEntityId(selectedDistrictId)! }
+                        : undefined,
                 )
                 setPostOffices(data)
             }
@@ -304,6 +316,7 @@ export default function AddressManagementPage() {
         },
         { accessorKey: "nameEn", header: "Country Name (EN)" },
         { accessorKey: "nameBn", header: "Country Name (BN)" },
+        { accessorKey: "code", header: "Code" },
     ]
 
     const divisionColumns: ColumnDef<Division>[] = [
@@ -347,8 +360,8 @@ export default function AddressManagementPage() {
         },
         { accessorKey: "nameEn", header: "Post Office Name (EN)" },
         { accessorKey: "nameBn", header: "Post Office Name (BN)" },
-        { accessorKey: "code", header: "Post Code" },
-        { accessorKey: "districtName", header: "District" },
+        { accessorKey: "postalCode", header: "Post Code" },
+        { accessorKey: "upazilaName", header: "Thana" },
     ]
 
     return (
@@ -512,6 +525,17 @@ export default function AddressManagementPage() {
                                 <Label htmlFor="country-name-bn">Name (Bangla)</Label>
                                 <Input id="country-name-bn" name="nameBn" defaultValue={editingItem?.nameBn} />
                             </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="country-code">Code (ISO)</Label>
+                                <Input
+                                    id="country-code"
+                                    name="code"
+                                    defaultValue={editingItem?.code}
+                                    placeholder="e.g. BD"
+                                    maxLength={10}
+                                    required
+                                />
+                            </div>
                         </div>
                         <DialogFooter>
                             <Button variant="outline" type="button" onClick={() => setIsCountryModalOpen(false)}>Cancel</Button>
@@ -630,10 +654,10 @@ export default function AddressManagementPage() {
                         </DialogHeader>
                         <div className="py-4 space-y-4">
                             <div className="grid gap-2">
-                                <Label>District</Label>
-                                <NativeSelect name="districtId" defaultValue={editingItem?.districtId} required>
-                                    <option value="">Select District</option>
-                                    {districts.map(d => <option key={d.id} value={d.id}>{d.nameEn}</option>)}
+                                <Label>Thana / Upazila</Label>
+                                <NativeSelect name="upazilaId" defaultValue={editingItem?.upazilaId} required>
+                                    <option value="">Select Thana</option>
+                                    {thanas.map(t => <option key={t.id} value={t.id}>{t.nameEn}</option>)}
                                 </NativeSelect>
                             </div>
                             <div className="grid gap-2">
@@ -646,7 +670,7 @@ export default function AddressManagementPage() {
                             </div>
                             <div className="grid gap-2">
                                 <Label>Post Code</Label>
-                                <Input name="code" defaultValue={editingItem?.code} required />
+                                <Input name="postalCode" defaultValue={editingItem?.postalCode ?? editingItem?.code} required />
                             </div>
                         </div>
                         <DialogFooter>

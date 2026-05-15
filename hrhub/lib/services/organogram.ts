@@ -137,8 +137,23 @@ export interface Shift {
   status: string;
 }
 
+interface GroupApi {
+  id: string;
+  companyId: string;
+  nameEn: string;
+  nameBn: string;
+}
+
+interface FloorApi {
+  id: string;
+  companyId: string;
+  nameEn: string;
+  nameBn: string;
+}
+
 export interface Group {
   id: number;
+  entityId: string;
   nameEn: string;
   nameBn?: string;
   companyId?: number;
@@ -147,10 +162,65 @@ export interface Group {
 
 export interface Floor {
   id: number;
+  entityId: string;
   nameEn: string;
   nameBn?: string;
   companyId?: number;
   companyName?: string;
+}
+
+function mapGroup(row: GroupApi, companyName?: string): Group {
+  return {
+    id: stableIntFromGuid(row.id),
+    entityId: row.id,
+    nameEn: row.nameEn,
+    nameBn: row.nameBn || undefined,
+    companyId: stableIntFromGuid(row.companyId),
+    companyName,
+  };
+}
+
+function mapFloor(row: FloorApi, companyName?: string): Floor {
+  return {
+    id: stableIntFromGuid(row.id),
+    entityId: row.id,
+    nameEn: row.nameEn,
+    nameBn: row.nameBn || undefined,
+    companyId: stableIntFromGuid(row.companyId),
+    companyName,
+  };
+}
+
+async function fetchGroupsInternal(companyGuid?: string): Promise<Group[]> {
+  const params = companyGuid ? { companyId: companyGuid } : undefined;
+  const response = await api.get<unknown>(`${ORG}/groups`, { params });
+  const rows = asArray<GroupApi>(unwrapApiData<unknown>(response.data));
+  const companies = await listCompanySummaries();
+  return rows.map((r) => {
+    const company = companies.find((c) => c.id === r.companyId);
+    return mapGroup(r, company?.companyNameEn);
+  });
+}
+
+async function fetchFloorsInternal(companyGuid?: string): Promise<Floor[]> {
+  const params = companyGuid ? { companyId: companyGuid } : undefined;
+  const response = await api.get<unknown>(`${ORG}/floors`, { params });
+  const rows = asArray<FloorApi>(unwrapApiData<unknown>(response.data));
+  const companies = await listCompanySummaries();
+  return rows.map((r) => {
+    const company = companies.find((c) => c.id === r.companyId);
+    return mapFloor(r, company?.companyNameEn);
+  });
+}
+
+async function resolveGroupEntityId(legacyId: number): Promise<string | undefined> {
+  const groups = await fetchGroupsInternal();
+  return groups.find((g) => g.id === legacyId)?.entityId;
+}
+
+async function resolveFloorEntityId(legacyId: number): Promise<string | undefined> {
+  const floors = await fetchFloorsInternal();
+  return floors.find((f) => f.id === legacyId)?.entityId;
 }
 
 function mapDepartment(row: DepartmentApi, companyName?: string): Department {
@@ -263,7 +333,7 @@ async function allDepartmentsCached(): Promise<Department[]> {
   return nested.flat();
 }
 
-async function resolveDepartmentGuid(departmentId: string | number): Promise<string | undefined> {
+export async function resolveDepartmentGuid(departmentId: string | number): Promise<string | undefined> {
   if (typeof departmentId === "string" && departmentId.includes("-")) {
     return departmentId;
   }
@@ -273,7 +343,7 @@ async function resolveDepartmentGuid(departmentId: string | number): Promise<str
   return all.find((d) => d.id === n)?.entityId;
 }
 
-async function resolveSectionGuid(sectionId: string | number): Promise<string | undefined> {
+export async function resolveSectionGuid(sectionId: string | number): Promise<string | undefined> {
   if (typeof sectionId === "string" && sectionId.includes("-")) {
     return sectionId;
   }
@@ -281,6 +351,18 @@ async function resolveSectionGuid(sectionId: string | number): Promise<string | 
   if (!Number.isFinite(n)) return undefined;
   const allSections = await fetchAllSectionsInternal();
   return allSections.find((s) => s.id === n)?.entityId;
+}
+
+export async function resolveDesignationGuid(
+  designationId: string | number,
+): Promise<string | undefined> {
+  if (typeof designationId === "string" && designationId.includes("-")) {
+    return designationId;
+  }
+  const n = typeof designationId === "string" ? parseInt(designationId, 10) : designationId;
+  if (!Number.isFinite(n)) return undefined;
+  const all = await organogramService.getDesignations();
+  return all.find((d) => d.id === n)?.entityId;
 }
 
 /** Load departments + sections for filter dropdowns (e.g. Company Organogram). */
@@ -538,8 +620,21 @@ export const organogramService = {
   },
 
   getShifts: async (params?: { companyName?: string; companyId?: number }) => {
-    const response = await api.get<Shift[]>("/shift", { params });
-    return response.data;
+    void params?.companyName;
+    let companyGuid: string | undefined;
+    if (params?.companyId !== undefined) {
+      companyGuid = await companyGuidFromLegacyCompanyId(params.companyId);
+    } else {
+      const companies = await listCompanySummaries();
+      companyGuid = companies[0]?.id;
+    }
+    if (!companyGuid) return [];
+    try {
+      const response = await api.get<unknown>("Shifts", { params: { companyId: companyGuid } });
+      return asArray<Shift>(unwrapApiData<unknown>(response.data));
+    } catch {
+      return [];
+    }
   },
   getShift: async (id: number) => {
     const response = await api.get<Shift>(`/shift/${id}`);
@@ -568,37 +663,91 @@ export const organogramService = {
   },
 
   getGroups: async (params?: { companyName?: string; companyId?: number }) => {
-    const response = await api.get<Group[]>(`${ORG}/groups`, { params });
-    return response.data;
+    void params?.companyName;
+    let companyGuid: string | undefined;
+    if (params?.companyId !== undefined) {
+      companyGuid = await companyGuidFromLegacyCompanyId(params.companyId);
+      if (!companyGuid) return [];
+    }
+    return fetchGroupsInternal(companyGuid);
   },
   createGroup: async (data: { nameEn: string; nameBn?: string; companyId: number; companyName?: string }) => {
-    const response = await api.post<Group>(`${ORG}/groups`, data);
-    return response.data;
+    void data.companyName;
+    const companyGuid = await companyGuidFromLegacyCompanyId(data.companyId);
+    if (!companyGuid) throw new Error("Company not found");
+    const body = {
+      id: null as string | null,
+      companyId: companyGuid,
+      nameEn: data.nameEn,
+      nameBn: data.nameBn ?? "",
+    };
+    const response = await api.post<unknown>(`${ORG}/groups`, body);
+    return unwrapApiData<string>(response.data);
   },
   updateGroup: async (id: number, data: { nameEn: string; nameBn?: string; companyId: number; companyName?: string }) => {
-    const response = await api.put(`${ORG}/groups/${id}`, data);
-    return response.data;
+    void data.companyName;
+    const entityId = await resolveGroupEntityId(id);
+    if (!entityId) throw new Error("Group not found");
+    const companyGuid = await companyGuidFromLegacyCompanyId(data.companyId);
+    if (!companyGuid) throw new Error("Company not found");
+    const body = {
+      id: entityId,
+      companyId: companyGuid,
+      nameEn: data.nameEn,
+      nameBn: data.nameBn ?? "",
+    };
+    const response = await api.put<unknown>(`${ORG}/groups`, body);
+    return unwrapApiData<string>(response.data);
   },
   deleteGroup: async (id: number) => {
-    const response = await api.delete(`${ORG}/groups/${id}`);
-    return response.data;
+    const entityId = await resolveGroupEntityId(id);
+    if (!entityId) throw new Error("Group not found");
+    const response = await api.delete<unknown>(`${ORG}/groups/${encodeURIComponent(entityId)}`);
+    return unwrapApiData<string>(response.data);
   },
 
   getFloors: async (params?: { companyName?: string; companyId?: number }) => {
-    const response = await api.get<Floor[]>(`${ORG}/floors`, { params });
-    return response.data;
+    void params?.companyName;
+    let companyGuid: string | undefined;
+    if (params?.companyId !== undefined) {
+      companyGuid = await companyGuidFromLegacyCompanyId(params.companyId);
+      if (!companyGuid) return [];
+    }
+    return fetchFloorsInternal(companyGuid);
   },
   createFloor: async (data: { nameEn: string; nameBn?: string; companyId: number; companyName?: string }) => {
-    const response = await api.post<Floor>(`${ORG}/floors`, data);
-    return response.data;
+    void data.companyName;
+    const companyGuid = await companyGuidFromLegacyCompanyId(data.companyId);
+    if (!companyGuid) throw new Error("Company not found");
+    const body = {
+      id: null as string | null,
+      companyId: companyGuid,
+      nameEn: data.nameEn,
+      nameBn: data.nameBn ?? "",
+    };
+    const response = await api.post<unknown>(`${ORG}/floors`, body);
+    return unwrapApiData<string>(response.data);
   },
   updateFloor: async (id: number, data: { nameEn: string; nameBn?: string; companyId: number; companyName?: string }) => {
-    const response = await api.put(`${ORG}/floors/${id}`, data);
-    return response.data;
+    void data.companyName;
+    const entityId = await resolveFloorEntityId(id);
+    if (!entityId) throw new Error("Floor not found");
+    const companyGuid = await companyGuidFromLegacyCompanyId(data.companyId);
+    if (!companyGuid) throw new Error("Company not found");
+    const body = {
+      id: entityId,
+      companyId: companyGuid,
+      nameEn: data.nameEn,
+      nameBn: data.nameBn ?? "",
+    };
+    const response = await api.put<unknown>(`${ORG}/floors`, body);
+    return unwrapApiData<string>(response.data);
   },
   deleteFloor: async (id: number) => {
-    const response = await api.delete(`${ORG}/floors/${id}`);
-    return response.data;
+    const entityId = await resolveFloorEntityId(id);
+    if (!entityId) throw new Error("Floor not found");
+    const response = await api.delete<unknown>(`${ORG}/floors/${encodeURIComponent(entityId)}`);
+    return unwrapApiData<string>(response.data);
   },
 
   downloadTemplate: async () => {

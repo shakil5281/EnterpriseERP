@@ -40,6 +40,7 @@ export default function ManpowerSummaryPage() {
     const [designationId, setDesignationId] = React.useState<string>("all")
     const [status, setStatus] = React.useState<string>("all")
     const [companyName, setCompanyName] = React.useState<string>("all")
+    const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>("all")
     const [floorId, setFloorId] = React.useState<string>("all")
     const [gender, setGender] = React.useState<string>("all")
     const [religion, setReligion] = React.useState<string>("all")
@@ -60,6 +61,7 @@ export default function ManpowerSummaryPage() {
             if (sectionId !== "all") params.sectionId = parseInt(sectionId)
             if (designationId !== "all") params.designationId = parseInt(designationId)
             if (floorId !== "all") params.floorId = parseInt(floorId)
+            if (selectedCompanyId !== "all") params.companyId = parseInt(selectedCompanyId)
             if (companyName !== "all") params.companyName = companyName
             if (gender !== "all") params.gender = gender
             if (religion !== "all") params.religion = religion
@@ -75,7 +77,7 @@ export default function ManpowerSummaryPage() {
         } finally {
             setIsLoading(false)
         }
-    }, [departmentId, sectionId, designationId, floorId, companyName, gender, religion, dateRange, status])
+    }, [departmentId, sectionId, designationId, floorId, selectedCompanyId, companyName, gender, religion, dateRange, status])
 
     React.useEffect(() => {
         const loadRefs = async () => {
@@ -116,7 +118,9 @@ export default function ManpowerSummaryPage() {
 
     React.useEffect(() => {
         fetchSummary()
-    }, [fetchSummary])
+        // Initial load only; further loads use Apply Filters.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     const departmentColumns: ColumnDef<SummaryItem>[] = [
         {
@@ -228,24 +232,41 @@ export default function ManpowerSummaryPage() {
                             <IconFilter className="size-4 text-primary" />
                             <CardTitle className="text-sm font-medium uppercase tracking-wider">Analytics Filters</CardTitle>
                         </div>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 text-xs text-muted-foreground hover:text-primary"
-                            onClick={() => {
-                                setDepartmentId("all")
-                                setSectionId("all")
-                                setDesignationId("all")
-                                setFloorId("all")
-                                setCompanyName("all")
-                                setGender("all")
-                                setReligion("all")
-                                setDateRange(undefined)
-                                setStatus("all")
-                            }}
-                        >
-                            Reset All
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="default"
+                                size="sm"
+                                className="h-8 text-xs gap-1.5"
+                                onClick={fetchSummary}
+                                disabled={isLoading}
+                            >
+                                {isLoading ? (
+                                    <IconLoader className="size-3.5 animate-spin" />
+                                ) : (
+                                    <IconFilter className="size-3.5" />
+                                )}
+                                Apply Filters
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 text-xs text-muted-foreground hover:text-primary"
+                                onClick={() => {
+                                    setDepartmentId("all")
+                                    setSectionId("all")
+                                    setDesignationId("all")
+                                    setFloorId("all")
+                                    setCompanyName("all")
+                                    setSelectedCompanyId("all")
+                                    setGender("all")
+                                    setReligion("all")
+                                    setDateRange(undefined)
+                                    setStatus("all")
+                                }}
+                            >
+                                Reset All
+                            </Button>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent className="pt-6">
@@ -318,12 +339,24 @@ export default function ManpowerSummaryPage() {
                             <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Company</Label>
                             <NativeSelect
                                 className="h-10 bg-muted/30 border-none"
-                                value={companyName}
-                                onChange={(e) => setCompanyName(e.target.value)}
+                                value={selectedCompanyId}
+                                onChange={(e) => {
+                                    const val = e.target.value
+                                    setSelectedCompanyId(val)
+                                    if (val === "all") {
+                                        setCompanyName("all")
+                                    } else {
+                                        const comp = companies.find((c) => c.id === parseInt(val, 10))
+                                        setCompanyName(comp?.companyNameEn ?? "all")
+                                    }
+                                    setDepartmentId("all")
+                                    setSectionId("all")
+                                    setDesignationId("all")
+                                }}
                             >
                                 <option value="all">All Companies</option>
                                 {companies.map((c) => (
-                                    <option key={c.id} value={c.companyNameEn}>{c.companyNameEn}</option>
+                                    <option key={c.id} value={c.id}>{c.companyNameEn}</option>
                                 ))}
                             </NativeSelect>
                         </div>

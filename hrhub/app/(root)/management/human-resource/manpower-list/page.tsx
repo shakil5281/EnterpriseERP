@@ -119,6 +119,7 @@ export default function ManpowerListPage() {
             if (sectionId !== "all") params.sectionId = parseInt(sectionId)
             if (designationId !== "all") params.designationId = parseInt(designationId)
             if (floorId !== "all") params.floorId = parseInt(floorId)
+            if (selectedCompanyId !== "all") params.companyId = parseInt(selectedCompanyId)
             if (companyName !== "all") params.companyName = companyName
             if (gender !== "all") params.gender = gender
             if (religion !== "all") params.religion = religion
@@ -145,6 +146,7 @@ export default function ManpowerListPage() {
             if (sectionId !== "all") params.sectionId = parseInt(sectionId)
             if (designationId !== "all") params.designationId = parseInt(designationId)
             if (floorId !== "all") params.floorId = parseInt(floorId)
+            if (selectedCompanyId !== "all") params.companyId = parseInt(selectedCompanyId)
             if (companyName !== "all") params.companyName = companyName
             if (gender !== "all") params.gender = gender
             if (religion !== "all") params.religion = religion

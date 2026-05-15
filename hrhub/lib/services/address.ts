@@ -5,6 +5,14 @@ import { unwrapApiData } from "@/lib/api-response";
 /** Matches Swagger: `/api/v1/Addresses/...` (capital A, plural). */
 const ADDR = "Addresses";
 
+export type EntityId = string;
+
+/** Use filter dropdown values (skip `"all"`). */
+export function parseOptionalEntityId(value: string): string | undefined {
+  if (!value || value === "all") return undefined;
+  return value;
+}
+
 function asArray<T>(data: unknown): T[] {
   if (data == null) return [];
   if (Array.isArray(data)) return data as T[];
@@ -20,7 +28,7 @@ function parseList<T>(responseData: unknown): T[] {
   return asArray<T>(raw);
 }
 
-function idPath(id: number | string): string {
+function idPath(id: EntityId): string {
   return encodeURIComponent(String(id));
 }
 
@@ -37,103 +45,107 @@ function writeMutation(responseData: unknown): unknown {
 }
 
 export interface Country {
-  id: number;
+  id: EntityId;
   nameEn: string;
   nameBn?: string;
+  code: string;
 }
 
 export interface Division {
-  id: number;
+  id: EntityId;
   nameEn: string;
   nameBn?: string;
-  countryId: number;
+  countryId: EntityId;
   countryName?: string;
 }
 
 export interface District {
-  id: number;
+  id: EntityId;
   nameEn: string;
   nameBn?: string;
-  divisionId: number;
+  divisionId: EntityId;
   divisionName?: string;
 }
 
+/** UI label "Thana"; API resource is `upazilas`. */
 export interface Thana {
-  id: number;
+  id: EntityId;
   nameEn: string;
   nameBn?: string;
-  districtId: number;
+  districtId: EntityId;
   districtName?: string;
 }
 
 export interface PostOffice {
-  id: number;
+  id: EntityId;
   nameEn: string;
   nameBn?: string;
-  code: string;
-  districtId: number;
+  postalCode: string;
+  upazilaId: EntityId;
+  upazilaName?: string;
+  /** @deprecated use postalCode */
+  code?: string;
+  districtId?: EntityId;
   districtName?: string;
 }
 
-async function getDivisionsForCountry(countryId: number): Promise<Division[]> {
+async function getDivisionsForCountry(countryId: EntityId): Promise<Division[]> {
   const response = await api.get<unknown>(`${ADDR}/countries/${idPath(countryId)}/divisions`);
   return parseList<Division>(response.data);
 }
 
-async function getDistrictsForDivision(divisionId: number): Promise<District[]> {
+async function getDistrictsForDivision(divisionId: EntityId): Promise<District[]> {
   const response = await api.get<unknown>(`${ADDR}/divisions/${idPath(divisionId)}/districts`);
   return parseList<District>(response.data);
 }
 
-async function getThanasForDistrict(districtId: number): Promise<Thana[]> {
-  try {
-    const response = await api.get<unknown>(`${ADDR}/districts/${idPath(districtId)}/thanas`);
-    return parseList<Thana>(response.data);
-  } catch (e) {
-    if (!is404(e)) throw e;
-    const response = await api.get<unknown>(`${ADDR}/thanas`, { params: { districtId } });
-    return parseList<Thana>(response.data);
-  }
+async function getUpazilasForDistrict(districtId: EntityId): Promise<Thana[]> {
+  const response = await api.get<unknown>(`${ADDR}/districts/${idPath(districtId)}/upazilas`);
+  return parseList<Thana>(response.data);
+}
+
+async function getPostOfficesForUpazila(upazilaId: EntityId): Promise<PostOffice[]> {
+  const response = await api.get<unknown>(`${ADDR}/upazilas/${idPath(upazilaId)}/post-offices`);
+  return parseList<PostOffice>(response.data);
 }
 
 export const addressService = {
-  // Countries — GET/POST/PUT `/Addresses/countries`, DELETE `/Addresses/countries/{id}`
   getCountries: async () => {
     const response = await api.get<unknown>(`${ADDR}/countries`);
     return parseList<Country>(response.data);
   },
-  createCountry: async (data: { nameEn: string; nameBn?: string }) => {
+  createCountry: async (data: { nameEn: string; nameBn?: string; code: string }) => {
     const body = {
-      id: null as number | null,
+      id: null,
       nameEn: data.nameEn,
       nameBn: data.nameBn ?? "",
+      code: data.code,
     };
     const response = await api.post<unknown>(`${ADDR}/countries`, body);
     return writeMutation(response.data);
   },
-  updateCountry: async (id: number, data: { nameEn: string; nameBn?: string }) => {
+  updateCountry: async (id: EntityId, data: { nameEn: string; nameBn?: string; code: string }) => {
     const response = await api.put<unknown>(`${ADDR}/countries`, {
       id,
       nameEn: data.nameEn,
       nameBn: data.nameBn ?? "",
+      code: data.code,
     });
     return writeMutation(response.data);
   },
-  deleteCountry: async (id: number) => {
+  deleteCountry: async (id: EntityId) => {
     const response = await api.delete<unknown>(`${ADDR}/countries/${idPath(id)}`);
     return writeMutation(response.data);
   },
 
-  // Divisions — GET `/Addresses/countries/{countryId}/divisions`, POST/PUT `/Addresses/divisions`, DELETE `/Addresses/divisions/{id}`
-  getDivisions: async (countryId?: number) => {
-    if (countryId !== undefined && countryId !== null && !Number.isNaN(countryId)) {
+  getDivisions: async (countryId?: EntityId) => {
+    if (countryId) {
       const rows = await getDivisionsForCountry(countryId);
       const country = (await addressService.getCountries()).find((c) => c.id === countryId);
-      const countryName = country?.nameEn;
       return rows.map((d) => ({
         ...d,
         countryId: d.countryId ?? countryId,
-        countryName: d.countryName ?? countryName,
+        countryName: d.countryName ?? country?.nameEn,
       }));
     }
     const countries = await addressService.getCountries();
@@ -149,9 +161,9 @@ export const addressService = {
     );
     return nested.flat();
   },
-  createDivision: async (data: { nameEn: string; nameBn?: string; countryId: number }) => {
+  createDivision: async (data: { nameEn: string; nameBn?: string; countryId: EntityId }) => {
     const body = {
-      id: null as number | null,
+      id: null,
       countryId: data.countryId,
       nameEn: data.nameEn,
       nameBn: data.nameBn ?? "",
@@ -159,7 +171,7 @@ export const addressService = {
     const response = await api.post<unknown>(`${ADDR}/divisions`, body);
     return writeMutation(response.data);
   },
-  updateDivision: async (id: number, data: { nameEn: string; nameBn?: string; countryId: number }) => {
+  updateDivision: async (id: EntityId, data: { nameEn: string; nameBn?: string; countryId: EntityId }) => {
     const response = await api.put<unknown>(`${ADDR}/divisions`, {
       id,
       countryId: data.countryId,
@@ -168,14 +180,13 @@ export const addressService = {
     });
     return writeMutation(response.data);
   },
-  deleteDivision: async (id: number) => {
+  deleteDivision: async (id: EntityId) => {
     const response = await api.delete<unknown>(`${ADDR}/divisions/${idPath(id)}`);
     return writeMutation(response.data);
   },
 
-  // Districts — GET `/Addresses/divisions/{divisionId}/districts`, POST/PUT `/Addresses/districts`, DELETE `/Addresses/districts/{id}`
-  getDistricts: async (divisionId?: number) => {
-    if (divisionId !== undefined && divisionId !== null && !Number.isNaN(divisionId)) {
+  getDistricts: async (divisionId?: EntityId) => {
+    if (divisionId) {
       const rows = await getDistrictsForDivision(divisionId);
       return rows.map((r) => ({
         ...r,
@@ -195,9 +206,9 @@ export const addressService = {
     );
     return nested.flat();
   },
-  createDistrict: async (data: { nameEn: string; nameBn?: string; divisionId: number }) => {
+  createDistrict: async (data: { nameEn: string; nameBn?: string; divisionId: EntityId }) => {
     const body = {
-      id: null as number | null,
+      id: null,
       divisionId: data.divisionId,
       nameEn: data.nameEn,
       nameBn: data.nameBn ?? "",
@@ -205,7 +216,7 @@ export const addressService = {
     const response = await api.post<unknown>(`${ADDR}/districts`, body);
     return writeMutation(response.data);
   },
-  updateDistrict: async (id: number, data: { nameEn: string; nameBn?: string; divisionId: number }) => {
+  updateDistrict: async (id: EntityId, data: { nameEn: string; nameBn?: string; divisionId: EntityId }) => {
     const response = await api.put<unknown>(`${ADDR}/districts`, {
       id,
       divisionId: data.divisionId,
@@ -214,38 +225,44 @@ export const addressService = {
     });
     return writeMutation(response.data);
   },
-  deleteDistrict: async (id: number) => {
+  deleteDistrict: async (id: EntityId) => {
     const response = await api.delete<unknown>(`${ADDR}/districts/${idPath(id)}`);
     return writeMutation(response.data);
   },
 
-  /**
-   * Thanas — GET `/Addresses/districts/{districtId}/thanas` (nested, same style as divisions/districts).
-   * Without `districtId`: GET `/Addresses/thanas` (list all, if supported by API).
-   */
-  getThanas: async (districtId?: number) => {
-    if (districtId !== undefined && districtId !== null && !Number.isNaN(districtId)) {
-      const rows = await getThanasForDistrict(districtId);
+  getThanas: async (districtId?: EntityId) => {
+    if (districtId) {
+      const rows = await getUpazilasForDistrict(districtId);
       return rows.map((t) => ({
         ...t,
         districtId: t.districtId ?? districtId,
       }));
     }
-    const response = await api.get<unknown>(`${ADDR}/thanas`);
-    return parseList<Thana>(response.data);
+    const districts = await addressService.getDistricts();
+    const nested = await Promise.all(
+      districts.map(async (d) => {
+        const rows = await getUpazilasForDistrict(d.id);
+        return rows.map((t) => ({
+          ...t,
+          districtId: t.districtId ?? d.id,
+          districtName: t.districtName ?? d.nameEn,
+        }));
+      }),
+    );
+    return nested.flat();
   },
-  createThana: async (data: { nameEn: string; nameBn?: string; districtId: number }) => {
+  createThana: async (data: { nameEn: string; nameBn?: string; districtId: EntityId }) => {
     const body = {
-      id: null as number | null,
+      id: null,
       districtId: data.districtId,
       nameEn: data.nameEn,
       nameBn: data.nameBn ?? "",
     };
-    const response = await api.post<unknown>(`${ADDR}/thanas`, body);
+    const response = await api.post<unknown>(`${ADDR}/upazilas`, body);
     return writeMutation(response.data);
   },
-  updateThana: async (id: number, data: { nameEn: string; nameBn?: string; districtId: number }) => {
-    const response = await api.put<unknown>(`${ADDR}/thanas`, {
+  updateThana: async (id: EntityId, data: { nameEn: string; nameBn?: string; districtId: EntityId }) => {
+    const response = await api.put<unknown>(`${ADDR}/upazilas`, {
       id,
       districtId: data.districtId,
       nameEn: data.nameEn,
@@ -253,70 +270,74 @@ export const addressService = {
     });
     return writeMutation(response.data);
   },
-  deleteThana: async (id: number) => {
-    const response = await api.delete<unknown>(`${ADDR}/thanas/${idPath(id)}`);
+  deleteThana: async (id: EntityId) => {
+    const response = await api.delete<unknown>(`${ADDR}/upazilas/${idPath(id)}`);
     return writeMutation(response.data);
   },
 
-  /**
-   * Post offices — nested GETs aligned with address hierarchy:
-   * - `districtId`: GET `/Addresses/districts/{id}/postoffices`
-   * - `thanaId`: GET `/Addresses/thanas/{id}/postoffices`
-   * - neither: GET `/Addresses/postoffices`
-   */
-  getPostOffices: async (filters?: { districtId?: number; thanaId?: number }) => {
-    if (filters?.districtId != null && !Number.isNaN(filters.districtId)) {
-      const did = filters.districtId;
-      try {
-        const response = await api.get<unknown>(`${ADDR}/districts/${idPath(did)}/postoffices`);
-        return parseList<PostOffice>(response.data);
-      } catch (e) {
-        if (!is404(e)) throw e;
-        const response = await api.get<unknown>(`${ADDR}/postoffices`, { params: { districtId: did } });
-        return parseList<PostOffice>(response.data);
-      }
+  getPostOffices: async (filters?: { districtId?: EntityId; upazilaId?: EntityId }) => {
+    if (filters?.upazilaId) {
+      return getPostOfficesForUpazila(filters.upazilaId);
     }
-    if (filters?.thanaId != null && !Number.isNaN(filters.thanaId)) {
-      const tid = filters.thanaId;
-      try {
-        const response = await api.get<unknown>(`${ADDR}/thanas/${idPath(tid)}/postoffices`);
-        return parseList<PostOffice>(response.data);
-      } catch (e) {
-        if (!is404(e)) throw e;
-        const response = await api.get<unknown>(`${ADDR}/postoffices`, { params: { thanaId: tid } });
-        return parseList<PostOffice>(response.data);
-      }
+    if (filters?.districtId) {
+      const upazilas = await getUpazilasForDistrict(filters.districtId);
+      const nested = await Promise.all(
+        upazilas.map(async (u) => {
+          const rows = await getPostOfficesForUpazila(u.id);
+          return rows.map((po) => ({
+            ...po,
+            upazilaId: po.upazilaId ?? u.id,
+            postalCode: po.postalCode ?? po.code ?? "",
+          }));
+        }),
+      );
+      return nested.flat();
     }
-    const response = await api.get<unknown>(`${ADDR}/postoffices`);
-    return parseList<PostOffice>(response.data);
+    const thanas = await addressService.getThanas();
+    const nested = await Promise.all(
+      thanas.map(async (t) => {
+        const rows = await getPostOfficesForUpazila(t.id);
+        return rows.map((po) => ({
+          ...po,
+          upazilaId: po.upazilaId ?? t.id,
+          postalCode: po.postalCode ?? po.code ?? "",
+        }));
+      }),
+    );
+    return nested.flat();
   },
 
-  createPostOffice: async (data: { nameEn: string; nameBn?: string; code: string; districtId: number }) => {
+  createPostOffice: async (data: {
+    nameEn: string;
+    nameBn?: string;
+    postalCode: string;
+    upazilaId: EntityId;
+  }) => {
     const body = {
-      id: null as number | null,
-      districtId: data.districtId,
+      id: null,
+      upazilaId: data.upazilaId,
       nameEn: data.nameEn,
       nameBn: data.nameBn ?? "",
-      code: data.code,
+      postalCode: data.postalCode,
     };
-    const response = await api.post<unknown>(`${ADDR}/postoffices`, body);
+    const response = await api.post<unknown>(`${ADDR}/post-offices`, body);
     return writeMutation(response.data);
   },
   updatePostOffice: async (
-    id: number,
-    data: { nameEn: string; nameBn?: string; code: string; districtId: number },
+    id: EntityId,
+    data: { nameEn: string; nameBn?: string; postalCode: string; upazilaId: EntityId },
   ) => {
-    const response = await api.put<unknown>(`${ADDR}/postoffices`, {
+    const response = await api.put<unknown>(`${ADDR}/post-offices`, {
       id,
-      districtId: data.districtId,
+      upazilaId: data.upazilaId,
       nameEn: data.nameEn,
       nameBn: data.nameBn ?? "",
-      code: data.code,
+      postalCode: data.postalCode,
     });
     return writeMutation(response.data);
   },
-  deletePostOffice: async (id: number) => {
-    const response = await api.delete<unknown>(`${ADDR}/postoffices/${idPath(id)}`);
+  deletePostOffice: async (id: EntityId) => {
+    const response = await api.delete<unknown>(`${ADDR}/post-offices/${idPath(id)}`);
     return writeMutation(response.data);
   },
 
