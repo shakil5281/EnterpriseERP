@@ -1,0 +1,444 @@
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using AuthService.Application.Abstractions.Authentication;
+using AuthService.Application.Abstractions.CompanyAccess;
+using AuthService.Application.Models;
+using AuthService.Contracts.Auth;
+using AuthService.Contracts.CompanyAccess;
+using AuthService.Contracts.Common;
+using AuthService.Infrastructure.Entities;
+using AuthService.Infrastructure.Identity;
+using AuthService.Infrastructure.Options;
+using AuthService.Infrastructure.Persistence;
+using AuthService.Infrastructure.Security;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace AuthService.Infrastructure.Services;
+
+public sealed class IdentityAuthService(
+	AuthDbContext db,
+	IUserCompanyAccessRepository companyAccessRepository,
+	UserManager<AppUser> userManager,
+	IJwtTokenIssuer jwtTokenIssuer,
+	IOptions<JwtOptions> jwtOptions,
+	IOptions<AuthFeatureOptions> featureOptions,
+	IOptions<TwoFactorOptions> twoFactorOptions,
+	IHostEnvironment environment,
+	ILogger<IdentityAuthService> logger,
+	IPendingTwoFactorLoginTokenIssuer pendingTwoFactor,
+	ITwoFactorAuthenticatorService twoFactor) : IAuthService
+{
+	private readonly JwtOptions _jwt = jwtOptions.Value;
+
+	private readonly AuthFeatureOptions _features = featureOptions.Value;
+
+	private readonly TwoFactorOptions _twoFactorOpts = twoFactorOptions.Value;
+
+	public async Task<(LoginResponse? Response, IReadOnlyList<string> Errors)> LoginAsync(LoginRequest request, AuthRequestContext? context, CancellationToken cancellationToken = default(CancellationToken))
+	{
+		string username = request.Username.Trim();
+		AppUser? user = await userManager.FindByNameAsync(username);
+		if (user == null || user.IsDeleted)
+		{
+			return (Response: null, Errors: new string[1] { "Invalid username or password." });
+		}
+		if (await userManager.IsLockedOutAsync(user))
+		{
+			await AppendLoginHistoryAsync(user.Id, context, isSuccess: false, "Account locked.", cancellationToken);
+			await db.SaveChangesAsync(cancellationToken);
+			return (Response: null, Errors: new string[1] { "Account is locked. Try again later." });
+		}
+		if (!user.IsActive)
+		{
+			await AppendLoginHistoryAsync(user.Id, context, isSuccess: false, "User is inactive.", cancellationToken);
+			await db.SaveChangesAsync(cancellationToken);
+			return (Response: null, Errors: new string[1] { "Account is not allowed to sign in." });
+		}
+		if (user.Status != UserStatus.Active)
+		{
+			await AppendLoginHistoryAsync(user.Id, context, isSuccess: false, "User status is not active.", cancellationToken);
+			await db.SaveChangesAsync(cancellationToken);
+			return (Response: null, Errors: new string[1] { "Account is not allowed to sign in." });
+		}
+		if (!(await userManager.CheckPasswordAsync(user, request.Password)))
+		{
+			await userManager.AccessFailedAsync(user);
+			await AppendLoginHistoryAsync(user.Id, context, isSuccess: false, "Invalid password.", cancellationToken);
+			await db.SaveChangesAsync(cancellationToken);
+			return (Response: null, Errors: new string[1] { "Invalid username or password." });
+		}
+		await userManager.ResetAccessFailedCountAsync(user);
+		if (await twoFactor.IsTwoFactorEnabledAsync(user.Id, cancellationToken))
+		{
+			bool trusted = await twoFactor.TrustedDeviceSkipsTwoFactorAsync(user.Id, context?.DeviceFingerprint, cancellationToken);
+			if (!trusted)
+			{
+				if (!string.IsNullOrWhiteSpace(request.TwoFactorCode))
+				{
+					(bool ok2, IReadOnlyList<string> err2) = await twoFactor.ValidateLoginCodeAsync(user.Id, request.TwoFactorCode.Trim(), cancellationToken);
+					if (!ok2)
+					{
+						await AppendLoginHistoryAsync(user.Id, context, isSuccess: false, "Invalid two-factor code.", cancellationToken);
+						await db.SaveChangesAsync(cancellationToken);
+						return (Response: null, Errors: err2);
+					}
+				}
+				else
+				{
+					string pending = pendingTwoFactor.Create(user.Id);
+					await AppendLoginHistoryAsync(user.Id, context, isSuccess: false, "Two-factor code required.", cancellationToken);
+					await db.SaveChangesAsync(cancellationToken);
+					return (Response: new LoginResponse
+					{
+						AccessToken = string.Empty,
+						RefreshToken = string.Empty,
+						ExpiresInSeconds = 0,
+						UserId = user.Id,
+						Username = (user.UserName ?? string.Empty),
+						FullName = user.FullName,
+						Email = (user.Email ?? string.Empty),
+						Roles = Array.Empty<string>(),
+						Permissions = Array.Empty<string>(),
+						RequiresTwoFactor = true,
+						PendingTwoFactorToken = pending
+					}, Errors: Array.Empty<string>());
+				}
+			}
+		}
+		return await FinalizeSuccessfulLoginAsync(user, context, cancellationToken);
+	}
+
+	public async Task<(LoginResponse? Response, IReadOnlyList<string> Errors)> CompleteTwoFactorLoginAsync(CompleteTwoFactorLoginRequest request, AuthRequestContext? context, CancellationToken cancellationToken = default(CancellationToken))
+	{
+		if (!pendingTwoFactor.TryValidate(request.PendingTwoFactorToken.Trim(), out Guid userId))
+		{
+			return (Response: null, Errors: new string[1] { "Invalid or expired two-factor login token." });
+		}
+		AppUser? user = await userManager.FindByIdAsync(userId.ToString());
+		if (user == null || user.IsDeleted || !user.IsActive || user.Status != UserStatus.Active)
+		{
+			return (Response: null, Errors: new string[1] { "User not found or not allowed to sign in." });
+		}
+		(bool ok, IReadOnlyList<string> errors) = await twoFactor.ValidateLoginCodeAsync(user.Id, request.Code.Trim(), cancellationToken);
+		if (!ok)
+		{
+			await AppendLoginHistoryAsync(user.Id, context, isSuccess: false, "Invalid two-factor code (complete login).", cancellationToken);
+			await db.SaveChangesAsync(cancellationToken);
+			return (Response: null, Errors: errors);
+		}
+		return await FinalizeSuccessfulLoginAsync(user, context, cancellationToken);
+	}
+
+	public async Task<(LoginResponse? Response, IReadOnlyList<string> Errors)> RegisterAsync(RegisterRequest request, AuthRequestContext? context, CancellationToken cancellationToken = default(CancellationToken))
+	{
+		if (!_features.AllowSelfRegistration && !environment.IsDevelopment())
+		{
+			return (Response: null, Errors: new string[1] { "Self registration is disabled." });
+		}
+		AppUser user = new AppUser
+		{
+			Id = Guid.NewGuid(),
+			UserName = request.Username.Trim(),
+			Email = request.Email.Trim(),
+			FullName = request.FullName.Trim(),
+			EmailConfirmed = true,
+			IsActive = true,
+			Status = UserStatus.Active,
+			LockoutEnabled = true,
+			CreatedAt = DateTimeOffset.UtcNow
+		};
+		IdentityResult result = await userManager.CreateAsync(user, request.Password);
+		if (!result.Succeeded)
+		{
+			return (Response: null, Errors: result.Errors.Select((IdentityError e) => e.Description).ToList());
+		}
+		if (await db.Roles.AnyAsync((AppRole r) => r.Name == "User" && !r.IsDeleted, cancellationToken))
+		{
+			await userManager.AddToRoleAsync(user, "User");
+		}
+		List<string> roles = (await userManager.GetRolesAsync(user)).OrderBy((string x) => x).ToList();
+		IReadOnlyList<string> permissions = await LoadPermissionsForRolesAsync(roles, cancellationToken);
+		logger.LogInformation("Registered user {UserId} {Username}", user.Id, user.UserName);
+		LoginResponse? regResponse;
+		IReadOnlyList<string> regErrors;
+		(regResponse, _, regErrors) = await IssueTokensAsync(user, roles, permissions, context, cancellationToken);
+		await db.SaveChangesAsync(cancellationToken);
+		return (Response: regResponse, Errors: regErrors);
+	}
+
+	public async Task<(LoginResponse? Response, IReadOnlyList<string> Errors)> RefreshAsync(RefreshTokenRequest request, AuthRequestContext? context, CancellationToken cancellationToken = default(CancellationToken))
+	{
+		string hash = JwtTokenIssuer.HashRefreshToken(request.RefreshToken.Trim());
+		(LoginResponse?, IReadOnlyList<string>) result;
+		await using (IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken))
+		{
+			RefreshToken? existing = await db.RefreshTokens.Include((RefreshToken x) => x.User).FirstOrDefaultAsync((RefreshToken x) => x.TokenHash == hash, cancellationToken);
+			if (existing == null || existing.RevokedAt.HasValue || existing.IsRevoked)
+			{
+				result = (null, new string[1] { "Invalid refresh token." });
+			}
+			else if (existing.ExpiresAt < DateTimeOffset.UtcNow)
+			{
+				result = (null, new string[1] { "Refresh token expired." });
+			}
+			else
+			{
+				AppUser user = existing.User;
+				if (!user.IsActive || user.IsDeleted || user.Status != UserStatus.Active)
+				{
+					result = (null, new string[1] { "User is inactive." });
+				}
+				else
+				{
+					existing.RevokedAt = DateTimeOffset.UtcNow;
+					existing.IsRevoked = true;
+					existing.RevokedReason = "rotated";
+					List<string> roles = (await userManager.GetRolesAsync(user)).OrderBy((string x) => x).ToList();
+					LoginResponse? response;
+					Guid? newRefreshId;
+					IReadOnlyList<string> errors;
+					string? carryIp = context?.IpAddress ?? existing.IpAddress;
+					AuthRequestContext merged = new AuthRequestContext(carryIp, context?.MacAddress ?? existing.MacAddress, context?.DeviceFingerprint ?? existing.DeviceFingerprint, context?.UserAgent);
+					(response, newRefreshId, errors) = await IssueTokensAsync(user, roles, await LoadPermissionsForRolesAsync(roles, cancellationToken), merged, cancellationToken, existing.FamilyId);
+					if (response == null || !newRefreshId.HasValue)
+					{
+						result = (null, errors);
+					}
+					else
+					{
+						existing.ReplacedByTokenId = newRefreshId;
+						await db.SaveChangesAsync(cancellationToken);
+						await transaction.CommitAsync(cancellationToken);
+						result = (response, Array.Empty<string>());
+					}
+				}
+			}
+		}
+		return result;
+	}
+
+	public async Task<bool> RevokeAllRefreshTokensAsync(Guid userId, CancellationToken cancellationToken = default(CancellationToken))
+	{
+		List<RefreshToken> tokens = await db.RefreshTokens.Where((RefreshToken x) => x.UserId == userId && x.RevokedAt == null && !x.IsRevoked).ToListAsync(cancellationToken);
+		DateTimeOffset now = DateTimeOffset.UtcNow;
+		foreach (RefreshToken token in tokens)
+		{
+			token.RevokedAt = now;
+			token.IsRevoked = true;
+			token.RevokedReason = "revoked";
+		}
+		await db.SaveChangesAsync(cancellationToken);
+		return true;
+	}
+
+	public async Task<(UserProfileResponse? Response, IReadOnlyList<string> Errors)> GetProfileAsync(Guid userId, CancellationToken cancellationToken = default(CancellationToken))
+	{
+		AppUser? user = await userManager.FindByIdAsync(userId.ToString());
+		if (user?.IsDeleted ?? true)
+		{
+			return (Response: null, Errors: new string[1] { "User not found." });
+		}
+		DateTimeOffset now = DateTimeOffset.UtcNow;
+		bool locked = user.LockoutEnd.HasValue && user.LockoutEnd > now;
+		List<string> roles = (await userManager.GetRolesAsync(user)).OrderBy((string x) => x).ToList();
+		IReadOnlyList<string> permissions = await LoadPermissionsForRolesAsync(roles, cancellationToken);
+		List<UserCompanyAccessDto> companyDtos = (await companyAccessRepository.ListActiveByUserIdAsync(userId, cancellationToken)).Select((UserCompanyAccessRecord c) => new UserCompanyAccessDto
+		{
+			Id = c.Id,
+			CompanyId = c.CompanyId,
+			IsDefaultCompany = c.IsDefaultCompany
+		}).ToList();
+		bool tf = await twoFactor.IsTwoFactorEnabledAsync(userId, cancellationToken);
+		return (Response: new UserProfileResponse
+		{
+			UserId = user.Id,
+			Username = (user.UserName ?? string.Empty),
+			Email = (user.Email ?? string.Empty),
+			PhoneNumber = user.PhoneNumber,
+			FullName = user.FullName,
+			IsActive = user.IsActive,
+			Status = user.Status,
+			IsLocked = locked,
+			LastLoginAt = user.LastLoginAt,
+			TwoFactorEnabled = tf,
+			Roles = roles,
+			Permissions = permissions,
+			CompanyAccess = companyDtos
+		}, Errors: Array.Empty<string>());
+	}
+
+	public async Task<(EnableTwoFactorStartResponse? Response, IReadOnlyList<string> Errors)> BeginEnableTwoFactorAsync(Guid userId, CancellationToken cancellationToken = default(CancellationToken))
+	{
+		AppUser? user = await userManager.FindByIdAsync(userId.ToString());
+		if (user == null || user.IsDeleted)
+		{
+			return (Response: null, Errors: new string[1] { "User not found." });
+		}
+		(string SharedKey, string OtpAuthUri)? start = await twoFactor.StartEnrollmentAsync(userId, user.UserName ?? user.Email ?? user.Id.ToString(), _twoFactorOpts.Issuer, cancellationToken);
+		if (!start.HasValue)
+		{
+			return (Response: null, Errors: new string[1] { "Two-factor authentication is already enabled or could not be started." });
+		}
+		return (new EnableTwoFactorStartResponse
+		{
+			SharedKey = start.Value.SharedKey,
+			OtpAuthUri = start.Value.OtpAuthUri
+		}, Array.Empty<string>());
+	}
+
+	public async Task<(IReadOnlyList<string>? RecoveryCodes, IReadOnlyList<string> Errors)> VerifyAndEnableTwoFactorAsync(Guid userId, string code, CancellationToken cancellationToken = default(CancellationToken))
+	{
+		return await twoFactor.CompleteEnrollmentAsync(userId, code, cancellationToken);
+	}
+
+	public async Task<(bool Ok, IReadOnlyList<string> Errors)> DisableTwoFactorAsync(Guid userId, string password, string code, CancellationToken cancellationToken = default(CancellationToken))
+	{
+		AppUser? user = await userManager.FindByIdAsync(userId.ToString());
+		if (user == null || user.IsDeleted)
+		{
+			return (Ok: false, Errors: new string[1] { "User not found." });
+		}
+		if (!(await userManager.CheckPasswordAsync(user, password)))
+		{
+			return (Ok: false, Errors: new string[1] { "Invalid password." });
+		}
+		return await twoFactor.DisableAsync(userId, code, cancellationToken);
+	}
+
+	private async Task<(LoginResponse? Response, IReadOnlyList<string> Errors)> FinalizeSuccessfulLoginAsync(AppUser user, AuthRequestContext? context, CancellationToken cancellationToken)
+	{
+		user.LastLoginAt = DateTimeOffset.UtcNow;
+		await userManager.UpdateAsync(user);
+		await AppendLoginHistoryAsync(user.Id, context, isSuccess: true, null, cancellationToken);
+		await UpsertDeviceAsync(user.Id, context, cancellationToken);
+		List<string> roles = (await userManager.GetRolesAsync(user)).OrderBy((string x) => x).ToList();
+		LoginResponse? response;
+		Guid? rid;
+		IReadOnlyList<string> errors;
+		(response, rid, errors) = await IssueTokensAsync(user, roles, await LoadPermissionsForRolesAsync(roles, cancellationToken), context, cancellationToken);
+		await db.SaveChangesAsync(cancellationToken);
+		return (response, errors);
+	}
+
+	private async Task AppendLoginHistoryAsync(Guid userId, AuthRequestContext? context, bool isSuccess, string? failureReason, CancellationToken cancellationToken)
+	{
+		(string? deviceName, string? browser, string? os) = UserAgentBrowserParser.Parse(context?.UserAgent);
+		db.UserLoginHistories.Add(new UserLoginHistory
+		{
+			Id = Guid.NewGuid(),
+			UserId = userId,
+			IpAddress = context?.IpAddress,
+			MacAddress = context?.MacAddress,
+			DeviceName = deviceName,
+			Browser = browser,
+			OperatingSystem = os,
+			IsSuccess = isSuccess,
+			FailureReason = failureReason,
+			LoginAt = DateTimeOffset.UtcNow
+		});
+		await Task.CompletedTask;
+	}
+
+	private async Task UpsertDeviceAsync(Guid userId, AuthRequestContext? context, CancellationToken cancellationToken)
+	{
+		if (string.IsNullOrWhiteSpace(context?.DeviceFingerprint))
+		{
+			return;
+		}
+		string fp = context.DeviceFingerprint.Trim();
+		UserDevice? device = await db.UserDevices.FirstOrDefaultAsync((UserDevice x) => x.UserId == userId && x.DeviceFingerprint == fp, cancellationToken);
+		(string? deviceName, string? _, string? _) = UserAgentBrowserParser.Parse(context.UserAgent);
+		DateTimeOffset now = DateTimeOffset.UtcNow;
+		if (device == null)
+		{
+			db.UserDevices.Add(new UserDevice
+			{
+				Id = Guid.NewGuid(),
+				UserId = userId,
+				DeviceName = deviceName,
+				IpAddress = context.IpAddress,
+				MacAddress = context.MacAddress,
+				DeviceFingerprint = fp,
+				IsTrusted = false,
+				LastUsedAt = now
+			});
+		}
+		else
+		{
+			device.LastUsedAt = now;
+			device.IpAddress = context.IpAddress ?? device.IpAddress;
+			device.MacAddress = context.MacAddress ?? device.MacAddress;
+			device.DeviceName = deviceName ?? device.DeviceName;
+		}
+		await Task.CompletedTask;
+	}
+
+	private async Task<IReadOnlyList<string>> LoadPermissionsForRolesAsync(IReadOnlyList<string> roleNames, CancellationToken cancellationToken)
+	{
+		if (roleNames.Count == 0)
+		{
+			return Array.Empty<string>();
+		}
+		List<Guid> roleIds = await (from r in db.Roles.AsNoTracking()
+			where r.Name != null && roleNames.Contains<string>(r.Name) && !r.IsDeleted
+			select r.Id).ToListAsync(cancellationToken);
+		if (roleIds.Count == 0)
+		{
+			return Array.Empty<string>();
+		}
+		return await (from x in (from rp in db.RolePermissions.AsNoTracking()
+				where roleIds.Contains(rp.RoleId) && !rp.Permission.IsDeleted
+				select rp.Permission.Code).Distinct()
+			orderby x
+			select x).ToListAsync(cancellationToken);
+	}
+
+	private async Task<(LoginResponse? Response, Guid? NewRefreshTokenId, IReadOnlyList<string> Errors)> IssueTokensAsync(AppUser user, IReadOnlyList<string> roles, IReadOnlyList<string> permissions, AuthRequestContext? context, CancellationToken cancellationToken, Guid? familyId = null)
+	{
+		(string, DateTime) tuple = jwtTokenIssuer.CreateAccessToken(user, roles, permissions);
+		string accessToken = tuple.Item1;
+		DateTime expiresAtUtc = tuple.Item2;
+		string rawRefresh = JwtTokenIssuer.CreateRawRefreshToken();
+		string refreshHash = JwtTokenIssuer.HashRefreshToken(rawRefresh);
+		Guid family = familyId ?? Guid.NewGuid();
+		int refreshDays = ((_jwt.RefreshTokenDays <= 0) ? 7 : _jwt.RefreshTokenDays);
+		RefreshToken refreshEntity = new RefreshToken
+		{
+			Id = Guid.NewGuid(),
+			UserId = user.Id,
+			TokenHash = refreshHash,
+			FamilyId = family,
+			ExpiresAt = DateTimeOffset.UtcNow.AddDays(refreshDays),
+			CreatedAt = DateTimeOffset.UtcNow,
+			IpAddress = context?.IpAddress,
+			MacAddress = context?.MacAddress,
+			DeviceFingerprint = context?.DeviceFingerprint
+		};
+		db.RefreshTokens.Add(refreshEntity);
+		int expiresIn = (int)Math.Max(1.0, (expiresAtUtc - DateTime.UtcNow).TotalSeconds);
+		LoginResponse response = new LoginResponse
+		{
+			AccessToken = accessToken,
+			RefreshToken = rawRefresh,
+			ExpiresInSeconds = expiresIn,
+			UserId = user.Id,
+			Username = (user.UserName ?? string.Empty),
+			FullName = user.FullName,
+			Email = (user.Email ?? string.Empty),
+			Roles = roles,
+			Permissions = permissions,
+			RequiresTwoFactor = false,
+			PendingTwoFactorToken = null
+		};
+		return (Response: response, NewRefreshTokenId: refreshEntity.Id, Errors: Array.Empty<string>());
+	}
+}

@@ -1,0 +1,52 @@
+[
+    {
+        "id": 1,
+        "employeeId": "EMP001",
+        "name": "John Doe",
+        "designation": "Software Engineer",
+        "department": "Engineering",
+        "email": "john.doe@example.com",
+        "joinDate": "2023-01-15",
+        "status": "Active"
+    },
+    {
+        "id": 2,
+        "employeeId": "EMP002",
+        "name": "Jane Smith",
+        "designation": "HR Manager",
+        "department": "Human Resources",
+        "email": "jane.smith@example.com",
+        "joinDate": "2022-05-20",
+        "status": "Active"
+    },
+    {
+        "id": 3,
+        "employeeId": "EMP003",
+        "name": "Michael Brown",
+        "designation": "Product Manager",
+        "department": "Product",
+        "email": "michael.brown@example.com",
+        "joinDate": "2021-11-10",
+        "status": "Active"
+    },
+    {
+        "id": 4,
+        "employeeId": "EMP004",
+        "name": "Emily Davis",
+        "designation": "UI/UX Designer",
+        "department": "Design",
+        "email": "emily.davis@example.com",
+        "joinDate": "2023-03-05",
+        "status": "On Leave"
+    },
+    {
+        "id": 5,
+        "employeeId": "EMP005",
+        "name": "David Wilson",
+        "designation": "QA Engineer",
+        "department": "Engineering",
+        "email": "david.wilson@example.com",
+        "joinDate": "2022-08-12",
+        "status": "Active"
+    }
+]

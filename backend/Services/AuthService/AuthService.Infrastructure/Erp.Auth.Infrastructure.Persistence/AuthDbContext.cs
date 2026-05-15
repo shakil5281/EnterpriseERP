@@ -1,0 +1,114 @@
+using System;
+using AuthService.Contracts.Common;
+using AuthService.Infrastructure.Entities;
+using AuthService.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace AuthService.Infrastructure.Persistence;
+
+public sealed class AuthDbContext : IdentityDbContext<AppUser, AppRole, Guid>
+{
+	public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
+	public DbSet<Permission> Permissions => Set<Permission>();
+
+	public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+
+	public DbSet<UserCompanyAccess> UserCompanyAccesses => Set<UserCompanyAccess>();
+
+	public DbSet<UserLoginHistory> UserLoginHistories => Set<UserLoginHistory>();
+
+	public DbSet<UserDevice> UserDevices => Set<UserDevice>();
+
+	public DbSet<User2FA> User2FAs => Set<User2FA>();
+
+	public AuthDbContext(DbContextOptions<AuthDbContext> options)
+		: base((DbContextOptions)options)
+	{
+	}
+
+	protected override void OnModelCreating(ModelBuilder builder)
+	{
+		base.OnModelCreating(builder);
+		builder.Entity(delegate(EntityTypeBuilder<AppUser> b)
+		{
+			b.Property((AppUser x) => x.FullName).HasMaxLength(256);
+			b.Property((AppUser x) => x.Status).HasConversion<int>();
+			b.HasIndex((AppUser x) => x.IsDeleted);
+			b.HasIndex((AppUser x) => x.Status);
+		});
+		builder.Entity(delegate(EntityTypeBuilder<AppRole> b)
+		{
+			b.HasIndex((AppRole x) => x.IsDeleted);
+		});
+		builder.Entity(delegate(EntityTypeBuilder<Permission> b)
+		{
+			b.Property((Permission x) => x.Code).HasMaxLength(128);
+			b.Property((Permission x) => x.Description).HasMaxLength(512);
+			b.HasIndex((Permission x) => x.Code).IsUnique();
+			b.HasIndex((Permission x) => x.IsDeleted);
+		});
+		builder.Entity(delegate(EntityTypeBuilder<RolePermission> b)
+		{
+			b.HasKey((RolePermission x) => new { x.RoleId, x.PermissionId });
+			b.HasOne((RolePermission x) => x.Role).WithMany().HasForeignKey((RolePermission x) => x.RoleId)
+				.OnDelete(DeleteBehavior.Cascade);
+			b.HasOne((RolePermission x) => x.Permission).WithMany((Permission x) => x.RolePermissions).HasForeignKey((RolePermission x) => x.PermissionId)
+				.OnDelete(DeleteBehavior.Cascade);
+		});
+		builder.Entity(delegate(EntityTypeBuilder<RefreshToken> b)
+		{
+			b.Property((RefreshToken x) => x.TokenHash).HasMaxLength(128);
+			b.Property((RefreshToken x) => x.RevokedReason).HasMaxLength(256);
+			b.Property((RefreshToken x) => x.IpAddress).HasMaxLength(64);
+			b.Property((RefreshToken x) => x.MacAddress).HasMaxLength(64);
+			b.Property((RefreshToken x) => x.DeviceFingerprint).HasMaxLength(512);
+			b.HasIndex((RefreshToken x) => x.TokenHash).IsUnique();
+			b.HasIndex((RefreshToken x) => new { x.UserId, x.ExpiresAt });
+			b.HasOne((RefreshToken x) => x.User).WithMany().HasForeignKey((RefreshToken x) => x.UserId)
+				.OnDelete(DeleteBehavior.Cascade);
+		});
+		builder.Entity(delegate(EntityTypeBuilder<UserCompanyAccess> b)
+		{
+			b.HasIndex((UserCompanyAccess x) => new { x.UserId, x.CompanyId }).IsUnique();
+			b.HasIndex((UserCompanyAccess x) => new { x.UserId, x.IsDefaultCompany });
+			b.HasOne((UserCompanyAccess x) => x.User).WithMany().HasForeignKey((UserCompanyAccess x) => x.UserId)
+				.OnDelete(DeleteBehavior.Cascade);
+		});
+		builder.Entity(delegate(EntityTypeBuilder<UserLoginHistory> b)
+		{
+			b.Property((UserLoginHistory x) => x.IpAddress).HasMaxLength(64);
+			b.Property((UserLoginHistory x) => x.MacAddress).HasMaxLength(64);
+			b.Property((UserLoginHistory x) => x.DeviceName).HasMaxLength(256);
+			b.Property((UserLoginHistory x) => x.Browser).HasMaxLength(128);
+			b.Property((UserLoginHistory x) => x.OperatingSystem).HasMaxLength(128);
+			b.Property((UserLoginHistory x) => x.FailureReason).HasMaxLength(512);
+			b.HasIndex((UserLoginHistory x) => new { x.UserId, x.LoginAt });
+			b.HasOne((UserLoginHistory x) => x.User).WithMany().HasForeignKey((UserLoginHistory x) => x.UserId)
+				.OnDelete(DeleteBehavior.Cascade);
+		});
+		builder.Entity(delegate(EntityTypeBuilder<UserDevice> b)
+		{
+			b.Property((UserDevice x) => x.DeviceName).HasMaxLength(256);
+			b.Property((UserDevice x) => x.IpAddress).HasMaxLength(64);
+			b.Property((UserDevice x) => x.MacAddress).HasMaxLength(64);
+			b.Property((UserDevice x) => x.DeviceFingerprint).HasMaxLength(512);
+			b.HasIndex((UserDevice x) => x.UserId);
+			b.HasIndex((UserDevice x) => new { x.UserId, x.DeviceFingerprint }).IsUnique()
+				.HasFilter("[DeviceFingerprint] IS NOT NULL");
+			b.HasOne((UserDevice x) => x.User).WithMany().HasForeignKey((UserDevice x) => x.UserId)
+				.OnDelete(DeleteBehavior.Cascade);
+		});
+		builder.Entity(delegate(EntityTypeBuilder<User2FA> b)
+		{
+			b.Property((User2FA x) => x.Method).HasMaxLength(64);
+			b.Property((User2FA x) => x.SecretKey).HasMaxLength(2048);
+			b.Property((User2FA x) => x.RecoveryCodesHash).HasMaxLength(8000);
+			b.HasIndex((User2FA x) => x.UserId).IsUnique();
+			b.HasOne((User2FA x) => x.User).WithMany().HasForeignKey((User2FA x) => x.UserId)
+				.OnDelete(DeleteBehavior.Cascade);
+		});
+	}
+}

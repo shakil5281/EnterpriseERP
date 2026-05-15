@@ -1,0 +1,14 @@
+{
+  "ConnectionStrings": {
+    "AuthDb": "Server=localhost;Database=AuthServiceDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "CompanyDb": "Server=localhost;Database=CompanyServiceDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "HrDb": "Server=localhost;Database=HRServiceDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "AttendanceDb": "Server=localhost;Database=AttendanceServiceDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "LeaveDb": "Server=localhost;Database=LeaveServiceDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "ShiftDb": "Server=localhost;Database=ShiftServiceDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "PayrollDb": "Server=localhost;Database=PayrollServiceDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "NotificationDb": "Server=localhost;Database=NotificationServiceDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "PunchDataDb": "Server=localhost;Database=PunchDataDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "Redis": "localhost:6379"
+  }
+}

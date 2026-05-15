@@ -1,0 +1,66 @@
+# Canonical Docker Compose definitions for EnterpriseERP (referenced from repo-root docker-compose.yml).
+# Run from EnterpriseERP root:
+#   docker compose up -d redis rabbitmq seq
+#   dotnet run --project ApiGateway/Gateway.Api/Gateway.Api.csproj
+#
+# Gateway in Docker (Windows Docker Desktop uses host.docker.internal for upstreams):
+#   docker compose --profile gateway-docker up -d --build gateway
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: erp
+      RABBITMQ_DEFAULT_PASS: erp_dev_password
+    restart: unless-stopped
+
+  seq:
+    image: datalust/seq:latest
+    environment:
+      ACCEPT_EULA: "Y"
+      # Seq 2024+ requires first-run auth; disable for local dev only.
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "true"
+    ports:
+      - "5341:80"
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ../../ApiGateway
+      dockerfile: Dockerfile
+    ports:
+      - "5000:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ReverseProxy__Clusters__auth__Destinations__d1__Address: "http://host.docker.internal:5012/"
+      ReverseProxy__Clusters__company__Destinations__d1__Address: "http://host.docker.internal:5020/"
+      ReverseProxy__Clusters__hr__Destinations__d1__Address: "http://host.docker.internal:5035/"
+      ReverseProxy__Clusters__punchdata__Destinations__d1__Address: "http://host.docker.internal:5050/"
+      ReverseProxy__Clusters__shift__Destinations__d1__Address: "http://host.docker.internal:5036/"
+      ReverseProxy__Clusters__attendance__Destinations__d1__Address: "http://host.docker.internal:5037/"
+      ReverseProxy__Clusters__leave__Destinations__d1__Address: "http://host.docker.internal:5038/"
+      ReverseProxy__Clusters__payroll__Destinations__d1__Address: "http://host.docker.internal:5039/"
+      ReverseProxy__Clusters__accounts__Destinations__d1__Address: "http://host.docker.internal:5040/"
+      ReverseProxy__Clusters__inventory__Destinations__d1__Address: "http://host.docker.internal:5041/"
+      ReverseProxy__Clusters__production__Destinations__d1__Address: "http://host.docker.internal:5042/"
+      ReverseProxy__Clusters__merchandising__Destinations__d1__Address: "http://host.docker.internal:5043/"
+      ReverseProxy__Clusters__cutting__Destinations__d1__Address: "http://host.docker.internal:5044/"
+      ReverseProxy__Clusters__bills__Destinations__d1__Address: "http://host.docker.internal:5045/"
+      ReverseProxy__Clusters__report__Destinations__d1__Address: "http://host.docker.internal:5046/"
+      ReverseProxy__Clusters__notification__Destinations__d1__Address: "http://host.docker.internal:5047/"
+      ReverseProxy__Clusters__audit__Destinations__d1__Address: "http://host.docker.internal:5048/"
+      ReverseProxy__Clusters__filestorage__Destinations__d1__Address: "http://host.docker.internal:5049/"
+      ReverseProxy__Clusters__legacy__Destinations__d1__Address: "http://host.docker.internal:5011/"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    profiles:
+      - gateway-docker
