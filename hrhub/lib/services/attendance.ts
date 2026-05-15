@@ -173,12 +173,12 @@ export interface BackendAttendanceQuery {
 
 export const attendanceService = {
     processDaily: async (data: { companyId: string; date: string }) => {
-        const response = await api.post<unknown>(platformApiUrl('/api/Attendance/process'), data);
+        const response = await api.post<unknown>(platformApiUrl('/api/v1/Attendance/process'), data);
         return unwrapResponse<boolean>(response);
     },
 
     getDailyAttendance: async (params: BackendAttendanceQuery) => {
-        const response = await api.get<unknown>(platformApiUrl('/api/Attendance'), { params });
+        const response = await api.get<unknown>(platformApiUrl('/api/v1/Attendance'), { params });
         return unwrapResponse<BackendDailyAttendance[]>(response);
     },
 
@@ -189,24 +189,24 @@ export const attendanceService = {
         remarks?: string | null;
         adminId: string;
     }) => {
-        const response = await api.patch<unknown>(platformApiUrl('/api/Attendance/adjust'), data);
+        const response = await api.patch<unknown>(platformApiUrl('/api/v1/Attendance/adjust'), data);
         return unwrapResponse<boolean>(response);
     },
 
     approveAttendance: async (id: string, adminId: string) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/Attendance/${encodeURIComponent(id)}/approve`), null, {
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/Attendance/${encodeURIComponent(id)}/approve`), null, {
             params: { adminId }
         });
         return unwrapResponse<boolean>(response);
     },
 
     getAttendanceSummaryRecords: async (params: BackendAttendanceQuery) => {
-        const response = await api.get<unknown>(platformApiUrl('/api/Attendance/summary'), { params });
+        const response = await api.get<unknown>(platformApiUrl('/api/v1/Attendance/summary'), { params });
         return unwrapResponse<BackendAttendanceSummary[]>(response);
     },
 
     uploadPunchLogs: async (data: { companyId: string; logs: PunchLogUploadItem[] }) => {
-        const response = await api.post<unknown>(platformApiUrl('/api/PunchLogs/upload'), {
+        const response = await api.post<unknown>(platformApiUrl('/api/v1/PunchLogs/upload'), {
             companyId: data.companyId,
             logs: data.logs.map((log) => ({
                 id: log.id ?? '00000000-0000-0000-0000-000000000000',

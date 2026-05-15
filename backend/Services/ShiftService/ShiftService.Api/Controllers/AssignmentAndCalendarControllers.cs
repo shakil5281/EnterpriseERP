@@ -8,7 +8,7 @@ using ShiftService.Application.DTOs;
 namespace ShiftService.Api.Controllers;
 
 [ApiController]
-[Route("api/employee-shifts")]
+[Route("api/v1/employee-shifts")]
 public class EmployeeShiftsController(IMediator mediator) : ControllerBase
 {
     [HttpPost("assign")]
@@ -35,7 +35,7 @@ public class EmployeeShiftsController(IMediator mediator) : ControllerBase
 }
 
 [ApiController]
-[Route("api/temporary-shifts")]
+[Route("api/v1/temporary-shifts")]
 public class TemporaryShiftsController(IMediator mediator) : ControllerBase
 {
     [HttpPost]
@@ -62,7 +62,7 @@ public class TemporaryShiftsController(IMediator mediator) : ControllerBase
 }
 
 [ApiController]
-[Route("api/shift-calendars")]
+[Route("api/v1/shift-calendars")]
 public class ShiftCalendarsController(IMediator mediator) : ControllerBase
 {
     [HttpPost]

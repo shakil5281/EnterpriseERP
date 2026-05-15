@@ -6,7 +6,7 @@ using ShiftService.Application.Features.Shifts.Commands;
 namespace ShiftService.Api.Controllers;
 
 [ApiController]
-[Route("api/shifts/{shiftId}/rules")]
+[Route("api/v1/shifts/{shiftId}/rules")]
 public class ShiftRulesController(IMediator mediator) : ControllerBase
 {
     [HttpPost]
@@ -26,7 +26,7 @@ public class ShiftRulesController(IMediator mediator) : ControllerBase
 }
 
 [ApiController]
-[Route("api/shifts/{shiftId}/breaks")]
+[Route("api/v1/shifts/{shiftId}/breaks")]
 public class ShiftBreaksController(IMediator mediator) : ControllerBase
 {
     [HttpPost]

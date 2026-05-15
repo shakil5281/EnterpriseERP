@@ -7,13 +7,13 @@ public sealed class EmployeeServiceClient(HttpClient httpClient) : IEmployeeServ
 {
     public async Task<IReadOnlyList<EmployeeSnapshot>> GetActiveEmployeesAsync(Guid companyId, CancellationToken cancellationToken = default)
     {
-        return await httpClient.GetFromJsonAsync<IReadOnlyList<EmployeeSnapshot>>($"/api/employees/active?companyId={companyId}", cancellationToken)
+        return await httpClient.GetFromJsonAsync<IReadOnlyList<EmployeeSnapshot>>($"/api/v1/employees/active?companyId={companyId}", cancellationToken)
             ?? Array.Empty<EmployeeSnapshot>();
     }
 
     public async Task<EmployeeSnapshot?> GetEmployeeByIdAsync(Guid companyId, Guid employeeId, CancellationToken cancellationToken = default)
     {
-        return await httpClient.GetFromJsonAsync<EmployeeSnapshot?>($"/api/employees/{employeeId}?companyId={companyId}", cancellationToken);
+        return await httpClient.GetFromJsonAsync<EmployeeSnapshot?>($"/api/v1/employees/{employeeId}?companyId={companyId}", cancellationToken);
     }
 
     public async Task<DateOnly?> GetEmployeeJoinDateAsync(Guid companyId, Guid employeeId, CancellationToken cancellationToken = default)
@@ -24,7 +24,7 @@ public sealed class EmployeeServiceClient(HttpClient httpClient) : IEmployeeServ
 
     public async Task<IReadOnlyList<EmployeeSnapshot>> GetResignedEmployeesAsync(Guid companyId, int year, int month, CancellationToken cancellationToken = default)
     {
-        return await httpClient.GetFromJsonAsync<IReadOnlyList<EmployeeSnapshot>>($"/api/employees/resigned?companyId={companyId}&year={year}&month={month}", cancellationToken)
+        return await httpClient.GetFromJsonAsync<IReadOnlyList<EmployeeSnapshot>>($"/api/v1/employees/resigned?companyId={companyId}&year={year}&month={month}", cancellationToken)
             ?? Array.Empty<EmployeeSnapshot>();
     }
 }
@@ -35,7 +35,7 @@ public sealed class AttendanceServiceClient(HttpClient httpClient) : IAttendance
     {
         try
         {
-            return await httpClient.GetFromJsonAsync<AttendanceSummary?>($"/api/attendance/monthly-summary/approved?companyId={companyId}&employeeId={employeeId}&year={year}&month={month}", cancellationToken);
+            return await httpClient.GetFromJsonAsync<AttendanceSummary?>($"/api/v1/attendance/monthly-summary/approved?companyId={companyId}&employeeId={employeeId}&year={year}&month={month}", cancellationToken);
         }
         catch (HttpRequestException)
         {
@@ -47,7 +47,7 @@ public sealed class AttendanceServiceClient(HttpClient httpClient) : IAttendance
     {
         try
         {
-            return await httpClient.GetFromJsonAsync<bool>($"/api/attendance/monthly-summary/is-approved?companyId={companyId}&year={year}&month={month}", cancellationToken);
+            return await httpClient.GetFromJsonAsync<bool>($"/api/v1/attendance/monthly-summary/is-approved?companyId={companyId}&year={year}&month={month}", cancellationToken);
         }
         catch (HttpRequestException)
         {
@@ -62,7 +62,7 @@ public sealed class LeaveServiceClient(HttpClient httpClient) : ILeaveServiceCli
     {
         try
         {
-            return await httpClient.GetFromJsonAsync<decimal>($"/api/leaves/encashment/approved?companyId={companyId}&employeeId={employeeId}&year={year}&month={month}", cancellationToken);
+            return await httpClient.GetFromJsonAsync<decimal>($"/api/v1/leaves/encashment/approved?companyId={companyId}&employeeId={employeeId}&year={year}&month={month}", cancellationToken);
         }
         catch (HttpRequestException)
         {
@@ -75,7 +75,7 @@ public sealed class CompanyServiceClient(HttpClient httpClient) : ICompanyServic
 {
     public async Task<CompanySnapshot?> GetCompanyAsync(Guid companyId, CancellationToken cancellationToken = default)
     {
-        return await httpClient.GetFromJsonAsync<CompanySnapshot?>($"/api/companies/{companyId}", cancellationToken);
+        return await httpClient.GetFromJsonAsync<CompanySnapshot?>($"/api/v1/companies/{companyId}", cancellationToken);
     }
 }
 
@@ -83,11 +83,11 @@ public sealed class NotificationServiceClient(HttpClient httpClient) : INotifica
 {
     public Task SendPayrollApprovalNotificationAsync(Guid companyId, Guid payrollPeriodId, CancellationToken cancellationToken = default)
     {
-        return httpClient.PostAsJsonAsync("/api/notifications/payroll-approval", new { companyId, payrollPeriodId }, cancellationToken);
+        return httpClient.PostAsJsonAsync("/api/v1/notifications/payroll-approval", new { companyId, payrollPeriodId }, cancellationToken);
     }
 
     public Task SendPayslipNotificationAsync(Guid companyId, Guid employeeId, Guid payrollPeriodId, CancellationToken cancellationToken = default)
     {
-        return httpClient.PostAsJsonAsync("/api/notifications/payslip", new { companyId, employeeId, payrollPeriodId }, cancellationToken);
+        return httpClient.PostAsJsonAsync("/api/v1/notifications/payslip", new { companyId, employeeId, payrollPeriodId }, cancellationToken);
     }
 }

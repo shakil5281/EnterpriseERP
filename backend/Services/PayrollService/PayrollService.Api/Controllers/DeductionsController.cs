@@ -6,7 +6,7 @@ using PayrollService.Contracts;
 namespace PayrollService.Api.Controllers;
 
 [ApiController]
-[Route("api/deductions")]
+[Route("api/v1/deductions")]
 public sealed class DeductionsController(IMediator mediator) : ControllerBase
 {
     [HttpPost]

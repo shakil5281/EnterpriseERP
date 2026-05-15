@@ -247,204 +247,204 @@ export interface PayrollProcessRequest {
 
 export const payrollService = {
     createPayrollPolicy: async (data: Record<string, unknown>) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/payroll-policies"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/payroll-policies"), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     getPayrollPolicies: async (companyId?: string) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/payroll-policies"), { params: { companyId } });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/payroll-policies"), { params: { companyId } });
         return unwrapResponse<PayrollApiEntity[]>(response);
     },
     getPayrollPolicyById: async (id: string) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/payroll-policies/${encodeURIComponent(id)}`));
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/payroll-policies/${encodeURIComponent(id)}`));
         return unwrapResponse<PayrollApiEntity>(response);
     },
     updatePayrollPolicy: async (id: string, data: Record<string, unknown>) => {
-        const response = await api.put<unknown>(platformApiUrl(`/api/payroll-policies/${encodeURIComponent(id)}`), data);
+        const response = await api.put<unknown>(platformApiUrl(`/api/v1/payroll-policies/${encodeURIComponent(id)}`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     activatePayrollPolicy: async (id: string) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/payroll-policies/${encodeURIComponent(id)}/activate`));
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/payroll-policies/${encodeURIComponent(id)}/activate`));
         return unwrapResponse<PayrollApiEntity>(response);
     },
     deactivatePayrollPolicy: async (id: string) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/payroll-policies/${encodeURIComponent(id)}/deactivate`));
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/payroll-policies/${encodeURIComponent(id)}/deactivate`));
         return unwrapResponse<PayrollApiEntity>(response);
     },
 
     createSalaryStructure: async (data: Record<string, unknown>) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/salary-structures"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/salary-structures"), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     getSalaryStructures: async (companyId: string) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/salary-structures"), { params: { companyId } });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/salary-structures"), { params: { companyId } });
         return unwrapResponse<PayrollApiEntity[]>(response);
     },
     addSalaryStructureComponent: async (id: string, data: Record<string, unknown>) => {
-        const response = await api.post<unknown>(platformApiUrl(`/api/salary-structures/${encodeURIComponent(id)}/components`), data);
+        const response = await api.post<unknown>(platformApiUrl(`/api/v1/salary-structures/${encodeURIComponent(id)}/components`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     getSalaryStructureComponents: async (id: string) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/salary-structures/${encodeURIComponent(id)}/components`));
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/salary-structures/${encodeURIComponent(id)}/components`));
         return unwrapResponse<PayrollApiEntity[]>(response);
     },
 
     assignEmployeeSalary: async (data: Record<string, unknown>) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/employee-salaries"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/employee-salaries"), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     getCurrentEmployeeSalary: async (employeeId: string, companyId: string) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/employee-salaries/${encodeURIComponent(employeeId)}/current`), { params: { companyId } });
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/employee-salaries/${encodeURIComponent(employeeId)}/current`), { params: { companyId } });
         return unwrapResponse<PayrollApiEntity>(response);
     },
     getEmployeeSalaryHistory: async (employeeId: string, companyId: string) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/employee-salaries/${encodeURIComponent(employeeId)}/history`), { params: { companyId } });
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/employee-salaries/${encodeURIComponent(employeeId)}/history`), { params: { companyId } });
         return unwrapResponse<PayrollApiEntity[]>(response);
     },
 
     createPayrollPeriod: async (data: Record<string, unknown>) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/payroll-periods"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/payroll-periods"), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     getPayrollPeriods: async (companyId?: string) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/payroll-periods"), { params: { companyId } });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/payroll-periods"), { params: { companyId } });
         return unwrapResponse<PayrollApiEntity[]>(response);
     },
     closePayrollPeriod: async (id: string, data: PayrollApprovalRequest) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/payroll-periods/${encodeURIComponent(id)}/close`), data);
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/payroll-periods/${encodeURIComponent(id)}/close`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     lockPayrollPeriod: async (id: string, data: { lockedBy: string; remarks?: string | null }) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/payroll-periods/${encodeURIComponent(id)}/lock`), data);
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/payroll-periods/${encodeURIComponent(id)}/lock`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     unlockPayrollPeriod: async (id: string, data: { unlockedBy: string; unlockReason: string }) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/payroll-periods/${encodeURIComponent(id)}/unlock`), data);
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/payroll-periods/${encodeURIComponent(id)}/unlock`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
 
     processPayroll: async (data: PayrollProcessRequest) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/payroll/process"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/payroll/process"), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     reprocessPayroll: async (data: PayrollProcessRequest) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/payroll/reprocess"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/payroll/reprocess"), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     getPayrollByPeriod: async (periodId: string) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/payroll/${encodeURIComponent(periodId)}`));
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}`));
         return unwrapResponse<PayrollApiEntity[]>(response);
     },
     getEmployeePayroll: async (periodId: string, employeeId: string) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/payroll/${encodeURIComponent(periodId)}/employees/${encodeURIComponent(employeeId)}`));
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/employees/${encodeURIComponent(employeeId)}`));
         return unwrapResponse<PayrollApiEntity>(response);
     },
     getSalarySheetByPeriod: async (periodId: string) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/payroll/${encodeURIComponent(periodId)}/salary-sheet`));
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/salary-sheet`));
         return unwrapResponse<PayrollApiEntity[]>(response);
     },
     getBankSheetByPeriod: async (periodId: string) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/payroll/${encodeURIComponent(periodId)}/bank-sheet`));
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/bank-sheet`));
         return unwrapResponse<PayrollApiEntity[]>(response);
     },
     getPayslipsByPeriod: async (periodId: string) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/payroll/${encodeURIComponent(periodId)}/payslips`));
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/payslips`));
         return unwrapResponse<PayrollApiEntity[]>(response);
     },
     getPayslipByPeriod: async (periodId: string, employeeId: string) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/payroll/${encodeURIComponent(periodId)}/payslips/${encodeURIComponent(employeeId)}`));
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/payslips/${encodeURIComponent(employeeId)}`));
         return unwrapResponse<PayrollApiEntity>(response);
     },
     submitPayroll: async (periodId: string, data: PayrollApprovalRequest) => {
-        const response = await api.post<unknown>(platformApiUrl(`/api/payroll/${encodeURIComponent(periodId)}/submit`), data);
+        const response = await api.post<unknown>(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/submit`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     approvePayroll: async (periodId: string, data: PayrollApprovalRequest) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/payroll/${encodeURIComponent(periodId)}/approve`), data);
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/approve`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     rejectPayroll: async (periodId: string, data: PayrollApprovalRequest) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/payroll/${encodeURIComponent(periodId)}/reject`), data);
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/reject`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     checkPayrollLock: async (params: { companyId: string; year: number; month: number }) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/payroll-locks/check"), { params });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/payroll-locks/check"), { params });
         return unwrapResponse<PayrollApiEntity>(response);
     },
 
     createSalaryAdvance: async (data: Record<string, unknown>) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/salary-advances"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/salary-advances"), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     getSalaryAdvance: async (params: { companyId: string; employeeId: string }) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/salary-advances"), { params });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/salary-advances"), { params });
         return unwrapResponse<PayrollApiEntity>(response);
     },
     approveSalaryAdvance: async (id: string, data: PayrollApprovalRequest) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/salary-advances/${encodeURIComponent(id)}/approve`), data);
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/salary-advances/${encodeURIComponent(id)}/approve`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     rejectSalaryAdvance: async (id: string, data: PayrollApprovalRequest) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/salary-advances/${encodeURIComponent(id)}/reject`), data);
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/salary-advances/${encodeURIComponent(id)}/reject`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     getSalaryAdvanceBalance: async (employeeId: string, companyId: string) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/salary-advances/${encodeURIComponent(employeeId)}/balance`), { params: { companyId } });
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/salary-advances/${encodeURIComponent(employeeId)}/balance`), { params: { companyId } });
         return unwrapResponse<PayrollApiEntity>(response);
     },
 
     createSalaryIncrement: async (data: Record<string, unknown>) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/salary-increments"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/salary-increments"), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     getSalaryIncrements: async (params: { companyId: string; employeeId?: string }) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/salary-increments"), { params });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/salary-increments"), { params });
         return unwrapResponse<PayrollApiEntity[]>(response);
     },
     approveSalaryIncrement: async (id: string, data: PayrollApprovalRequest) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/salary-increments/${encodeURIComponent(id)}/approve`), data);
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/salary-increments/${encodeURIComponent(id)}/approve`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     rejectSalaryIncrement: async (id: string, data: PayrollApprovalRequest) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/salary-increments/${encodeURIComponent(id)}/reject`), data);
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/salary-increments/${encodeURIComponent(id)}/reject`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
 
     createAllowanceBill: async (data: Record<string, unknown>) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/allowance-bills"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/allowance-bills"), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     getAllowanceBills: async (params: { companyId: string; employeeId?: string; fromDate?: string; toDate?: string }) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/allowance-bills"), { params });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/allowance-bills"), { params });
         return unwrapResponse<PayrollApiEntity[]>(response);
     },
     approveAllowanceBill: async (id: string, data: PayrollApprovalRequest) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/allowance-bills/${encodeURIComponent(id)}/approve`), data);
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/allowance-bills/${encodeURIComponent(id)}/approve`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     rejectAllowanceBill: async (id: string, data: PayrollApprovalRequest) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/allowance-bills/${encodeURIComponent(id)}/reject`), data);
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/allowance-bills/${encodeURIComponent(id)}/reject`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
 
     createDeduction: async (data: Record<string, unknown>) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/deductions"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/deductions"), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     getDeductions: async (params: { companyId: string; employeeId?: string }) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/deductions"), { params });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/deductions"), { params });
         return unwrapResponse<PayrollApiEntity[]>(response);
     },
 
     createFinalSettlement: async (data: Record<string, unknown>) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/final-settlements"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/final-settlements"), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
     getFinalSettlements: async (params: { companyId: string; employeeId?: string }) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/final-settlements"), { params });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/final-settlements"), { params });
         return unwrapResponse<PayrollApiEntity[]>(response);
     },
     approveFinalSettlement: async (id: string, data: PayrollApprovalRequest) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/final-settlements/${encodeURIComponent(id)}/approve`), data);
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/final-settlements/${encodeURIComponent(id)}/approve`), data);
         return unwrapResponse<PayrollApiEntity>(response);
     },
 

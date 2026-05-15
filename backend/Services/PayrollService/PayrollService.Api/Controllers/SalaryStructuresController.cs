@@ -8,7 +8,7 @@ using PayrollService.Domain.Enums;
 namespace PayrollService.Api.Controllers;
 
 [ApiController]
-[Route("api/salary-structures")]
+[Route("api/v1/salary-structures")]
 public sealed class SalaryStructuresController(IMediator mediator) : ControllerBase
 {
     [HttpPost]

@@ -11,7 +11,7 @@ using Erp.BuildingBlocks.CommonResponses;
 namespace AttendanceService.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/v1/[controller]")]
 public class AttendanceController(IMediator mediator) : ControllerBase
 {
     [HttpPost("process")]
@@ -51,7 +51,7 @@ public class AttendanceController(IMediator mediator) : ControllerBase
 }
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/v1/[controller]")]
 public class PunchLogsController(IMediator mediator) : ControllerBase
 {
     [HttpPost("upload")]

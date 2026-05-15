@@ -279,7 +279,7 @@ export default function RosterAssignPage() {
                             <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider ml-1">Shift</Label>
                             <NativeSelect className="h-10 bg-muted/10 border-muted rounded-xl" value={filters.shiftId} onChange={e => setFilters(p => ({ ...p, shiftId: e.target.value }))}>
                                 <option value="all">Every Shift</option>
-                                {shifts.map(s => <option key={s.id} value={s.id}>{s.nameEn}</option>)}
+                                {shifts.map(s => <option key={s.id} value={s.id}>{s.shiftName}</option>)}
                             </NativeSelect>
                         </div>
                         <div className="space-y-2">
@@ -391,7 +391,7 @@ export default function RosterAssignPage() {
                                 <option value="">Choose Shift</option>
                                 {shifts.map(s => (
                                     <option key={s.id} value={s.id.toString()}>
-                                        {s.nameEn} ({s.inTime}-{s.outTime})
+                                        {s.shiftName} ({s.startTime?.substring(0, 5)}-{s.endTime?.substring(0, 5)})
                                     </option>
                                 ))}
                             </NativeSelect>

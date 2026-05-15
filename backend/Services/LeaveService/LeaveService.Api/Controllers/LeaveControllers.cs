@@ -18,7 +18,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LeaveService.Api.Controllers;
 
 [ApiController]
-[Route("api/leave-types")]
+[Route("api/v1/leave-types")]
 [Authorize]
 public sealed class LeaveTypesController(IMediator mediator) : ControllerBase
 {
@@ -55,7 +55,7 @@ public sealed class LeaveTypesController(IMediator mediator) : ControllerBase
 }
 
 [ApiController]
-[Route("api/leave-policies")]
+[Route("api/v1/leave-policies")]
 [Authorize]
 public sealed class LeavePoliciesController(IMediator mediator) : ControllerBase
 {
@@ -75,7 +75,7 @@ public sealed class LeavePoliciesController(IMediator mediator) : ControllerBase
 }
 
 [ApiController]
-[Route("api/leave-balances")]
+[Route("api/v1/leave-balances")]
 [Authorize]
 public sealed class LeaveBalancesController(IMediator mediator) : ControllerBase
 {
@@ -101,7 +101,7 @@ public sealed class LeaveBalancesController(IMediator mediator) : ControllerBase
 }
 
 [ApiController]
-[Route("api/leaves")]
+[Route("api/v1/leaves")]
 [Authorize]
 public sealed class LeavesController(IMediator mediator) : ControllerBase
 {
@@ -147,7 +147,7 @@ public sealed class LeavesController(IMediator mediator) : ControllerBase
 }
 
 [ApiController]
-[Route("api/holidays")]
+[Route("api/v1/holidays")]
 [Authorize]
 public sealed class HolidaysController(IMediator mediator) : ControllerBase
 {
@@ -175,7 +175,7 @@ public sealed class HolidaysController(IMediator mediator) : ControllerBase
 }
 
 [ApiController]
-[Route("api/weekly-offs")]
+[Route("api/v1/weekly-offs")]
 [Authorize]
 public sealed class WeeklyOffsController(IMediator mediator) : ControllerBase
 {
@@ -198,7 +198,7 @@ public sealed class WeeklyOffsController(IMediator mediator) : ControllerBase
 }
 
 [ApiController]
-[Route("api/earn-leaves")]
+[Route("api/v1/earn-leaves")]
 [Authorize]
 public sealed class EarnLeavesController(IMediator mediator) : ControllerBase
 {
@@ -213,7 +213,7 @@ public sealed class EarnLeavesController(IMediator mediator) : ControllerBase
 }
 
 [ApiController]
-[Route("api/leave-encashments")]
+[Route("api/v1/leave-encashments")]
 [Authorize]
 public sealed class LeaveEncashmentsController(IMediator mediator) : ControllerBase
 {
@@ -242,7 +242,7 @@ public sealed class LeaveEncashmentsController(IMediator mediator) : ControllerB
 }
 
 [ApiController]
-[Route("api/day-types")]
+[Route("api/v1/day-types")]
 [Authorize]
 public sealed class DayTypesController(IMediator mediator) : ControllerBase
 {

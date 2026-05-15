@@ -8,7 +8,7 @@ using ShiftService.Application.DTOs;
 namespace ShiftService.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/v1/[controller]")]
 public class ShiftsController(IMediator mediator) : ControllerBase
 {
     [HttpPost]

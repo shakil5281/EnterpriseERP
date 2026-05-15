@@ -6,7 +6,7 @@ using PayrollService.Contracts;
 namespace PayrollService.Api.Controllers;
 
 [ApiController]
-[Route("api/allowance-bills")]
+[Route("api/v1/allowance-bills")]
 public sealed class AllowanceBillsController(IMediator mediator) : ControllerBase
 {
     [HttpPost]

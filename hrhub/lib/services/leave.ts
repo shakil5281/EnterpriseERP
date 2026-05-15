@@ -167,15 +167,15 @@ export const leaveService = {
         maxCarryForwardDays: number;
         isEncashable: boolean;
     }) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/leave-types"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/leave-types"), data);
         return unwrapResponse<BackendLeaveType>(response);
     },
     listLeaveTypes: async (companyId: string) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/leave-types"), { params: { companyId } });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/leave-types"), { params: { companyId } });
         return unwrapResponse<BackendLeaveType[]>(response);
     },
     getLeaveTypeById: async (id: string) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/leave-types/${encodeURIComponent(id)}`));
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/leave-types/${encodeURIComponent(id)}`));
         return unwrapResponse<BackendLeaveType>(response);
     },
     updateLeaveType: async (id: string, data: {
@@ -185,41 +185,41 @@ export const leaveService = {
         maxCarryForwardDays: number;
         isEncashable: boolean;
     }) => {
-        const response = await api.put<unknown>(platformApiUrl(`/api/leave-types/${encodeURIComponent(id)}`), data);
+        const response = await api.put<unknown>(platformApiUrl(`/api/v1/leave-types/${encodeURIComponent(id)}`), data);
         return unwrapResponse<BackendLeaveType>(response);
     },
     activateLeaveType: async (id: string) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/leave-types/${encodeURIComponent(id)}/activate`));
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/leave-types/${encodeURIComponent(id)}/activate`));
         return unwrapResponse<BackendLeaveType>(response);
     },
     deactivateLeaveType: async (id: string) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/leave-types/${encodeURIComponent(id)}/deactivate`));
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/leave-types/${encodeURIComponent(id)}/deactivate`));
         return unwrapResponse<BackendLeaveType>(response);
     },
 
     createLeavePolicy: async (data: Omit<BackendLeavePolicy, "id" | "leaveCode" | "isActive">) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/leave-policies"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/leave-policies"), data);
         return unwrapResponse<BackendLeavePolicy>(response);
     },
     listLeavePolicies: async (companyId: string) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/leave-policies"), { params: { companyId } });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/leave-policies"), { params: { companyId } });
         return unwrapResponse<BackendLeavePolicy[]>(response);
     },
     updateLeavePolicy: async (id: string, data: Omit<BackendLeavePolicy, "id" | "companyId" | "leaveTypeId" | "leaveCode">) => {
-        const response = await api.put<unknown>(platformApiUrl(`/api/leave-policies/${encodeURIComponent(id)}`), data);
+        const response = await api.put<unknown>(platformApiUrl(`/api/v1/leave-policies/${encodeURIComponent(id)}`), data);
         return unwrapResponse<BackendLeavePolicy>(response);
     },
 
     generateYearlyBalances: async (data: { companyId: string; yearNo: number; triggeredBy?: string | null }) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/leave-balances/generate-yearly"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/leave-balances/generate-yearly"), data);
         return unwrapResponse<number>(response);
     },
     accrueMonthlyBalances: async (data: { companyId: string; yearNo: number; month: number; triggeredBy?: string | null }) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/leave-balances/accrue-monthly"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/leave-balances/accrue-monthly"), data);
         return unwrapResponse<number>(response);
     },
     getEmployeeBalances: async (employeeId: string, params: { companyId: string; year: number }) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/leave-balances/${encodeURIComponent(employeeId)}`), { params });
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/leave-balances/${encodeURIComponent(employeeId)}`), { params });
         return unwrapResponse<BackendLeaveBalance[]>(response);
     },
     adjustLeaveBalance: async (data: {
@@ -230,7 +230,7 @@ export const leaveService = {
         adjustmentDays: number;
         remarks: string;
     }) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/leave-balances/adjust"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/leave-balances/adjust"), data);
         return unwrapResponse<BackendLeaveBalance>(response);
     },
 
@@ -247,33 +247,33 @@ export const leaveService = {
         appliedBy: string;
         approvalSteps?: { approvalLevel: number; approverUserId?: string | null; approverEmployeeId?: string | null }[] | null;
     }) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/leaves/apply"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/leaves/apply"), data);
         return unwrapResponse<BackendLeaveApplication>(response);
     },
     listLeaveApplications: async (companyId: string) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/leaves/applications"), { params: { companyId } });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/leaves/applications"), { params: { companyId } });
         return unwrapResponse<BackendLeaveApplication[]>(response);
     },
     getLeaveApplicationById: async (id: string) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/leaves/applications/${encodeURIComponent(id)}`));
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/leaves/applications/${encodeURIComponent(id)}`));
         return unwrapResponse<BackendLeaveApplication>(response);
     },
     approveLeaveApplication: async (id: string, data: { approvedBy: string; approverUserId?: string | null }) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/leaves/applications/${encodeURIComponent(id)}/approve`), {
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/leaves/applications/${encodeURIComponent(id)}/approve`), {
             leaveApplicationId: id,
             ...data
         });
         return unwrapResponse<BackendLeaveApplication>(response);
     },
     rejectLeaveApplication: async (id: string, data: { rejectedBy: string; remarks: string; approverUserId?: string | null }) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/leaves/applications/${encodeURIComponent(id)}/reject`), {
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/leaves/applications/${encodeURIComponent(id)}/reject`), {
             leaveApplicationId: id,
             ...data
         });
         return unwrapResponse<BackendLeaveApplication>(response);
     },
     cancelLeaveApplication: async (id: string, cancelledBy: string) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/leaves/applications/${encodeURIComponent(id)}/cancel`), {
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/leaves/applications/${encodeURIComponent(id)}/cancel`), {
             leaveApplicationId: id,
             cancelledBy
         });
@@ -281,41 +281,41 @@ export const leaveService = {
     },
 
     createHoliday: async (data: Omit<Holiday, "id" | "createdAt">) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/holidays"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/holidays"), data);
         return unwrapResponse<Holiday>(response);
     },
     listHolidays: async (params: { companyId: string; year: number }) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/holidays"), { params });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/holidays"), { params });
         return unwrapResponse<Holiday[]>(response);
     },
     updateHoliday: async (id: string, data: Omit<Holiday, "id" | "createdAt">) => {
-        const response = await api.put<unknown>(platformApiUrl(`/api/holidays/${encodeURIComponent(id)}`), data);
+        const response = await api.put<unknown>(platformApiUrl(`/api/v1/holidays/${encodeURIComponent(id)}`), data);
         return unwrapResponse<Holiday>(response);
     },
     deleteHoliday: async (id: string) => {
-        const response = await api.delete<unknown>(platformApiUrl(`/api/holidays/${encodeURIComponent(id)}`));
+        const response = await api.delete<unknown>(platformApiUrl(`/api/v1/holidays/${encodeURIComponent(id)}`));
         return unwrapResponse<unknown>(response);
     },
 
     createWeeklyOff: async (data: { companyId: string; dayOfWeekName: string }) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/weekly-offs"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/weekly-offs"), data);
         return unwrapResponse<WeeklyOff>(response);
     },
     listWeeklyOffs: async (companyId: string) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/weekly-offs"), { params: { companyId } });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/weekly-offs"), { params: { companyId } });
         return unwrapResponse<WeeklyOff[]>(response);
     },
     deleteWeeklyOff: async (id: string) => {
-        const response = await api.delete<unknown>(platformApiUrl(`/api/weekly-offs/${encodeURIComponent(id)}`));
+        const response = await api.delete<unknown>(platformApiUrl(`/api/v1/weekly-offs/${encodeURIComponent(id)}`));
         return unwrapResponse<unknown>(response);
     },
 
     generateEarnLeave: async (data: { companyId: string; employeeId: string; leaveTypeId: string; yearNo: number; month: number }) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/earn-leaves/generate"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/earn-leaves/generate"), data);
         return unwrapResponse<{ employeeId: string; yearNo: number; month: number; earnedDays: number; newAccruedTotal: number }>(response);
     },
     getEarnLeaveSummary: async (employeeId: string, params: { companyId: string; year: number }) => {
-        const response = await api.get<unknown>(platformApiUrl(`/api/earn-leaves/${encodeURIComponent(employeeId)}`), { params });
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/earn-leaves/${encodeURIComponent(employeeId)}`), { params });
         return unwrapResponse<BackendLeaveBalance[]>(response);
     },
 
@@ -328,28 +328,28 @@ export const leaveService = {
         ratePerDay: number;
         requestedBy?: string | null;
     }) => {
-        const response = await api.post<unknown>(platformApiUrl("/api/leave-encashments"), data);
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/leave-encashments"), data);
         return unwrapResponse<LeaveEncashment>(response);
     },
     listLeaveEncashments: async (params: { companyId: string; year?: number }) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/leave-encashments"), { params });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/leave-encashments"), { params });
         return unwrapResponse<LeaveEncashment[]>(response);
     },
     approveLeaveEncashment: async (id: string, approvedBy: string) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/leave-encashments/${encodeURIComponent(id)}/approve`), null, { params: { approvedBy } });
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/leave-encashments/${encodeURIComponent(id)}/approve`), null, { params: { approvedBy } });
         return unwrapResponse<LeaveEncashment>(response);
     },
     rejectLeaveEncashment: async (id: string, rejectedBy: string) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/leave-encashments/${encodeURIComponent(id)}/reject`), null, { params: { rejectedBy } });
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/leave-encashments/${encodeURIComponent(id)}/reject`), null, { params: { rejectedBy } });
         return unwrapResponse<LeaveEncashment>(response);
     },
     markLeaveEncashmentPaid: async (id: string) => {
-        const response = await api.patch<unknown>(platformApiUrl(`/api/leave-encashments/${encodeURIComponent(id)}/paid`));
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/leave-encashments/${encodeURIComponent(id)}/paid`));
         return unwrapResponse<LeaveEncashment>(response);
     },
 
     getDayType: async (params: { companyId: string; employeeId: string; date: string }) => {
-        const response = await api.get<unknown>(platformApiUrl("/api/day-types"), { params });
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/day-types"), { params });
         return unwrapResponse<DayTypeResponse>(response);
     },
 
