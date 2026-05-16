@@ -58,10 +58,6 @@ export default function CreateCompanyPage() {
                     <CardContent className="space-y-6 py-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="grid gap-2">
-                                <Label htmlFor="companyCode">Company Code</Label>
-                                <Input id="companyCode" name="companyCode" placeholder="e.g. COMP-001 (optional — auto if empty)" />
-                            </div>
-                            <div className="grid gap-2">
                                 <Label htmlFor="branch">Branch Type</Label>
                                 <NativeSelect id="branch" name="branch" className="w-full" required>
                                     <option value="1">Primary</option>

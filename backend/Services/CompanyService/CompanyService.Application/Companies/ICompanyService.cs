@@ -11,7 +11,6 @@ public interface ICompanyService
 public sealed class CompanyDetailsDto
 {
     public Guid Id { get; init; }
-    public string CompanyCode { get; init; } = string.Empty;
     public string CompanyNameEn { get; init; } = string.Empty;
     public string? CompanyNameBn { get; init; }
     public string? AddressEn { get; init; }
@@ -29,7 +28,6 @@ public sealed class CompanyDetailsDto
 
 public sealed class CreateCompanyDto
 {
-    public string CompanyCode { get; init; } = string.Empty;
     public string CompanyNameEn { get; init; } = string.Empty;
     public string? CompanyNameBn { get; init; }
     public string? AddressEn { get; init; }

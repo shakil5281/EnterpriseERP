@@ -24,6 +24,7 @@ type ServerConfig struct {
 
 type ConnectionStringsConfig struct {
 	ImportExportDb string `json:"ImportExportDb"`
+	CompanyDb      string `json:"CompanyDb"`
 }
 
 type RedisConfig struct {
@@ -33,7 +34,7 @@ type RedisConfig struct {
 }
 
 type AsynqConfig struct {
-	Concurrency            int `json:"Concurrency"`
+	Concurrency             int `json:"Concurrency"`
 	ImportLargeRowThreshold int `json:"ImportLargeRowThreshold"`
 }
 
@@ -59,9 +60,38 @@ func Load() (*AppConfig, error) {
 		return nil, err
 	}
 	cfg := &AppConfig{}
-	if err := readJSON(filepath.Join(root, "appsettings.json"), cfg); err != nil {
-		return nil, err
+	base := filepath.Join(root, "appsettings.json")
+	if err := readJSON(base, cfg); err != nil {
+		return nil, fmt.Errorf("read %s: %w", base, err)
 	}
+
+	env := strings.TrimSpace(os.Getenv("ASPNETCORE_ENVIRONMENT"))
+	if env == "" {
+		env = "Development"
+	}
+	overlay := filepath.Join(root, fmt.Sprintf("appsettings.%s.json", env))
+	if _, err := os.Stat(overlay); err == nil {
+		if err := readJSON(overlay, cfg); err != nil {
+			return nil, fmt.Errorf("read %s: %w", overlay, err)
+		}
+	}
+
+	central := filepath.Clean(filepath.Join(root, "..", "..", "Configuration", "connectionstrings.json"))
+	if _, err := os.Stat(central); err == nil {
+		var centralCfg struct {
+			ConnectionStrings struct {
+				ImportExportDb string `json:"ImportExportDb"`
+				CompanyDb      string `json:"CompanyDb"`
+			} `json:"ConnectionStrings"`
+		}
+		if err := readJSON(central, &centralCfg); err == nil && strings.TrimSpace(centralCfg.ConnectionStrings.ImportExportDb) != "" {
+			cfg.ConnectionStrings.ImportExportDb = centralCfg.ConnectionStrings.ImportExportDb
+		}
+		if strings.TrimSpace(centralCfg.ConnectionStrings.CompanyDb) != "" {
+			cfg.ConnectionStrings.CompanyDb = centralCfg.ConnectionStrings.CompanyDb
+		}
+	}
+
 	applyEnv(cfg)
 	applyDefaults(cfg)
 	return cfg, nil
@@ -81,6 +111,9 @@ func applyEnv(cfg *AppConfig) {
 	}
 	if v := os.Getenv("IMPORTEXPORT_CONNECTIONSTRING"); v != "" {
 		cfg.ConnectionStrings.ImportExportDb = v
+	}
+	if v := os.Getenv("IMPORTEXPORT_COMPANY_CONNECTIONSTRING"); v != "" {
+		cfg.ConnectionStrings.CompanyDb = v
 	}
 	if v := os.Getenv("IMPORTEXPORT_REDIS"); v != "" {
 		cfg.Redis.Address = v
@@ -163,18 +196,35 @@ func NormalizeSQLServerDSN(cs string) string {
 	database := first(kv, "database", "initial catalog")
 	user := first(kv, "user id", "uid")
 	password := first(kv, "password", "pwd")
-	host := server
-	port := ""
-	if strings.Contains(server, ",") {
-		bits := strings.SplitN(server, ",", 2)
-		host, port = bits[0], bits[1]
+
+	host, instance, port := parseServer(server)
+	q := []string{}
+	if database != "" {
+		q = append(q, "database="+esc(database))
 	}
-	q := []string{"database=" + esc(database)}
 	if port != "" {
 		q = append(q, "port="+esc(port))
 	}
+	trustCert := false
 	if strings.EqualFold(kv["trustservercertificate"], "true") {
-		q = append(q, "trustservercertificate=true", "tlsmin=1.0")
+		trustCert = true
+		q = append(q, "trustservercertificate=true")
+	}
+	if v, ok := kv["encrypt"]; ok {
+		switch strings.ToLower(v) {
+		case "mandatory", "true", "yes":
+			q = append(q, "encrypt=true")
+		case "optional", "false", "no":
+			q = append(q, "encrypt=disable")
+		case "strict":
+			q = append(q, "encrypt=strict")
+		}
+	}
+	if trustCert {
+		q = append(q, "tlsmin=1.0")
+	}
+	if strings.EqualFold(kv["multipleactiveresultsets"], "true") {
+		q = append(q, "MultipleActiveResultSets=true")
 	}
 	auth := ""
 	if user != "" {
@@ -184,7 +234,32 @@ func NormalizeSQLServerDSN(cs string) string {
 		}
 		auth += "@"
 	}
-	return "sqlserver://" + auth + esc(host) + "?" + strings.Join(q, "&")
+	dsn := "sqlserver://" + auth + esc(host)
+	if instance != "" {
+		dsn += "/" + esc(instance)
+	}
+	if len(q) > 0 {
+		dsn += "?" + strings.Join(q, "&")
+	}
+	return dsn
+}
+
+func parseServer(server string) (host, instance, port string) {
+	if server == "" {
+		return "", "", ""
+	}
+	if strings.Contains(server, "\\") {
+		bits := strings.SplitN(server, "\\", 2)
+		host = bits[0]
+		instance = bits[1]
+	} else if strings.Contains(server, ",") {
+		bits := strings.SplitN(server, ",", 2)
+		host = bits[0]
+		port = bits[1]
+	} else {
+		host = server
+	}
+	return host, instance, port
 }
 
 func first(m map[string]string, keys ...string) string {

@@ -2,6 +2,7 @@ package importsvc
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,23 +32,31 @@ var payrollHeaders = []string{
 var shiftHeaders = []string{"EmployeeCode", "ShiftCode", "EffectiveFrom", "EffectiveTo", "Remarks"}
 var leaveHeaders = []string{"EmployeeCode", "LeaveType", "FromDate", "ToDate", "Days", "Reason"}
 
+const (
+	departmentSelect  = "CAST(Id AS varchar(36)) AS Id, CAST(CompanyId AS varchar(36)) AS CompanyId, NameEn, NameBn, IsActive, CreatedAt, UpdatedAt"
+	sectionSelect     = "CAST(Id AS varchar(36)) AS Id, CAST(DepartmentId AS varchar(36)) AS DepartmentId, NameEn, NameBn, IsActive, CreatedAt, UpdatedAt"
+	designationSelect = "CAST(Id AS varchar(36)) AS Id, CAST(SectionId AS varchar(36)) AS SectionId, NameEn, NameBn, IsActive, CreatedAt, UpdatedAt"
+	lineSelect        = "CAST(Id AS varchar(36)) AS Id, CAST(SectionId AS varchar(36)) AS SectionId, NameEn, NameBn, IsActive, CreatedAt, UpdatedAt"
+)
+
 type Service struct {
-	DB               *gorm.DB
-	Store            storage.LocalStorage
-	ExportDir        string
-	LargeThreshold   int
-	AsynqClient      *asynq.Client
+	DB             *gorm.DB
+	CompanyDB      *gorm.DB
+	Store          storage.LocalStorage
+	ExportDir      string
+	LargeThreshold int
+	AsynqClient    *asynq.Client
 }
 
 type previewCache struct {
-	ModuleName    string          `json:"moduleName"`
-	FileName      string          `json:"fileName"`
-	FilePath      string          `json:"filePath"`
-	ValidJSON     string          `json:"validJson"`
-	Errors        []dto.RowError  `json:"errors"`
-	TotalRows     int             `json:"totalRows"`
-	ValidRows     int             `json:"validRows"`
-	InvalidRows   int             `json:"invalidRows"`
+	ModuleName  string         `json:"moduleName"`
+	FileName    string         `json:"fileName"`
+	FilePath    string         `json:"filePath"`
+	ValidJSON   string         `json:"validJson"`
+	Errors      []dto.RowError `json:"errors"`
+	TotalRows   int            `json:"totalRows"`
+	ValidRows   int            `json:"validRows"`
+	InvalidRows int            `json:"invalidRows"`
 }
 
 func (s *Service) Preview(companyID, userID uuid.UUID, module, absFilePath, fileName string) (*dto.ImportPreviewResult, error) {
@@ -338,6 +347,348 @@ func (s *Service) Export(companyID, userID uuid.UUID, module, format string, _ m
 	job.CompletedAt = &now
 	_ = s.DB.Save(&job)
 	return toExportDTO(job), filepath.Join(s.Store.Root, rel), nil
+}
+
+func (s *Service) ImportCompanyOrganogram(path string) (*dto.CompanyOrganogramImportResult, error) {
+	if s.CompanyDB == nil {
+		return nil, fmt.Errorf("company database is not configured")
+	}
+	rows, errs, err := excelsvc.ParseCompanyOrganogramImport(path)
+	if err != nil {
+		return nil, err
+	}
+	result := &dto.CompanyOrganogramImportResult{
+		TotalRows:  len(rows) + countUniqueErrorRows(errs),
+		FailedRows: countUniqueErrorRows(errs),
+		Errors:     errs,
+	}
+	if len(rows) == 0 {
+		return result, nil
+	}
+
+	err = s.CompanyDB.Transaction(func(tx *gorm.DB) error {
+		for _, row := range rows {
+			company, companyCreated, err := resolveOrCreateCompany(tx, row)
+			if err != nil {
+				result.Errors = append(result.Errors, dto.RowError{Row: row.RowIndex, Column: "CompanyNameEn", Message: err.Error()})
+				result.FailedRows++
+				continue
+			}
+			if companyCreated {
+				result.CompaniesCreated++
+			}
+
+			dept, created, err := upsertDepartment(tx, company.ID, row)
+			if err != nil {
+				result.Errors = append(result.Errors, dto.RowError{Row: row.RowIndex, Column: "DepartmentNameEn", Message: err.Error()})
+				result.FailedRows++
+				continue
+			}
+			if created {
+				result.DepartmentsCreated++
+			} else {
+				result.DepartmentsUpdated++
+			}
+
+			section, created, err := upsertSection(tx, dept.ID, row)
+			if err != nil {
+				result.Errors = append(result.Errors, dto.RowError{Row: row.RowIndex, Column: "SectionNameEn", Message: err.Error()})
+				result.FailedRows++
+				continue
+			}
+			if created {
+				result.SectionsCreated++
+			} else {
+				result.SectionsUpdated++
+			}
+
+			if strings.TrimSpace(row.DesignationNameEn) != "" {
+				created, err := upsertDesignation(tx, section.ID, row)
+				if err != nil {
+					result.Errors = append(result.Errors, dto.RowError{Row: row.RowIndex, Column: "DesignationNameEn", Message: err.Error()})
+					result.FailedRows++
+					continue
+				}
+				if created {
+					result.DesignationsCreated++
+				} else {
+					result.DesignationsUpdated++
+				}
+			}
+
+			if strings.TrimSpace(row.LineNameEn) != "" {
+				created, err := upsertLine(tx, section.ID, row)
+				if err != nil {
+					result.Errors = append(result.Errors, dto.RowError{Row: row.RowIndex, Column: "LineNameEn", Message: err.Error()})
+					result.FailedRows++
+					continue
+				}
+				if created {
+					result.LinesCreated++
+				} else {
+					result.LinesUpdated++
+				}
+			}
+
+			result.SuccessRows++
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result.FailedRows > result.TotalRows {
+		result.FailedRows = result.TotalRows
+	}
+	return result, nil
+}
+
+func (s *Service) ExportCompanyOrganogram(companyName string) (*excelize.File, error) {
+	if s.CompanyDB == nil {
+		return nil, fmt.Errorf("company database is not configured")
+	}
+	query := s.CompanyDB.Table("Companies AS c").
+		Select(`c.CompanyNameEn, COALESCE(c.CompanyNameBn, '') AS CompanyNameBn,
+			d.NameEn AS DepartmentNameEn, d.NameBn AS DepartmentNameBn,
+			s.NameEn AS SectionNameEn, s.NameBn AS SectionNameBn,
+			COALESCE(ds.NameEn, '') AS DesignationNameEn, COALESCE(ds.NameBn, '') AS DesignationNameBn,
+			COALESCE(l.NameEn, '') AS LineNameEn, COALESCE(l.NameBn, '') AS LineNameBn,
+			CASE WHEN COALESCE(l.IsActive, ds.IsActive, s.IsActive, d.IsActive, CAST(1 AS bit)) = 1 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS IsActive`).
+		Joins("JOIN Departments AS d ON d.CompanyId = c.Id").
+		Joins("JOIN Sections AS s ON s.DepartmentId = d.Id").
+		Joins("LEFT JOIN Designations AS ds ON ds.SectionId = s.Id").
+		Joins("LEFT JOIN Lines AS l ON l.SectionId = s.Id").
+		Order("c.CompanyNameEn, d.NameEn, s.NameEn, ds.NameEn, l.NameEn")
+	if strings.TrimSpace(companyName) != "" {
+		query = query.Where("c.CompanyNameEn = ?", strings.TrimSpace(companyName))
+	}
+	var rows []excelsvc.CompanyOrganogramRow
+	if err := query.Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	return excelsvc.BuildCompanyOrganogramWorkbook(rows)
+}
+
+func upsertDepartment(tx *gorm.DB, companyID string, row excelsvc.CompanyOrganogramRow) (*models.CompanyDepartment, bool, error) {
+	var dept models.CompanyDepartment
+	nameEn := organogramName(row.DepartmentNameEn)
+	err := tx.Select(departmentSelect).Where("CompanyId = ? AND UPPER(LTRIM(RTRIM(NameEn))) = UPPER(?)", companyID, nameEn).Order("CreatedAt, Id").Take(&dept).Error
+	now := time.Now()
+	if err == nil {
+		dept.NameEn = nameEn
+		dept.NameBn = fallback(row.DepartmentNameBn, nameEn)
+		dept.IsActive = row.IsActive
+		dept.UpdatedAt = &now
+		if err := tx.Save(&dept).Error; err != nil {
+			return nil, false, err
+		}
+		return &dept, false, deduplicateDepartments(tx, dept.ID, companyID, nameEn)
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, false, err
+	}
+	dept = models.CompanyDepartment{
+		ID: uuid.NewString(), CompanyID: companyID, NameEn: nameEn,
+		NameBn:   fallback(row.DepartmentNameBn, nameEn),
+		IsActive: row.IsActive, CreatedAt: now,
+	}
+	return &dept, true, tx.Create(&dept).Error
+}
+
+func upsertSection(tx *gorm.DB, departmentID string, row excelsvc.CompanyOrganogramRow) (*models.CompanySection, bool, error) {
+	var section models.CompanySection
+	nameEn := organogramName(row.SectionNameEn)
+	err := tx.Select(sectionSelect).Where("DepartmentId = ? AND UPPER(LTRIM(RTRIM(NameEn))) = UPPER(?)", departmentID, nameEn).Order("CreatedAt, Id").Take(&section).Error
+	now := time.Now()
+	if err == nil {
+		section.NameEn = nameEn
+		section.NameBn = fallback(row.SectionNameBn, nameEn)
+		section.IsActive = row.IsActive
+		section.UpdatedAt = &now
+		if err := tx.Save(&section).Error; err != nil {
+			return nil, false, err
+		}
+		return &section, false, deduplicateSections(tx, section.ID, departmentID, nameEn)
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, false, err
+	}
+	section = models.CompanySection{
+		ID: uuid.NewString(), DepartmentID: departmentID, NameEn: nameEn,
+		NameBn:   fallback(row.SectionNameBn, nameEn),
+		IsActive: row.IsActive, CreatedAt: now,
+	}
+	return &section, true, tx.Create(&section).Error
+}
+
+func upsertDesignation(tx *gorm.DB, sectionID string, row excelsvc.CompanyOrganogramRow) (bool, error) {
+	var designation models.CompanyDesignation
+	nameEn := organogramName(row.DesignationNameEn)
+	err := tx.Select(designationSelect).Where("SectionId = ? AND UPPER(LTRIM(RTRIM(NameEn))) = UPPER(?)", sectionID, nameEn).Order("CreatedAt, Id").Take(&designation).Error
+	now := time.Now()
+	if err == nil {
+		designation.NameEn = nameEn
+		designation.NameBn = fallback(row.DesignationNameBn, nameEn)
+		designation.IsActive = row.IsActive
+		designation.UpdatedAt = &now
+		if err := tx.Save(&designation).Error; err != nil {
+			return false, err
+		}
+		return false, deduplicateDesignations(tx, designation.ID, sectionID, nameEn)
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, err
+	}
+	designation = models.CompanyDesignation{
+		ID: uuid.NewString(), SectionID: sectionID, NameEn: nameEn,
+		NameBn:   fallback(row.DesignationNameBn, nameEn),
+		IsActive: row.IsActive, CreatedAt: now,
+	}
+	return true, tx.Create(&designation).Error
+}
+
+func upsertLine(tx *gorm.DB, sectionID string, row excelsvc.CompanyOrganogramRow) (bool, error) {
+	var line models.CompanyLine
+	nameEn := organogramName(row.LineNameEn)
+	err := tx.Select(lineSelect).Where("SectionId = ? AND UPPER(LTRIM(RTRIM(NameEn))) = UPPER(?)", sectionID, nameEn).Order("CreatedAt, Id").Take(&line).Error
+	now := time.Now()
+	if err == nil {
+		line.NameEn = nameEn
+		line.NameBn = fallback(row.LineNameBn, nameEn)
+		line.IsActive = row.IsActive
+		line.UpdatedAt = &now
+		if err := tx.Save(&line).Error; err != nil {
+			return false, err
+		}
+		return false, deduplicateLines(tx, line.ID, sectionID, nameEn)
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, err
+	}
+	line = models.CompanyLine{
+		ID: uuid.NewString(), SectionID: sectionID, NameEn: nameEn,
+		NameBn:   fallback(row.LineNameBn, nameEn),
+		IsActive: row.IsActive, CreatedAt: now,
+	}
+	return true, tx.Create(&line).Error
+}
+
+func fallback(value, fallback string) string {
+	value = organogramName(value)
+	if value == "" {
+		return organogramName(fallback)
+	}
+	return value
+}
+
+func deduplicateDepartments(tx *gorm.DB, keepID, companyID string, name string) error {
+	var duplicates []models.CompanyDepartment
+	if err := tx.Select(departmentSelect).Where("Id <> ? AND CompanyId = ? AND UPPER(LTRIM(RTRIM(NameEn))) = UPPER(?)", keepID, companyID, organogramName(name)).Order("CreatedAt, Id").Find(&duplicates).Error; err != nil {
+		return err
+	}
+	for _, duplicate := range duplicates {
+		var sections []models.CompanySection
+		if err := tx.Select(sectionSelect).Where("DepartmentId = ?", duplicate.ID).Find(&sections).Error; err != nil {
+			return err
+		}
+		for _, section := range sections {
+			if err := mergeSectionIntoDepartment(tx, section, keepID); err != nil {
+				return err
+			}
+		}
+		if err := tx.Delete(&duplicate).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func mergeSectionIntoDepartment(tx *gorm.DB, section models.CompanySection, targetDepartmentID string) error {
+	name := organogramName(section.NameEn)
+	var existing models.CompanySection
+	err := tx.Select(sectionSelect).Where("DepartmentId = ? AND UPPER(LTRIM(RTRIM(NameEn))) = UPPER(?)", targetDepartmentID, name).Order("CreatedAt, Id").Take(&existing).Error
+	if err == nil {
+		if err := mergeSectionChildren(tx, section.ID, existing.ID); err != nil {
+			return err
+		}
+		return tx.Delete(&section).Error
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	return tx.Model(&section).Update("DepartmentId", targetDepartmentID).Error
+}
+
+func deduplicateSections(tx *gorm.DB, keepID, departmentID string, name string) error {
+	var duplicates []models.CompanySection
+	if err := tx.Select(sectionSelect).Where("Id <> ? AND DepartmentId = ? AND UPPER(LTRIM(RTRIM(NameEn))) = UPPER(?)", keepID, departmentID, organogramName(name)).Order("CreatedAt, Id").Find(&duplicates).Error; err != nil {
+		return err
+	}
+	for _, duplicate := range duplicates {
+		if err := mergeSectionChildren(tx, duplicate.ID, keepID); err != nil {
+			return err
+		}
+		if err := tx.Delete(&duplicate).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func mergeSectionChildren(tx *gorm.DB, fromSectionID, toSectionID string) error {
+	var designations []models.CompanyDesignation
+	if err := tx.Select(designationSelect).Where("SectionId = ?", fromSectionID).Find(&designations).Error; err != nil {
+		return err
+	}
+	for _, designation := range designations {
+		if err := mergeDesignationIntoSection(tx, designation, toSectionID); err != nil {
+			return err
+		}
+	}
+	var lines []models.CompanyLine
+	if err := tx.Select(lineSelect).Where("SectionId = ?", fromSectionID).Find(&lines).Error; err != nil {
+		return err
+	}
+	for _, line := range lines {
+		if err := mergeLineIntoSection(tx, line, toSectionID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func mergeDesignationIntoSection(tx *gorm.DB, designation models.CompanyDesignation, targetSectionID string) error {
+	name := organogramName(designation.NameEn)
+	var existing models.CompanyDesignation
+	err := tx.Select(designationSelect).Where("SectionId = ? AND UPPER(LTRIM(RTRIM(NameEn))) = UPPER(?)", targetSectionID, name).Order("CreatedAt, Id").Take(&existing).Error
+	if err == nil {
+		return tx.Delete(&designation).Error
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	return tx.Model(&designation).Update("SectionId", targetSectionID).Error
+}
+
+func mergeLineIntoSection(tx *gorm.DB, line models.CompanyLine, targetSectionID string) error {
+	name := organogramName(line.NameEn)
+	var existing models.CompanyLine
+	err := tx.Select(lineSelect).Where("SectionId = ? AND UPPER(LTRIM(RTRIM(NameEn))) = UPPER(?)", targetSectionID, name).Order("CreatedAt, Id").Take(&existing).Error
+	if err == nil {
+		return tx.Delete(&line).Error
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	return tx.Model(&line).Update("SectionId", targetSectionID).Error
+}
+
+func deduplicateDesignations(tx *gorm.DB, keepID, sectionID string, name string) error {
+	return tx.Where("Id <> ? AND SectionId = ? AND UPPER(LTRIM(RTRIM(NameEn))) = UPPER(?)", keepID, sectionID, organogramName(name)).Delete(&models.CompanyDesignation{}).Error
+}
+
+func deduplicateLines(tx *gorm.DB, keepID, sectionID string, name string) error {
+	return tx.Where("Id <> ? AND SectionId = ? AND UPPER(LTRIM(RTRIM(NameEn))) = UPPER(?)", keepID, sectionID, organogramName(name)).Delete(&models.CompanyLine{}).Error
 }
 
 func (s *Service) buildExportFile(module, format string, jobID uuid.UUID) (rel, name string, err error) {

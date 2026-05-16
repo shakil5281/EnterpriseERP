@@ -12,7 +12,6 @@ function stableIntFromGuid(guid: string): number {
 export interface Company {
   id: number;
   entityId: string;
-  companyCode: string;
   companyNameEn: string;
   companyNameBn: string;
   addressEn: string;
@@ -30,7 +29,6 @@ export interface Company {
 
 interface CompanySummaryApi {
   id: string;
-  companyCode: string;
   companyNameEn: string;
   status: string;
 }
@@ -44,7 +42,6 @@ interface PagedResultApi<T> {
 
 interface CompanyDetailsApi {
   id: string;
-  companyCode: string;
   companyNameEn: string;
   companyNameBn?: string | null;
   addressEn?: string | null;
@@ -64,7 +61,6 @@ function mapSummaryToCompany(row: CompanySummaryApi): Company {
   return {
     id: stableIntFromGuid(row.id),
     entityId: row.id,
-    companyCode: row.companyCode,
     companyNameEn: row.companyNameEn,
     companyNameBn: "",
     addressEn: "",
@@ -86,7 +82,6 @@ function mapDetailsToCompany(d: CompanyDetailsApi): Company {
   return {
     id: stableIntFromGuid(d.id),
     entityId: d.id,
-    companyCode: d.companyCode,
     companyNameEn: d.companyNameEn,
     companyNameBn: d.companyNameBn ?? "",
     addressEn: d.addressEn ?? "",
@@ -106,10 +101,6 @@ function mapDetailsToCompany(d: CompanyDetailsApi): Company {
 function readFormString(fd: FormData, key: string): string {
   const v = fd.get(key);
   return typeof v === "string" ? v.trim() : "";
-}
-
-function generateCompanyCode(): string {
-  return `COMP-${Date.now().toString(36).toUpperCase()}`;
 }
 
 export interface AssignCompanyDto {
@@ -147,12 +138,7 @@ export const companyService = {
 
   /** Create from browser form (JSON to match `CompaniesController`). */
   create: async (form: FormData): Promise<string> => {
-    let companyCode = readFormString(form, "companyCode");
-    if (!companyCode) {
-      companyCode = generateCompanyCode();
-    }
     const body = {
-      companyCode,
       companyNameEn: readFormString(form, "companyNameEn"),
       companyNameBn: readFormString(form, "companyNameBn") || null,
       addressEn: readFormString(form, "addressEn") || null,

@@ -15,6 +15,8 @@ type Options struct {
 	Health         *handlers.HealthHandler
 	Import         *handlers.ImportHandler
 	Export         *handlers.ExportHandler
+	Organogram     *handlers.CompanyOrganogramHandler
+	Address        *handlers.AddressHandler
 	Jobs           *handlers.JobsHandler
 	Templates      *handlers.TemplateHandler
 }
@@ -38,7 +40,14 @@ func New(opts Options) *gin.Engine {
 
 	api := r.Group("/api/v1/import-export")
 	api.Use(middleware.JWTAuth(opts.Jwt))
-	api.Use(middleware.RequireAnyRole("Admin", "HRAdmin", "SuperAdmin", "ImportExport"))
+	// Roles align with AuthService seed data; hr.employees.write grants HR staff without a named role.
+	api.Use(middleware.RequireAnyRoleOrPermission(
+		[]string{
+			"SuperAdmin", "Admin", "HRAdmin", "ImportExport",
+			"HR", "HR Officer", "Management",
+		},
+		[]string{"hr.employees.write"},
+	))
 	{
 		api.POST("/import/:module/preview", opts.Import.Preview)
 		api.POST("/import/:module/confirm", opts.Import.Confirm)
@@ -46,6 +55,13 @@ func New(opts Options) *gin.Engine {
 		api.POST("/export/:module", opts.Export.Create)
 
 		api.GET("/templates/:module/download", opts.Templates.Download)
+
+		api.POST("/company-organogram/import", opts.Organogram.Import)
+		api.GET("/company-organogram/demo-format", opts.Organogram.DemoFormat)
+		api.GET("/company-organogram/export", opts.Organogram.Export)
+
+		api.POST("/address/import", opts.Address.Import)
+		api.GET("/address/demo-format", opts.Address.DemoFormat)
 
 		api.GET("/import-jobs", opts.Jobs.ListImportJobs)
 		api.GET("/import-jobs/:id", opts.Jobs.GetImportJob)

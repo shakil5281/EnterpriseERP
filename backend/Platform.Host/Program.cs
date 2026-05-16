@@ -266,7 +266,17 @@ app.Use(async (ctx, next) =>
 });
 
 app.UseSwagger();
-app.UseSwaggerUI(o => o.SwaggerEndpoint("/swagger/v1/swagger.json", "Enterprise ERP v1"));
+app.UseSwaggerUI(o =>
+{
+    o.SwaggerEndpoint("/swagger/v1/swagger.json", "Core Services (Platform Host)");
+    if (app.Configuration.GetValue("Swagger:IncludeGoServiceSpecs", false))
+    {
+        o.SwaggerEndpoint("/api/v1/punch-data/swagger/doc.json", "Punch Data Service (Go)");
+        o.SwaggerEndpoint("/api/v1/import-export/swagger/doc.json", "Import Export Service (Go)");
+    }
+
+    o.RoutePrefix = "swagger";
+});
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -284,7 +294,6 @@ await using (var scope = app.Services.CreateAsyncScope())
         companyDb.Companies.Add(new Company
         {
             Id = Guid.NewGuid(),
-            CompanyCode = "COMP-001",
             CompanyNameEn = "Default Company",
             Status = "Active",
             CreatedAt = DateTime.UtcNow,

@@ -12,6 +12,7 @@ func ExportEmployeesExcel(rows []EmployeeExportRow) (*excelize.File, error) {
 	f := excelize.NewFile()
 	sheet := "Employees"
 	f.SetSheetName("Sheet1", sheet)
+	f.SetActiveSheet(0)
 	headers := []string{"EmployeeCode", "EmployeeName", "Department", "Designation", "JoinDate", "Status", "GrossSalary"}
 	for i, h := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
@@ -19,7 +20,7 @@ func ExportEmployeesExcel(rows []EmployeeExportRow) (*excelize.File, error) {
 	}
 	style, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
 	_ = f.SetRowStyle(sheet, 1, 1, style)
-	_ = f.SetPanes(sheet, &excelize.Panes{Freeze: true, YSplit: 1})
+	_ = freezeTopRow(f, sheet)
 	for ri, row := range rows {
 		r := ri + 2
 		_ = f.SetCellValue(sheet, fmt.Sprintf("A%d", r), row.EmployeeCode)
@@ -38,13 +39,13 @@ func ExportEmployeesExcel(rows []EmployeeExportRow) (*excelize.File, error) {
 }
 
 type EmployeeExportRow struct {
-	EmployeeCode   string
-	EmployeeName   string
-	Department     string
-	Designation    string
-	JoinDate       time.Time
-	Status         string
-	GrossSalary    float64
+	EmployeeCode string
+	EmployeeName string
+	Department   string
+	Designation  string
+	JoinDate     time.Time
+	Status       string
+	GrossSalary  float64
 }
 
 // ExportPayrollExcel with NetPayable formula column.
@@ -52,6 +53,7 @@ func ExportPayrollExcel(rows []PayrollExportRow) (*excelize.File, error) {
 	f := excelize.NewFile()
 	sheet := "Payroll"
 	f.SetSheetName("Sheet1", sheet)
+	f.SetActiveSheet(0)
 	headers := []string{
 		"EmployeeCode", "EmployeeName", "Department", "Designation", "GrossSalary", "BasicSalary",
 		"HouseRent", "MedicalAllowance", "AttendanceDays", "OvertimeHours", "OvertimeAmount",
@@ -81,21 +83,21 @@ func ExportPayrollExcel(rows []PayrollExportRow) (*excelize.File, error) {
 		formula := fmt.Sprintf("E%d+K%d-L%d", r, r, r)
 		_ = f.SetCellFormula(sheet, fmt.Sprintf("M%d", r), formula)
 	}
-	_ = f.SetPanes(sheet, &excelize.Panes{Freeze: true, YSplit: 1})
+	_ = freezeTopRow(f, sheet)
 	return f, nil
 }
 
 type PayrollExportRow struct {
-	EmployeeCode      string
-	EmployeeName      string
-	Department        string
-	Designation       string
-	GrossSalary       float64
-	BasicSalary       float64
-	HouseRent         float64
-	MedicalAllowance  float64
-	AttendanceDays    float64
-	OvertimeHours     float64
-	OvertimeAmount    float64
-	Deduction         float64
+	EmployeeCode     string
+	EmployeeName     string
+	Department       string
+	Designation      string
+	GrossSalary      float64
+	BasicSalary      float64
+	HouseRent        float64
+	MedicalAllowance float64
+	AttendanceDays   float64
+	OvertimeHours    float64
+	OvertimeAmount   float64
+	Deduction        float64
 }

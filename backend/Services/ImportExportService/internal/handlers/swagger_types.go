@@ -22,24 +22,38 @@ type APIResponseImportPreview struct {
 }
 
 type APIResponseImportJob struct {
-	Success bool              `json:"success" example:"true"`
-	TraceID string            `json:"traceId,omitempty"`
-	Data    dto.ImportJobDTO  `json:"data"`
+	Success bool                   `json:"success" example:"true"`
+	TraceID string                 `json:"traceId,omitempty"`
+	Data    dto.ImportJobDTO       `json:"data"`
 	Errors  []response.ErrorDetail `json:"errors,omitempty"`
 }
 
 type APIResponseImportJobList struct {
-	Success bool                `json:"success" example:"true"`
-	TraceID string              `json:"traceId,omitempty"`
-	Data    []dto.ImportJobDTO  `json:"data"`
+	Success bool                   `json:"success" example:"true"`
+	TraceID string                 `json:"traceId,omitempty"`
+	Data    []dto.ImportJobDTO     `json:"data"`
 	Errors  []response.ErrorDetail `json:"errors,omitempty"`
 }
 
 type APIResponseExportJobList struct {
-	Success bool                `json:"success" example:"true"`
-	TraceID string              `json:"traceId,omitempty"`
-	Data    []dto.ExportJobDTO  `json:"data"`
+	Success bool                   `json:"success" example:"true"`
+	TraceID string                 `json:"traceId,omitempty"`
+	Data    []dto.ExportJobDTO     `json:"data"`
 	Errors  []response.ErrorDetail `json:"errors,omitempty"`
+}
+
+type APIResponseCompanyOrganogramImport struct {
+	Success bool                              `json:"success" example:"true"`
+	TraceID string                            `json:"traceId,omitempty"`
+	Data    dto.CompanyOrganogramImportResult `json:"data"`
+	Errors  []response.ErrorDetail            `json:"errors,omitempty"`
+}
+
+type APIResponseAddressImport struct {
+	Success bool                    `json:"success" example:"true"`
+	TraceID string                  `json:"traceId,omitempty"`
+	Data    dto.AddressImportResult `json:"data"`
+	Errors  []response.ErrorDetail  `json:"errors,omitempty"`
 }
 
 type APIResponseError struct {

@@ -52,6 +52,10 @@ func main() {
 		logger.Error("ConnectionStrings.ImportExportDb is required")
 		os.Exit(1)
 	}
+	if strings.TrimSpace(cfg.ConnectionStrings.CompanyDb) == "" {
+		logger.Error("ConnectionStrings.CompanyDb is required")
+		os.Exit(1)
+	}
 
 	dsn := config.NormalizeSQLServerDSN(cfg.ConnectionStrings.ImportExportDb)
 	gdb, err := database.Open(dsn, logger)
@@ -61,6 +65,12 @@ func main() {
 	}
 	if err := database.AutoMigrate(gdb); err != nil {
 		logger.Error("db migrate", "error", err)
+		os.Exit(1)
+	}
+	companyDSN := config.NormalizeSQLServerDSN(cfg.ConnectionStrings.CompanyDb)
+	companyDB, err := database.Open(companyDSN, logger)
+	if err != nil {
+		logger.Error("company db open", "error", err)
 		os.Exit(1)
 	}
 
@@ -82,6 +92,7 @@ func main() {
 	store := storage.LocalStorage{Root: dataRoot}
 	svc := &importsvc.Service{
 		DB:             gdb,
+		CompanyDB:      companyDB,
 		Store:          store,
 		ExportDir:      cfg.Storage.ExportDir,
 		LargeThreshold: cfg.Asynq.ImportLargeRowThreshold,
@@ -97,11 +108,13 @@ func main() {
 		Jwt: middleware.JwtConfig{
 			Issuer: cfg.Jwt.Issuer, Audience: cfg.Jwt.Audience, SigningKey: cfg.Jwt.SigningKey,
 		},
-		Health:    handlers.NewHealthHandler(gdb),
-		Import:    &handlers.ImportHandler{Svc: svc, Store: store},
-		Export:    &handlers.ExportHandler{Svc: svc},
-		Jobs:      &handlers.JobsHandler{Svc: svc},
-		Templates: &handlers.TemplateHandler{},
+		Health:     handlers.NewHealthHandler(gdb),
+		Import:     &handlers.ImportHandler{Svc: svc, Store: store},
+		Export:     &handlers.ExportHandler{Svc: svc},
+		Organogram: &handlers.CompanyOrganogramHandler{Svc: svc, Store: store},
+		Address:    &handlers.AddressHandler{Svc: svc, Store: store},
+		Jobs:       &handlers.JobsHandler{Svc: svc},
+		Templates:  &handlers.TemplateHandler{},
 	})
 
 	srv := &http.Server{
@@ -126,6 +139,9 @@ func main() {
 	defer cancel()
 	_ = srv.Shutdown(ctx)
 	if sqlDB, err := gdb.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+	if sqlDB, err := companyDB.DB(); err == nil {
 		_ = sqlDB.Close()
 	}
 }

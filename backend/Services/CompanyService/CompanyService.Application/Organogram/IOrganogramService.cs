@@ -42,9 +42,9 @@ public interface IOrganogramService
     Task DeleteFloorAsync(Guid id);
 }
 
-public record DepartmentDto(Guid? Id, Guid CompanyId, string NameEn, string NameBn, string? Code);
-public record SectionDto(Guid? Id, Guid DepartmentId, string NameEn, string NameBn, string? Code);
-public record DesignationDto(Guid? Id, Guid SectionId, string NameEn, string NameBn, string? Code);
-public record LineDto(Guid? Id, Guid SectionId, string NameEn, string NameBn, string? Code);
+public record DepartmentDto(Guid? Id, Guid CompanyId, string NameEn, string NameBn);
+public record SectionDto(Guid? Id, Guid DepartmentId, string NameEn, string NameBn);
+public record DesignationDto(Guid? Id, Guid SectionId, string NameEn, string NameBn);
+public record LineDto(Guid? Id, Guid SectionId, string NameEn, string NameBn);
 public record GroupDto(Guid? Id, Guid CompanyId, string NameEn, string NameBn);
 public record FloorDto(Guid? Id, Guid CompanyId, string NameEn, string NameBn);

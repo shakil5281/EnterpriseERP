@@ -69,11 +69,6 @@ namespace CompanyService.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<string>("CompanyNameBn")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -124,7 +119,7 @@ namespace CompanyService.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyCode")
+                    b.HasIndex("CompanyNameEn")
                         .IsUnique();
 
                     b.ToTable("Companies", (string)null);
@@ -165,9 +160,6 @@ namespace CompanyService.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("Code")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uniqueidentifier");
 
@@ -192,7 +184,8 @@ namespace CompanyService.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyId");
+                    b.HasIndex("CompanyId", "NameEn")
+                        .IsUnique();
 
                     b.ToTable("Departments", (string)null);
                 });
@@ -202,9 +195,6 @@ namespace CompanyService.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Code")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -230,7 +220,8 @@ namespace CompanyService.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SectionId");
+                    b.HasIndex("SectionId", "NameEn")
+                        .IsUnique();
 
                     b.ToTable("Designations", (string)null);
                 });
@@ -363,9 +354,6 @@ namespace CompanyService.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("Code")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -390,7 +378,8 @@ namespace CompanyService.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SectionId");
+                    b.HasIndex("SectionId", "NameEn")
+                        .IsUnique();
 
                     b.ToTable("Lines", (string)null);
                 });
@@ -435,9 +424,6 @@ namespace CompanyService.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("Code")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -462,7 +448,8 @@ namespace CompanyService.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DepartmentId");
+                    b.HasIndex("DepartmentId", "NameEn")
+                        .IsUnique();
 
                     b.ToTable("Sections", (string)null);
                 });

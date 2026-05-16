@@ -17,6 +17,217 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/import-export/address/demo-format": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Downloads an Excel workbook showing how to import Country, Division, District, Thana, Post Office, and Post Code relationships.",
+                "produces": [
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                ],
+                "tags": [
+                    "address"
+                ],
+                "summary": "Download address Excel demo format",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.APIResponseError"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/import-export/address/import": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates or updates Countries, Divisions, Districts, Thanas/Upazilas, and Post Offices in CompanyServiceDB from an Excel file.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "address"
+                ],
+                "summary": "Import address hierarchy from Excel",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Excel (.xlsx) file using the Address demo format",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.APIResponseAddressImport"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.APIResponseError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.APIResponseError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.APIResponseError"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/import-export/company-organogram/demo-format": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Downloads an Excel workbook showing how to import Departments, Sections, Designations, and Lines.",
+                "produces": [
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                ],
+                "tags": [
+                    "company-organogram"
+                ],
+                "summary": "Download company organogram Excel demo format",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.APIResponseError"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/import-export/company-organogram/export": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Exports current Company, Department, Section, Designation, and Line relationships in the same Excel format used for import.",
+                "produces": [
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                ],
+                "tags": [
+                    "company-organogram"
+                ],
+                "summary": "Export company organogram Excel",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by company English name",
+                        "name": "companyName",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.APIResponseError"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/import-export/company-organogram/import": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates or updates Companies (when missing), Departments, Sections, Designations, and Lines in CompanyServiceDB from an Excel file.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "company-organogram"
+                ],
+                "summary": "Import company organogram from Excel",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Excel (.xlsx) file using the Company Organogram demo format",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.APIResponseCompanyOrganogramImport"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.APIResponseError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.APIResponseError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.APIResponseError"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/import-export/export-jobs": {
             "get": {
                 "security": [
@@ -447,6 +658,103 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "github_com_enterprise-erp_importexport_internal_dto.AddressImportResult": {
+            "type": "object",
+            "properties": {
+                "countriesCreated": {
+                    "type": "integer"
+                },
+                "countriesUpdated": {
+                    "type": "integer"
+                },
+                "districtsCreated": {
+                    "type": "integer"
+                },
+                "districtsUpdated": {
+                    "type": "integer"
+                },
+                "divisionsCreated": {
+                    "type": "integer"
+                },
+                "divisionsUpdated": {
+                    "type": "integer"
+                },
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_enterprise-erp_importexport_internal_dto.RowError"
+                    }
+                },
+                "failedRows": {
+                    "type": "integer"
+                },
+                "postOfficesCreated": {
+                    "type": "integer"
+                },
+                "postOfficesUpdated": {
+                    "type": "integer"
+                },
+                "successRows": {
+                    "type": "integer"
+                },
+                "thanasCreated": {
+                    "type": "integer"
+                },
+                "thanasUpdated": {
+                    "type": "integer"
+                },
+                "totalRows": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_enterprise-erp_importexport_internal_dto.CompanyOrganogramImportResult": {
+            "type": "object",
+            "properties": {
+                "companiesCreated": {
+                    "type": "integer"
+                },
+                "departmentsCreated": {
+                    "type": "integer"
+                },
+                "departmentsUpdated": {
+                    "type": "integer"
+                },
+                "designationsCreated": {
+                    "type": "integer"
+                },
+                "designationsUpdated": {
+                    "type": "integer"
+                },
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_enterprise-erp_importexport_internal_dto.RowError"
+                    }
+                },
+                "failedRows": {
+                    "type": "integer"
+                },
+                "linesCreated": {
+                    "type": "integer"
+                },
+                "linesUpdated": {
+                    "type": "integer"
+                },
+                "sectionsCreated": {
+                    "type": "integer"
+                },
+                "sectionsUpdated": {
+                    "type": "integer"
+                },
+                "successRows": {
+                    "type": "integer"
+                },
+                "totalRows": {
+                    "type": "integer"
+                }
+            }
+        },
         "github_com_enterprise-erp_importexport_internal_dto.ConfirmImportRequest": {
             "type": "object",
             "required": [
@@ -564,6 +872,48 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handlers.APIResponseAddressImport": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_enterprise-erp_importexport_internal_dto.AddressImportResult"
+                },
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_enterprise-erp_importexport_internal_response.ErrorDetail"
+                    }
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "traceId": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handlers.APIResponseCompanyOrganogramImport": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_enterprise-erp_importexport_internal_dto.CompanyOrganogramImportResult"
+                },
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_enterprise-erp_importexport_internal_response.ErrorDetail"
+                    }
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "traceId": {
                     "type": "string"
                 }
             }

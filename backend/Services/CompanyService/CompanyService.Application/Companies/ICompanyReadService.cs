@@ -10,7 +10,6 @@ public interface ICompanyReadService
 public sealed class CompanySummaryDto
 {
     public Guid Id { get; init; }
-    public string CompanyCode { get; init; } = string.Empty;
     public string CompanyNameEn { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
 }

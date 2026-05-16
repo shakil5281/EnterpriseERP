@@ -121,7 +121,6 @@ await using (var scope = app.Services.CreateAsyncScope())
         db.Companies.Add(new Company
         {
             Id = Guid.NewGuid(),
-            CompanyCode = "COMP-001",
             CompanyNameEn = "Default Company",
             Status = "Active",
             CreatedAt = DateTime.UtcNow,

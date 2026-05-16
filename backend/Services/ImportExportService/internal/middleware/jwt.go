@@ -18,9 +18,10 @@ type JwtConfig struct {
 }
 
 const (
-	CtxUserID   = "auth.userId"
-	CtxRoles    = "auth.roles"
-	CtxCompanyID = "auth.companyId"
+	CtxUserID       = "auth.userId"
+	CtxRoles        = "auth.roles"
+	CtxPermissions  = "auth.permissions"
+	CtxCompanyID    = "auth.companyId"
 )
 
 func JWTAuth(cfg JwtConfig) gin.HandlerFunc {
@@ -61,6 +62,7 @@ func JWTAuth(cfg JwtConfig) gin.HandlerFunc {
 		}
 		c.Set(CtxUserID, uid)
 		c.Set(CtxRoles, extractRoles(claims))
+		c.Set(CtxPermissions, extractPermissions(claims))
 		if cid := extractCompanyID(claims); cid != nil {
 			c.Set(CtxCompanyID, *cid)
 		}
@@ -90,23 +92,77 @@ func extractUserID(claims jwt.MapClaims) uuid.UUID {
 	return uuid.Nil
 }
 
-func extractRoles(claims jwt.MapClaims) []string {
+func extractPermissions(claims jwt.MapClaims) []string {
 	var out []string
-	for _, k := range []string{"role", "roles"} {
+	seen := map[string]struct{}{}
+	for _, k := range []string{"permission", "permissions"} {
 		v, ok := claims[k]
 		if !ok {
 			continue
 		}
 		switch t := v.(type) {
 		case string:
-			out = append(out, t)
+			out = appendPermission(out, seen, t)
 		case []any:
 			for _, x := range t {
 				if s, ok := x.(string); ok {
-					out = append(out, s)
+					out = appendPermission(out, seen, s)
 				}
 			}
 		}
 	}
 	return out
+}
+
+func appendPermission(out []string, seen map[string]struct{}, perm string) []string {
+	perm = strings.TrimSpace(perm)
+	if perm == "" {
+		return out
+	}
+	key := strings.ToLower(perm)
+	if _, ok := seen[key]; ok {
+		return out
+	}
+	seen[key] = struct{}{}
+	return append(out, perm)
+}
+
+func extractRoles(claims jwt.MapClaims) []string {
+	var out []string
+	seen := map[string]struct{}{}
+	for _, k := range []string{
+		"role",
+		"roles",
+		"http://schemas.microsoft.com/ws/2008/06/identity/claims/role",
+		"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role",
+	} {
+		v, ok := claims[k]
+		if !ok {
+			continue
+		}
+		switch t := v.(type) {
+		case string:
+			out = appendRole(out, seen, t)
+		case []any:
+			for _, x := range t {
+				if s, ok := x.(string); ok {
+					out = appendRole(out, seen, s)
+				}
+			}
+		}
+	}
+	return out
+}
+
+func appendRole(out []string, seen map[string]struct{}, role string) []string {
+	role = strings.TrimSpace(role)
+	if role == "" {
+		return out
+	}
+	key := strings.ToLower(role)
+	if _, ok := seen[key]; ok {
+		return out
+	}
+	seen[key] = struct{}{}
+	return append(out, role)
 }

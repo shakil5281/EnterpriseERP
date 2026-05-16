@@ -15,7 +15,6 @@ public sealed class CompanyService(CompanyDbContext db) : ICompanyService
             .Select(c => new CompanyDetailsDto
             {
                 Id = c.Id,
-                CompanyCode = c.CompanyCode,
                 CompanyNameEn = c.CompanyNameEn,
                 CompanyNameBn = c.CompanyNameBn,
                 AddressEn = c.AddressEn,
@@ -38,7 +37,6 @@ public sealed class CompanyService(CompanyDbContext db) : ICompanyService
         var company = new Company
         {
             Id = Guid.NewGuid(),
-            CompanyCode = dto.CompanyCode,
             CompanyNameEn = dto.CompanyNameEn,
             CompanyNameBn = dto.CompanyNameBn,
             AddressEn = dto.AddressEn,

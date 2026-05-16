@@ -10,17 +10,17 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
     // Department
     public async Task<IEnumerable<DepartmentDto>> GetDepartmentsAsync(Guid companyId) =>
         await db.Departments.AsNoTracking().Where(x => x.CompanyId == companyId)
-            .Select(x => new DepartmentDto(x.Id, x.CompanyId, x.NameEn, x.NameBn, x.Code))
+            .Select(x => new DepartmentDto(x.Id, x.CompanyId, x.NameEn, x.NameBn))
             .ToListAsync();
 
     public async Task<IEnumerable<DepartmentDto>> GetAllDepartmentsAsync(CancellationToken cancellationToken = default) =>
         await db.Departments.AsNoTracking()
-            .Select(x => new DepartmentDto(x.Id, x.CompanyId, x.NameEn, x.NameBn, x.Code))
+            .Select(x => new DepartmentDto(x.Id, x.CompanyId, x.NameEn, x.NameBn))
             .ToListAsync(cancellationToken);
 
     public async Task<Guid> CreateDepartmentAsync(DepartmentDto dto)
     {
-        var dept = new Department { Id = Guid.NewGuid(), CompanyId = dto.CompanyId, NameEn = dto.NameEn, NameBn = dto.NameBn, Code = dto.Code, CreatedAt = DateTime.UtcNow };
+        var dept = new Department { Id = Guid.NewGuid(), CompanyId = dto.CompanyId, NameEn = dto.NameEn, NameBn = dto.NameBn, CreatedAt = DateTime.UtcNow };
         db.Departments.Add(dept);
         await db.SaveChangesAsync();
         return dept.Id;
@@ -33,7 +33,6 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
 
         dept.NameEn = dto.NameEn;
         dept.NameBn = dto.NameBn;
-        dept.Code = dto.Code;
         dept.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
@@ -51,12 +50,12 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
     // Section
     public async Task<IEnumerable<SectionDto>> GetSectionsAsync(Guid departmentId) =>
         await db.Sections.AsNoTracking().Where(x => x.DepartmentId == departmentId)
-            .Select(x => new SectionDto(x.Id, x.DepartmentId, x.NameEn, x.NameBn, x.Code))
+            .Select(x => new SectionDto(x.Id, x.DepartmentId, x.NameEn, x.NameBn))
             .ToListAsync();
 
     public async Task<IEnumerable<SectionDto>> GetAllSectionsAsync(CancellationToken cancellationToken = default) =>
         await db.Sections.AsNoTracking()
-            .Select(x => new SectionDto(x.Id, x.DepartmentId, x.NameEn, x.NameBn, x.Code))
+            .Select(x => new SectionDto(x.Id, x.DepartmentId, x.NameEn, x.NameBn))
             .ToListAsync(cancellationToken);
 
     public async Task<IEnumerable<SectionDto>> GetSectionsForCompanyAsync(Guid companyId, CancellationToken cancellationToken = default) =>
@@ -67,12 +66,12 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
                 d => d.Id,
                 (s, d) => new { s, d })
             .Where(x => x.d.CompanyId == companyId)
-            .Select(x => new SectionDto(x.s.Id, x.s.DepartmentId, x.s.NameEn, x.s.NameBn, x.s.Code))
+            .Select(x => new SectionDto(x.s.Id, x.s.DepartmentId, x.s.NameEn, x.s.NameBn))
             .ToListAsync(cancellationToken);
 
     public async Task<Guid> CreateSectionAsync(SectionDto dto)
     {
-        var sec = new Section { Id = Guid.NewGuid(), DepartmentId = dto.DepartmentId, NameEn = dto.NameEn, NameBn = dto.NameBn, Code = dto.Code, CreatedAt = DateTime.UtcNow };
+        var sec = new Section { Id = Guid.NewGuid(), DepartmentId = dto.DepartmentId, NameEn = dto.NameEn, NameBn = dto.NameBn, CreatedAt = DateTime.UtcNow };
         db.Sections.Add(sec);
         await db.SaveChangesAsync();
         return sec.Id;
@@ -85,7 +84,6 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
 
         sec.NameEn = dto.NameEn;
         sec.NameBn = dto.NameBn;
-        sec.Code = dto.Code;
         sec.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
@@ -103,12 +101,12 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
     // Designation
     public async Task<IEnumerable<DesignationDto>> GetDesignationsAsync(Guid sectionId) =>
         await db.Designations.AsNoTracking().Where(x => x.SectionId == sectionId)
-            .Select(x => new DesignationDto(x.Id, x.SectionId, x.NameEn, x.NameBn, x.Code))
+            .Select(x => new DesignationDto(x.Id, x.SectionId, x.NameEn, x.NameBn))
             .ToListAsync();
 
     public async Task<Guid> CreateDesignationAsync(DesignationDto dto)
     {
-        var des = new Designation { Id = Guid.NewGuid(), SectionId = dto.SectionId, NameEn = dto.NameEn, NameBn = dto.NameBn, Code = dto.Code, CreatedAt = DateTime.UtcNow };
+        var des = new Designation { Id = Guid.NewGuid(), SectionId = dto.SectionId, NameEn = dto.NameEn, NameBn = dto.NameBn, CreatedAt = DateTime.UtcNow };
         db.Designations.Add(des);
         await db.SaveChangesAsync();
         return des.Id;
@@ -121,7 +119,6 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
 
         des.NameEn = dto.NameEn;
         des.NameBn = dto.NameBn;
-        des.Code = dto.Code;
         des.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
@@ -139,12 +136,12 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
     // Line
     public async Task<IEnumerable<LineDto>> GetLinesAsync(Guid sectionId) =>
         await db.Lines.AsNoTracking().Where(x => x.SectionId == sectionId)
-            .Select(x => new LineDto(x.Id, x.SectionId, x.NameEn, x.NameBn, x.Code))
+            .Select(x => new LineDto(x.Id, x.SectionId, x.NameEn, x.NameBn))
             .ToListAsync();
 
     public async Task<Guid> CreateLineAsync(LineDto dto)
     {
-        var line = new Line { Id = Guid.NewGuid(), SectionId = dto.SectionId, NameEn = dto.NameEn, NameBn = dto.NameBn, Code = dto.Code, CreatedAt = DateTime.UtcNow };
+        var line = new Line { Id = Guid.NewGuid(), SectionId = dto.SectionId, NameEn = dto.NameEn, NameBn = dto.NameBn, CreatedAt = DateTime.UtcNow };
         db.Lines.Add(line);
         await db.SaveChangesAsync();
         return line.Id;
@@ -157,7 +154,6 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
 
         line.NameEn = dto.NameEn;
         line.NameBn = dto.NameBn;
-        line.Code = dto.Code;
         line.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();

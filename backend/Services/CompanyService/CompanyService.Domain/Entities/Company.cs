@@ -4,8 +4,6 @@ public sealed class Company
 {
     public Guid Id { get; set; }
 
-    public string CompanyCode { get; set; } = string.Empty;
-
     public string CompanyNameEn { get; set; } = string.Empty;
     public string? CompanyNameBn { get; set; }
 

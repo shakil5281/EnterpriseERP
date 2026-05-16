@@ -21,8 +21,9 @@ func BuildEmployeeImportTemplate() (*excelize.File, error) {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		_ = f.SetCellValue(tpl, cell, h)
 	}
-	style, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}, Fill: excelize.Fill{Type: "pattern", Color: []string{"#E8F5E9"}, Pattern: 1}})
-	_ = f.SetRowStyle(tpl, 1, 1, style)
+	style, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}, Fill: excelize.Fill{Type: "pattern", Color: []string{"E8F5E9"}, Pattern: 1}})
+	lastCol, _ := excelize.ColumnNumberToName(len(headers))
+	_ = f.SetCellStyle(tpl, "A1", lastCol+"1", style)
 
 	sample := "Sample"
 	f.NewSheet(sample)
@@ -41,6 +42,8 @@ func BuildEmployeeImportTemplate() (*excelize.File, error) {
 	_ = f.SetCellValue(sample, "I2", "karim@example.com")
 	_ = f.SetCellValue(sample, "J2", "Active")
 
+	idx, _ := f.GetSheetIndex("Template")
+	f.SetActiveSheet(idx)
 	return f, nil
 }
 
@@ -56,6 +59,8 @@ func BuildPayrollImportTemplate() (*excelize.File, error) {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		_ = f.SetCellValue("Template", cell, col)
 	}
+	idx, _ := f.GetSheetIndex("Template")
+	f.SetActiveSheet(idx)
 	return f, nil
 }
 
@@ -68,5 +73,7 @@ func BuildAttendanceImportTemplate() (*excelize.File, error) {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		_ = f.SetCellValue("Template", cell, col)
 	}
+	idx, _ := f.GetSheetIndex("Template")
+	f.SetActiveSheet(idx)
 	return f, nil
 }

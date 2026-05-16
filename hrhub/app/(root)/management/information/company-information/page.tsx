@@ -21,13 +21,6 @@ const companyColumns: ColumnDef<Company>[] = [
         size: 40,
     },
     {
-        accessorKey: "companyCode",
-        header: "Code",
-        cell: ({ row }) => (
-            <span className="font-mono text-xs text-muted-foreground">{row.original.companyCode}</span>
-        ),
-    },
-    {
         accessorKey: "logoPath",
         header: "Logo",
         cell: ({ row }) => row.original.logoPath ? (

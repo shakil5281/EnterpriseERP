@@ -30,9 +30,8 @@ public sealed class CompanyDbContext(DbContextOptions<CompanyDbContext> options)
         {
             b.ToTable("Companies");
             b.HasKey(x => x.Id);
-            b.Property(x => x.CompanyCode).HasMaxLength(50).IsRequired();
-            b.HasIndex(x => x.CompanyCode).IsUnique();
             b.Property(x => x.CompanyNameEn).HasMaxLength(200).IsRequired();
+            b.HasIndex(x => x.CompanyNameEn).IsUnique();
             b.Property(x => x.CompanyNameBn).HasMaxLength(200);
             b.Property(x => x.AddressEn).HasMaxLength(500);
             b.Property(x => x.AddressBn).HasMaxLength(500);
@@ -54,6 +53,7 @@ public sealed class CompanyDbContext(DbContextOptions<CompanyDbContext> options)
             b.HasKey(x => x.Id);
             b.Property(x => x.NameEn).HasMaxLength(100).IsRequired();
             b.Property(x => x.NameBn).HasMaxLength(100).IsRequired();
+            b.HasIndex(x => new { x.CompanyId, x.NameEn }).IsUnique();
             b.HasOne(x => x.Company).WithMany().HasForeignKey(x => x.CompanyId);
         });
 
@@ -63,6 +63,7 @@ public sealed class CompanyDbContext(DbContextOptions<CompanyDbContext> options)
             b.HasKey(x => x.Id);
             b.Property(x => x.NameEn).HasMaxLength(100).IsRequired();
             b.Property(x => x.NameBn).HasMaxLength(100).IsRequired();
+            b.HasIndex(x => new { x.DepartmentId, x.NameEn }).IsUnique();
             b.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentId);
         });
 
@@ -72,6 +73,7 @@ public sealed class CompanyDbContext(DbContextOptions<CompanyDbContext> options)
             b.HasKey(x => x.Id);
             b.Property(x => x.NameEn).HasMaxLength(100).IsRequired();
             b.Property(x => x.NameBn).HasMaxLength(100).IsRequired();
+            b.HasIndex(x => new { x.SectionId, x.NameEn }).IsUnique();
             b.HasOne(x => x.Section).WithMany().HasForeignKey(x => x.SectionId);
         });
 
@@ -81,6 +83,7 @@ public sealed class CompanyDbContext(DbContextOptions<CompanyDbContext> options)
             b.HasKey(x => x.Id);
             b.Property(x => x.NameEn).HasMaxLength(100).IsRequired();
             b.Property(x => x.NameBn).HasMaxLength(100).IsRequired();
+            b.HasIndex(x => new { x.SectionId, x.NameEn }).IsUnique();
             b.HasOne(x => x.Section).WithMany().HasForeignKey(x => x.SectionId);
         });
 

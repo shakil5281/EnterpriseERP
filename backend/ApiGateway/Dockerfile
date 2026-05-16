@@ -1,9 +1,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY Gateway.Api/Gateway.Api.csproj Gateway.Api/
-RUN dotnet restore Gateway.Api/Gateway.Api.csproj
-COPY Gateway.Api/ Gateway.Api/
-WORKDIR /src/Gateway.Api
+COPY ApiGateway/Gateway.Api/Gateway.Api.csproj ApiGateway/Gateway.Api/
+COPY BuildingBlocks/Erp.BuildingBlocks.Hosting/Erp.BuildingBlocks.Hosting.csproj BuildingBlocks/Erp.BuildingBlocks.Hosting/
+RUN dotnet restore ApiGateway/Gateway.Api/Gateway.Api.csproj
+COPY ApiGateway/Gateway.Api/ ApiGateway/Gateway.Api/
+COPY BuildingBlocks/Erp.BuildingBlocks.Hosting/ BuildingBlocks/Erp.BuildingBlocks.Hosting/
+WORKDIR /src/ApiGateway/Gateway.Api
 RUN dotnet publish -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final

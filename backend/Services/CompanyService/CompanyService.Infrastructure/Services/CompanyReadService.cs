@@ -14,10 +14,9 @@ public sealed class CompanyReadService(CompanyDbContext db) : ICompanyReadServic
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
             var s = request.Search.Trim();
-            query = query.Where(c => 
-                c.CompanyNameEn.Contains(s) || 
-                (c.CompanyNameBn != null && c.CompanyNameBn.Contains(s)) ||
-                c.CompanyCode.Contains(s));
+            query = query.Where(c =>
+                c.CompanyNameEn.Contains(s) ||
+                (c.CompanyNameBn != null && c.CompanyNameBn.Contains(s)));
         }
 
         var total = await query.CountAsync(cancellationToken);
@@ -27,9 +26,8 @@ public sealed class CompanyReadService(CompanyDbContext db) : ICompanyReadServic
             .Take(request.PageSize)
             .Select(c => new CompanySummaryDto 
             { 
-                Id = c.Id, 
-                CompanyCode = c.CompanyCode,
-                CompanyNameEn = c.CompanyNameEn, 
+                Id = c.Id,
+                CompanyNameEn = c.CompanyNameEn,
                 Status = c.Status 
             })
             .ToListAsync(cancellationToken);

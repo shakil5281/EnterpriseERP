@@ -11,32 +11,51 @@ import (
 
 // RequireAnyRole aborts with 403 unless caller has one of the roles (case-insensitive).
 func RequireAnyRole(roles ...string) gin.HandlerFunc {
-	lower := make([]string, len(roles))
-	for i, r := range roles {
-		lower[i] = strings.ToLower(strings.TrimSpace(r))
+	return RequireAnyRoleOrPermission(roles, nil)
+}
+
+// RequireAnyRoleOrPermission allows access when the caller has any listed role or permission.
+func RequireAnyRoleOrPermission(roles, permissions []string) gin.HandlerFunc {
+	lowerRoles := make([]string, 0, len(roles))
+	for _, r := range roles {
+		if r = strings.ToLower(strings.TrimSpace(r)); r != "" {
+			lowerRoles = append(lowerRoles, r)
+		}
+	}
+	lowerPerms := make([]string, 0, len(permissions))
+	for _, p := range permissions {
+		if p = strings.ToLower(strings.TrimSpace(p)); p != "" {
+			lowerPerms = append(lowerPerms, p)
+		}
 	}
 	return func(c *gin.Context) {
-		got, _ := c.Get(CtxRoles)
-		list, _ := got.([]string)
-		var glower []string
-		for _, r := range list {
-			glower = append(glower, strings.ToLower(strings.TrimSpace(r)))
+		gotRoles, _ := c.Get(CtxRoles)
+		roleList, _ := gotRoles.([]string)
+		var haveRoles []string
+		for _, r := range roleList {
+			haveRoles = append(haveRoles, strings.ToLower(strings.TrimSpace(r)))
 		}
-		ok := false
-		for _, want := range lower {
-			if want == "" {
-				continue
-			}
-			if slices.Contains(glower, want) {
-				ok = true
-				break
+		for _, want := range lowerRoles {
+			if slices.Contains(haveRoles, want) {
+				c.Next()
+				return
 			}
 		}
-		if !ok {
-			response.FailWithStatus(c, http.StatusForbidden, response.Err("FORBIDDEN", "insufficient role"))
-			c.Abort()
-			return
+
+		gotPerms, _ := c.Get(CtxPermissions)
+		permList, _ := gotPerms.([]string)
+		var havePerms []string
+		for _, p := range permList {
+			havePerms = append(havePerms, strings.ToLower(strings.TrimSpace(p)))
 		}
-		c.Next()
+		for _, want := range lowerPerms {
+			if slices.Contains(havePerms, want) {
+				c.Next()
+				return
+			}
+		}
+
+		response.FailWithStatus(c, http.StatusForbidden, response.Err("FORBIDDEN", "insufficient role or permission"))
+		c.Abort()
 	}
 }
