@@ -1,4 +1,4 @@
-﻿<Solution>
+<Solution>
   <Folder Name="/Platform/">
     <Project Path="Platform.Host/EnterpriseERP.Platform.Host.csproj" />
   </Folder>
@@ -9,6 +9,7 @@
     <Project Path="BuildingBlocks/Erp.BuildingBlocks.CommonResponses/Erp.BuildingBlocks.CommonResponses.csproj" />
     <Project Path="BuildingBlocks/Erp.BuildingBlocks.Contracts/Erp.BuildingBlocks.Contracts.csproj" />
     <Project Path="BuildingBlocks/Erp.BuildingBlocks.EventBus/Erp.BuildingBlocks.EventBus.csproj" />
+    <Project Path="BuildingBlocks/Erp.BuildingBlocks.Hosting/Erp.BuildingBlocks.Hosting.csproj" />
     <Project Path="BuildingBlocks/Erp.BuildingBlocks.SharedKernel/Erp.BuildingBlocks.SharedKernel.csproj" />
     <Project Path="BuildingBlocks/CommonSecurity/Erp.BuildingBlocks.CommonSecurity.csproj" />
   </Folder>
@@ -26,6 +27,14 @@
     <Project Path="Services/HRService/HRService.Infrastructure/HRService.Infrastructure.csproj" />
     <Project Path="Services/HRService/HRService.Tests/HRService.Tests.csproj" />
   </Folder>
+  <Folder Name="/Services/MerchandisingService/">
+    <Project Path="Services/MerchandisingService/MerchandisingService.API/MerchandisingService.API.csproj" />
+    <Project Path="Services/MerchandisingService/MerchandisingService.Application/MerchandisingService.Application.csproj" />
+    <Project Path="Services/MerchandisingService/MerchandisingService.Contracts/MerchandisingService.Contracts.csproj" />
+    <Project Path="Services/MerchandisingService/MerchandisingService.Domain/MerchandisingService.Domain.csproj" />
+    <Project Path="Services/MerchandisingService/MerchandisingService.Infrastructure/MerchandisingService.Infrastructure.csproj" />
+    <Project Path="Services/MerchandisingService/MerchandisingService.Tests/MerchandisingService.Tests.csproj" />
+  </Folder>
   <Folder Name="/Services/MicroserviceShells/">
     <Project Path="Services/MicroserviceShells/Erp.Shift.Shell/Erp.Shift.Shell.csproj" />
     <Project Path="Services/MicroserviceShells/Erp.Attendance.Shell/Erp.Attendance.Shell.csproj" />
@@ -41,6 +50,14 @@
     <Project Path="Services/MicroserviceShells/Erp.Notification.Shell/Erp.Notification.Shell.csproj" />
     <Project Path="Services/MicroserviceShells/Erp.Audit.Shell/Erp.Audit.Shell.csproj" />
     <Project Path="Services/MicroserviceShells/Erp.FileStorage.Shell/Erp.FileStorage.Shell.csproj" />
+  </Folder>
+  <Folder Name="/Services/AccountsService/">
+    <Project Path="Services/AccountsService/AccountsService.API/AccountsService.API.csproj" />
+    <Project Path="Services/AccountsService/AccountsService.Application/AccountsService.Application.csproj" />
+    <Project Path="Services/AccountsService/AccountsService.Contracts/AccountsService.Contracts.csproj" />
+    <Project Path="Services/AccountsService/AccountsService.Domain/AccountsService.Domain.csproj" />
+    <Project Path="Services/AccountsService/AccountsService.Infrastructure/AccountsService.Infrastructure.csproj" />
+    <Project Path="Services/AccountsService/AccountsService.Tests/AccountsService.Tests.csproj" />
   </Folder>
   <Folder Name="/Services/AuthService/">
     <Project Path="Services/AuthService/AuthService.Api/AuthService.Api.csproj" />

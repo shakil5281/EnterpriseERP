@@ -19,6 +19,7 @@ type Options struct {
 	Address        *handlers.AddressHandler
 	Jobs           *handlers.JobsHandler
 	Templates      *handlers.TemplateHandler
+	ReportExport   *handlers.ReportExportHandler
 }
 
 func New(opts Options) *gin.Engine {
@@ -53,6 +54,7 @@ func New(opts Options) *gin.Engine {
 		api.POST("/import/:module/confirm", opts.Import.Confirm)
 
 		api.POST("/export/:module", opts.Export.Create)
+		api.POST("/reports/accounts/export", opts.ReportExport.Export)
 
 		api.GET("/templates/:module/download", opts.Templates.Download)
 

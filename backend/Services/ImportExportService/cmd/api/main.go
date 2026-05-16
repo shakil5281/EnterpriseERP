@@ -108,13 +108,14 @@ func main() {
 		Jwt: middleware.JwtConfig{
 			Issuer: cfg.Jwt.Issuer, Audience: cfg.Jwt.Audience, SigningKey: cfg.Jwt.SigningKey,
 		},
-		Health:     handlers.NewHealthHandler(gdb),
-		Import:     &handlers.ImportHandler{Svc: svc, Store: store},
-		Export:     &handlers.ExportHandler{Svc: svc},
-		Organogram: &handlers.CompanyOrganogramHandler{Svc: svc, Store: store},
-		Address:    &handlers.AddressHandler{Svc: svc, Store: store},
-		Jobs:       &handlers.JobsHandler{Svc: svc},
-		Templates:  &handlers.TemplateHandler{},
+		Health:       handlers.NewHealthHandler(gdb),
+		Import:       &handlers.ImportHandler{Svc: svc, Store: store},
+		Export:       &handlers.ExportHandler{Svc: svc},
+		Organogram:   &handlers.CompanyOrganogramHandler{Svc: svc, Store: store},
+		Address:      &handlers.AddressHandler{Svc: svc, Store: store},
+		Jobs:         &handlers.JobsHandler{Svc: svc},
+		Templates:    &handlers.TemplateHandler{},
+		ReportExport: &handlers.ReportExportHandler{},
 	})
 
 	srv := &http.Server{
