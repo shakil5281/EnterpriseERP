@@ -15,6 +15,8 @@
     "FinishingDb": "Server=unity3\\SQLEXPRESS;Database=FinishingServiceDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
     "SecurityDb": "Server=unity3\\SQLEXPRESS;Database=SecurityServiceDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
     "AccountsDb": "Server=unity3\\SQLEXPRESS;Database=AccountsServiceDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "CuttingDb": "Server=unity3\\SQLEXPRESS;Database=CuttingServiceDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "MerchandisingDb": "Server=unity3\\SQLEXPRESS;Database=MerchandisingServiceDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
     "Redis": "localhost:6379"
   }
 }

@@ -36,8 +36,10 @@ public sealed class HrDbContext(DbContextOptions<HrDbContext> options) : DbConte
             b.HasKey(x => x.Id);
             b.HasIndex(x => new { x.CompanyId, x.PunchNumber }).IsUnique().HasFilter("[IsDeleted] = 0");
             b.HasIndex(x => new { x.CompanyId, x.EmployeeID }).IsUnique().HasFilter("[IsDeleted] = 0");
-            b.Property(x => x.PunchNumber).IsRequired();
-            b.Property(x => x.EmployeeID).HasColumnName("EmployeeID").HasMaxLength(EmployeeIdentityRules.EmployeeIdMaxLength).IsRequired();
+            b.Property(x => x.Id).HasColumnOrder(0);
+            b.Property(x => x.PunchNumber).HasColumnOrder(1).IsRequired();
+            b.Property(x => x.EmployeeID).HasColumnName("EmployeeID").HasColumnOrder(2).HasMaxLength(EmployeeIdentityRules.EmployeeIdMaxLength).IsRequired();
+            b.Property(x => x.CompanyId).HasColumnOrder(3);
             b.Property(x => x.FullName).HasMaxLength(150).IsRequired();
             b.Property(x => x.BanglaName).HasMaxLength(150);
             b.Property(x => x.Gender).HasMaxLength(20);

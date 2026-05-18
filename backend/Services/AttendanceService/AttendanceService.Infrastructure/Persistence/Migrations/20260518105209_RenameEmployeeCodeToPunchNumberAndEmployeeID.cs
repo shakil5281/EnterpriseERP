@@ -64,13 +64,18 @@ namespace AttendanceService.Infrastructure.Persistence.Migrations
                 nullable: true);
 
             migrationBuilder.Sql("""
-                UPDATE l SET PunchNumber = TRY_CAST(l.EmployeeCode AS int)
-                FROM DeviceLogs l
-                WHERE TRY_CAST(l.EmployeeCode AS int) IS NOT NULL AND TRY_CAST(l.EmployeeCode AS int) > 0;
+                IF COL_LENGTH('dbo.DeviceLogs', 'EmployeeCode') IS NOT NULL
+                BEGIN
+                    EXEC(N'
+                        UPDATE l SET PunchNumber = TRY_CAST(l.EmployeeCode AS int)
+                        FROM DeviceLogs l
+                        WHERE TRY_CAST(l.EmployeeCode AS int) IS NOT NULL AND TRY_CAST(l.EmployeeCode AS int) > 0;
 
-                UPDATE l SET EmployeeID = LTRIM(RTRIM(l.EmployeeCode))
-                FROM DeviceLogs l
-                WHERE l.EmployeeCode LIKE 'EMP-%';
+                        UPDATE l SET EmployeeID = LTRIM(RTRIM(l.EmployeeCode))
+                        FROM DeviceLogs l
+                        WHERE l.EmployeeCode LIKE ''EMP-%'';
+                    ');
+                END
 
                 UPDATE l SET EmployeeID = 'EMP-' + RIGHT('0000' + CAST(l.PunchNumber AS varchar(10)), 4)
                 FROM DeviceLogs l
@@ -81,27 +86,36 @@ namespace AttendanceService.Infrastructure.Persistence.Migrations
                 FROM DeviceLogs l
                 WHERE l.PunchNumber IS NULL;
 
-                UPDATE d SET PunchNumber = TRY_CAST(d.EmployeeCode AS int)
-                FROM DailyAttendances d
-                WHERE TRY_CAST(d.EmployeeCode AS int) IS NOT NULL AND TRY_CAST(d.EmployeeCode AS int) > 0;
+                IF COL_LENGTH('dbo.DailyAttendances', 'EmployeeCode') IS NOT NULL
+                BEGIN
+                    EXEC(N'
+                        UPDATE d SET PunchNumber = TRY_CAST(d.EmployeeCode AS int)
+                        FROM DailyAttendances d
+                        WHERE TRY_CAST(d.EmployeeCode AS int) IS NOT NULL AND TRY_CAST(d.EmployeeCode AS int) > 0;
 
-                UPDATE d SET EmployeeID = LTRIM(RTRIM(d.EmployeeCode))
-                FROM DailyAttendances d
-                WHERE d.EmployeeCode LIKE 'EMP-%';
+                        UPDATE d SET EmployeeID = LTRIM(RTRIM(d.EmployeeCode))
+                        FROM DailyAttendances d
+                        WHERE d.EmployeeCode LIKE ''EMP-%'';
+                    ');
+                END
 
-                UPDATE d SET PunchNumber = e.PunchNumber, EmployeeID = e.EmployeeID
-                FROM DailyAttendances d
-                INNER JOIN HRServiceDB.dbo.Employees e ON e.Id = d.HrEmployeeId AND e.IsDeleted = 0
-                WHERE d.PunchNumber IS NULL OR d.EmployeeID IS NULL OR LTRIM(RTRIM(d.EmployeeID)) = '';
+                IF DB_ID(N'HRServiceDB') IS NOT NULL AND OBJECT_ID(N'HRServiceDB.dbo.Employees', N'U') IS NOT NULL
+                BEGIN
+                    UPDATE d SET PunchNumber = e.PunchNumber, EmployeeID = e.EmployeeID
+                    FROM DailyAttendances d
+                    INNER JOIN HRServiceDB.dbo.Employees e ON e.Id = d.HrEmployeeId AND e.IsDeleted = 0
+                    WHERE d.PunchNumber IS NULL OR d.EmployeeID IS NULL OR LTRIM(RTRIM(d.EmployeeID)) = '';
+                END
 
                 UPDATE d SET PunchNumber = 0, EmployeeID = ''
                 FROM DailyAttendances d
                 WHERE d.PunchNumber IS NULL OR d.EmployeeID IS NULL OR LTRIM(RTRIM(d.EmployeeID)) = '';
                 """);
 
-            migrationBuilder.DropColumn(
-                name: "EmployeeCode",
-                table: "DeviceLogs");
+            migrationBuilder.Sql("""
+                IF COL_LENGTH('dbo.DeviceLogs', 'EmployeeCode') IS NOT NULL
+                    ALTER TABLE dbo.DeviceLogs DROP COLUMN EmployeeCode;
+                """);
 
             migrationBuilder.Sql("""
                 IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_DailyAttendances_CompanyId_EmployeeCode_AttendanceDate' AND object_id = OBJECT_ID('dbo.DailyAttendances'))

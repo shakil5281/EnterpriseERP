@@ -114,7 +114,8 @@ namespace HRService.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnOrder(0);
 
                     b.Property<string>("BanglaName")
                         .HasMaxLength(150)
@@ -125,7 +126,8 @@ namespace HRService.Infrastructure.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnOrder(3);
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -144,7 +146,8 @@ namespace HRService.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)")
-                        .HasColumnName("EmployeeID");
+                        .HasColumnName("EmployeeID")
+                        .HasColumnOrder(2);
 
                     b.Property<string>("EmploymentType")
                         .IsRequired()
@@ -175,7 +178,8 @@ namespace HRService.Infrastructure.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.Property<int>("PunchNumber")
-                        .HasColumnType("int");
+                        .HasColumnType("int")
+                        .HasColumnOrder(1);
 
                     b.Property<string>("Status")
                         .IsRequired()

@@ -4,13 +4,13 @@ public sealed class Employee
 {
     public Guid Id { get; set; }
 
-    public Guid CompanyId { get; set; }
-
     /// <summary>ZKTeco BADGENUMBER / device punch number (numeric).</summary>
     public int PunchNumber { get; set; }
 
     /// <summary>Business employee code, e.g. EMP-0001.</summary>
     public string EmployeeID { get; set; } = string.Empty;
+
+    public Guid CompanyId { get; set; }
 
     public string FullName { get; set; } = string.Empty;
 
