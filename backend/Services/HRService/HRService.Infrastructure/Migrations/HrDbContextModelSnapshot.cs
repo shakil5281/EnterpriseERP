@@ -140,10 +140,11 @@ namespace HRService.Infrastructure.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
-                    b.Property<string>("EmployeeCode")
+                    b.Property<string>("EmployeeID")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasColumnName("EmployeeID");
 
                     b.Property<string>("EmploymentType")
                         .IsRequired()
@@ -173,6 +174,9 @@ namespace HRService.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<int>("PunchNumber")
+                        .HasColumnType("int");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -183,7 +187,11 @@ namespace HRService.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyId", "EmployeeCode")
+                    b.HasIndex("CompanyId", "EmployeeID")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("CompanyId", "PunchNumber")
                         .IsUnique()
                         .HasFilter("[IsDeleted] = 0");
 

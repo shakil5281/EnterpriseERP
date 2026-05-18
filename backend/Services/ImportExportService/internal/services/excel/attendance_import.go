@@ -11,7 +11,7 @@ import (
 
 type AttendanceImportRow struct {
 	RowIndex        int
-	EmployeeCode    string
+	EmployeeID      string
 	AttendanceDate  time.Time
 	ShiftCode       string
 	InTime          string
@@ -22,7 +22,7 @@ type AttendanceImportRow struct {
 }
 
 var attendanceHeaders = []string{
-	"EmployeeCode", "AttendanceDate", "ShiftCode", "InTime", "OutTime", "Status", "Remarks",
+	"EmployeeID", "AttendanceDate", "ShiftCode", "InTime", "OutTime", "Status", "Remarks",
 }
 
 func ParseAttendanceImport(path string) ([]AttendanceImportRow, []dto.RowError, error) {
@@ -67,8 +67,8 @@ func ParseAttendanceImport(path string) ([]AttendanceImportRow, []dto.RowError, 
 			return strings.TrimSpace(r[idx])
 		}
 		ar := AttendanceImportRow{RowIndex: excelRow}
-		if ar.EmployeeCode = get("EmployeeCode"); ar.EmployeeCode == "" {
-			errs = append(errs, dto.RowError{Row: excelRow, Column: "EmployeeCode", Message: "required"})
+		if ar.EmployeeID = get("EmployeeID"); ar.EmployeeID == "" {
+			errs = append(errs, dto.RowError{Row: excelRow, Column: "EmployeeID", Message: "required"})
 		}
 		raw := get("AttendanceDate")
 		ar.RawDate = raw
@@ -94,8 +94,8 @@ func ParseAttendanceImport(path string) ([]AttendanceImportRow, []dto.RowError, 
 		if strings.EqualFold(ar.Status, "Present") && ar.InTime == "" && ar.OutTime == "" {
 			errs = append(errs, dto.RowError{Row: excelRow, Message: "present punches must not be auto-inferred: provide InTime/OutTime or adjust Status"})
 		}
-		key := fmt.Sprintf("%s|%s", ar.EmployeeCode, ar.RawDate)
-		if ar.EmployeeCode != "" && raw != "" {
+		key := fmt.Sprintf("%s|%s", ar.EmployeeID, ar.RawDate)
+		if ar.EmployeeID != "" && raw != "" {
 			if _, ok := seen[key]; ok {
 				errs = append(errs, dto.RowError{Row: excelRow, Message: "duplicate employee+date"})
 			} else {

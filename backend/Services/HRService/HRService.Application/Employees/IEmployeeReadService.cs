@@ -53,7 +53,8 @@ public sealed class SummaryBucketDto
 public sealed class EmployeeListItemDto
 {
     public Guid Id { get; init; }
-    public string EmployeeCode { get; init; } = string.Empty;
+    public int PunchNumber { get; init; }
+    public string EmployeeID { get; init; } = string.Empty;
     public string FullName { get; init; } = string.Empty;
     public string? Email { get; init; }
     public Guid CompanyId { get; init; }
@@ -65,7 +66,8 @@ public sealed class EmployeeListItemDto
 public sealed class ManpowerListItemDto
 {
     public Guid Id { get; init; }
-    public string EmployeeCode { get; init; } = string.Empty;
+    public int PunchNumber { get; init; }
+    public string EmployeeID { get; init; } = string.Empty;
     public string FullName { get; init; } = string.Empty;
     public string? DesignationName { get; init; }
     public string? DepartmentName { get; init; }
@@ -80,7 +82,8 @@ public sealed class EmployeeDetailsDto
 {
     public Guid Id { get; init; }
     public Guid CompanyId { get; init; }
-    public string EmployeeCode { get; init; } = string.Empty;
+    public int PunchNumber { get; init; }
+    public string EmployeeID { get; init; } = string.Empty;
     public string FullName { get; init; } = string.Empty;
     public string? BanglaName { get; init; }
     public string? Gender { get; init; }

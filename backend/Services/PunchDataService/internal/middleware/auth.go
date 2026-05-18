@@ -20,12 +20,13 @@ type JwtConfig struct {
 
 // Context keys for downstream handlers.
 const (
-	ContextUserID = "auth.userId"
-	ContextRoles  = "auth.roles"
+	ContextUserID       = "auth.userId"
+	ContextRoles        = "auth.roles"
+	ContextPermissions  = "auth.permissions"
 )
 
 // JWTAuth validates HS256 bearer tokens issued by AuthService and exposes the
-// caller's user id + roles on the gin context.
+// caller's user id, roles, and permissions on the gin context.
 func JWTAuth(cfg JwtConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		header := c.GetHeader("Authorization")
@@ -64,6 +65,9 @@ func JWTAuth(cfg JwtConfig) gin.HandlerFunc {
 
 		c.Set(ContextUserID, userID)
 		c.Set(ContextRoles, extractRoles(claims))
+		c.Set(ContextPermissions, extractPermissions(claims))
+		c.Set("auth.claims", map[string]any(claims))
+
 		c.Next()
 	}
 }
@@ -108,4 +112,40 @@ func extractRoles(claims jwt.MapClaims) []string {
 		}
 	}
 	return out
+}
+
+func extractPermissions(claims jwt.MapClaims) []string {
+	keys := []string{"permission", "permissions"}
+	var out []string
+	seen := map[string]struct{}{}
+	for _, k := range keys {
+		v, ok := claims[k]
+		if !ok {
+			continue
+		}
+		switch t := v.(type) {
+		case string:
+			appendUnique(&out, seen, t)
+		case []any:
+			for _, item := range t {
+				if s, ok := item.(string); ok {
+					appendUnique(&out, seen, s)
+				}
+			}
+		}
+	}
+	return out
+}
+
+func appendUnique(out *[]string, seen map[string]struct{}, value string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+	key := strings.ToLower(value)
+	if _, ok := seen[key]; ok {
+		return
+	}
+	seen[key] = struct{}{}
+	*out = append(*out, value)
 }

@@ -31,7 +31,7 @@ public interface IEmployeeService
 
 // DTOs
 public sealed record CreateEmployeeDto(
-    Guid CompanyId, string EmployeeCode, string FullName, string? BanglaName,
+    Guid CompanyId, int PunchNumber, string? EmployeeID, string FullName, string? BanglaName,
     string? Gender, DateTime? DateOfBirth, string? NationalId, string? BirthCertificateNo,
     string? Phone, string? Email, DateTime JoinDate, string EmploymentType,
     Guid? DepartmentId, Guid? SectionId, Guid? DesignationId, Guid? GradeId,

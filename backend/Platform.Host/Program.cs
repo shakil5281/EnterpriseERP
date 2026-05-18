@@ -18,6 +18,7 @@ using HRService.Domain.Entities;
 using HRService.Infrastructure;
 using HRService.Infrastructure.Persistence;
 using AttendanceService.Api.Controllers;
+using AttendanceService.Application;
 using AttendanceService.Infrastructure;
 using AttendanceService.Infrastructure.Persistence;
 using LeaveService.Api.Authorization;
@@ -45,6 +46,16 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using Erp.BuildingBlocks.Hosting;
+using Asp.Versioning;
+using FinishingService.API.Controllers;
+using FinishingService.Infrastructure;
+using QualityService.API.Controllers;
+using QualityService.Infrastructure;
+using SecurityService.API.Controllers;
+using SecurityService.Application;
+using SecurityService.Infrastructure;
+using AccountsService.API.Controllers;
+using AccountsService.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddEnterpriseErpConnectionConfiguration();
@@ -60,6 +71,7 @@ builder.Services.AddAuthApplication();
 builder.Services.AddAuthInfrastructure(builder.Configuration);
 builder.Services.AddCompanyInfrastructure(builder.Configuration);
 builder.Services.AddHrInfrastructure(builder.Configuration);
+builder.Services.AddAttendanceApplication();
 builder.Services.AddAttendanceInfrastructure(builder.Configuration);
 builder.Services.AddLeaveApplication();
 builder.Services.AddLeaveInfrastructure(builder.Configuration);
@@ -69,10 +81,33 @@ builder.Services.AddPayrollApplication();
 builder.Services.AddPayrollInfrastructure(builder.Configuration);
 builder.Services.AddNotificationInfrastructure(builder.Configuration);
 
+// Bootstrapping newly integrated ERP microservices
+builder.Services.AddFinishingInfrastructure(builder.Configuration);
+QualityService.Infrastructure.DependencyInjection.AddInfrastructure(builder.Services, builder.Configuration);
+builder.Services.AddSecurityApplication();
+builder.Services.AddSecurityInfrastructure(builder.Configuration);
+builder.Services.AddAccountsInfrastructure(builder.Configuration);
+
+// Add ASP.NET Core API Versioning support for route segments like api/v{version:apiVersion}
+builder.Services.AddApiVersioning(o =>
+{
+    o.DefaultApiVersion = new ApiVersion(1, 0);
+    o.AssumeDefaultVersionWhenUnspecified = true;
+    o.ReportApiVersions = true;
+    o.ApiVersionReader = ApiVersionReader.Combine(
+        new UrlSegmentApiVersionReader(),
+        new HeaderApiVersionReader("X-Api-Version")
+    );
+}).AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'VVV";
+    options.SubstituteApiVersionInUrl = true;
+});
+
 builder.Services.AddFluentValidationAutoValidation();
 
 builder.Services.AddControllers()
-    .AddApplicationPart(typeof(AuthController).Assembly)
+    .AddApplicationPart(typeof(AuthService.Api.Controllers.AuthController).Assembly)
     .AddApplicationPart(typeof(CompaniesController).Assembly)
     .AddApplicationPart(typeof(EmployeesController).Assembly)
     .AddApplicationPart(typeof(AttendanceController).Assembly)
@@ -80,6 +115,10 @@ builder.Services.AddControllers()
     .AddApplicationPart(typeof(ShiftsController).Assembly)
     .AddApplicationPart(typeof(PayrollController).Assembly)
     .AddApplicationPart(typeof(NotificationsController).Assembly)
+    .AddApplicationPart(typeof(FinishingReceivesController).Assembly)
+    .AddApplicationPart(typeof(FinalInspectionsController).Assembly)
+    .AddApplicationPart(typeof(SecurityService.API.Controllers.GatesController).Assembly)
+    .AddApplicationPart(typeof(VouchersController).Assembly)
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
@@ -92,6 +131,7 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo { Title = "Enterprise ERP API", Version = "v1" });
     options.CustomSchemaIds(type => (type.FullName ?? type.Name).Replace('+', '.'));
+    options.ResolveConflictingActions(apiDescriptions => apiDescriptions.First());
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -318,7 +358,8 @@ await using (var scope = app.Services.CreateAsyncScope())
         {
             Id = Guid.NewGuid(),
             CompanyId = companyId,
-            EmployeeCode = "EMP-0001",
+            PunchNumber = 1,
+            EmployeeID = "EMP-0001",
             FullName = "Sample Employee",
             Email = "sample@erp.local",
             JoinDate = DateTime.UtcNow.Date,
@@ -363,6 +404,11 @@ await using (var scope = app.Services.CreateAsyncScope())
     var payrollDb = scope.ServiceProvider.GetRequiredService<PayrollDbContext>();
     var notificationDb = scope.ServiceProvider.GetRequiredService<NotificationDbContext>();
 
+    var finishingDb = scope.ServiceProvider.GetRequiredService<FinishingService.Infrastructure.Persistence.FinishingDbContext>();
+    var qualityDb = scope.ServiceProvider.GetRequiredService<QualityService.Infrastructure.Persistence.QualityDbContext>();
+    var securityDb = scope.ServiceProvider.GetRequiredService<SecurityService.Infrastructure.Persistence.SecurityDbContext>();
+    var accountsDb = scope.ServiceProvider.GetRequiredService<AccountsService.Infrastructure.Persistence.AccountsDbContext>();
+
     if (!app.Configuration.GetValue("PlatformHost:SkipServiceDatabaseMigrations", false))
     {
         await attendanceDb.Database.MigrateAsync();
@@ -375,6 +421,11 @@ await using (var scope = app.Services.CreateAsyncScope())
         await shiftDb.Database.MigrateAsync();
         await payrollDb.Database.MigrateAsync();
         await notificationDb.Database.MigrateAsync();
+
+        await finishingDb.Database.MigrateAsync();
+        await qualityDb.Database.MigrateAsync();
+        await securityDb.Database.MigrateAsync();
+        await accountsDb.Database.MigrateAsync();
     }
 }
 

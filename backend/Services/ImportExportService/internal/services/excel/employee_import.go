@@ -14,22 +14,23 @@ const maxErrorsInPreview = 200
 
 // EmployeeImportRow matches ERP template.
 type EmployeeImportRow struct {
-	RowIndex       int
-	EmployeeCode   string
-	EmployeeName   string
-	CompanyCode    string
-	DepartmentName string
+	RowIndex        int
+	PunchNumber     int
+	EmployeeID      string
+	EmployeeName    string
+	CompanyCode     string
+	DepartmentName  string
 	DesignationName string
-	JoiningDate    time.Time
-	GrossSalary    float64
-	Phone          string
-	Email          string
-	Status         string
-	RawJoiningDate string
+	JoiningDate     time.Time
+	GrossSalary     float64
+	Phone           string
+	Email           string
+	Status          string
+	RawJoiningDate  string
 }
 
 var employeeHeaders = []string{
-	"EmployeeCode", "EmployeeName", "CompanyCode", "DepartmentName", "DesignationName",
+	"PunchNumber", "EmployeeID", "EmployeeName", "CompanyCode", "DepartmentName", "DesignationName",
 	"JoiningDate", "GrossSalary", "Phone", "Email", "Status",
 }
 
@@ -76,9 +77,20 @@ func ParseEmployeeImport(path string) ([]EmployeeImportRow, []dto.RowError, erro
 		}
 		er := EmployeeImportRow{RowIndex: excelRow}
 		missing := []string{}
-		er.EmployeeCode = get("EmployeeCode")
-		if er.EmployeeCode == "" {
-			missing = append(missing, "EmployeeCode")
+		rawPunch := get("PunchNumber")
+		if rawPunch == "" {
+			missing = append(missing, "PunchNumber")
+		} else {
+			v, e := strconv.Atoi(strings.TrimSpace(rawPunch))
+			if e != nil || v <= 0 {
+				errs = append(errs, dto.RowError{Row: excelRow, Column: "PunchNumber", Message: "must be a positive integer"})
+			} else {
+				er.PunchNumber = v
+			}
+		}
+		er.EmployeeID = get("EmployeeID")
+		if er.EmployeeID == "" {
+			missing = append(missing, "EmployeeID")
 		}
 		er.EmployeeName = get("EmployeeName")
 		if er.EmployeeName == "" {
@@ -125,10 +137,10 @@ func ParseEmployeeImport(path string) ([]EmployeeImportRow, []dto.RowError, erro
 		if strings.EqualFold(strings.TrimSpace(er.Status), "Inactive") {
 			errs = append(errs, dto.RowError{Row: excelRow, Message: "inactive employee rows are not processed"})
 		}
-		key := strings.ToUpper(er.CompanyCode + "|" + er.EmployeeCode)
-		if er.EmployeeCode != "" && er.CompanyCode != "" {
+		key := strings.ToUpper(er.CompanyCode + "|" + er.EmployeeID)
+		if er.EmployeeID != "" && er.CompanyCode != "" {
 			if _, dup := seen[key]; dup {
-				errs = append(errs, dto.RowError{Row: excelRow, Column: "EmployeeCode", Message: "duplicate within file for company"})
+				errs = append(errs, dto.RowError{Row: excelRow, Column: "EmployeeID", Message: "duplicate within file for company"})
 			} else {
 				seen[key] = struct{}{}
 			}
@@ -155,7 +167,6 @@ func mapHeaders(headerRow []string, required []string) (map[string]int, []string
 	for i, h := range headerRow {
 		key := strings.TrimSpace(h)
 		key = strings.ReplaceAll(key, " ", "")
-		// tolerate header labels
 		for _, req := range required {
 			if strings.EqualFold(key, req) || strings.EqualFold(key, strings.ReplaceAll(req, " ", "")) {
 				m[req] = i
@@ -205,7 +216,6 @@ func parseExcelDate(raw string, f *excelize.File, sheet string, row, col int) (t
 	if t, err := time.Parse("01/02/2006", raw); err == nil {
 		return t, nil
 	}
-	// Excel serial
 	if v, err := strconv.ParseFloat(raw, 64); err == nil && v > 0 && v < 1000000 {
 		if t, err := excelize.ExcelDateToTime(v, false); err == nil {
 			return t, nil

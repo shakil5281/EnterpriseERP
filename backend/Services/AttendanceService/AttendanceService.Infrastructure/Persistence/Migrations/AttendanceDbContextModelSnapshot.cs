@@ -61,8 +61,14 @@ namespace AttendanceService.Infrastructure.Persistence.Migrations
                     b.Property<int>("EarlyOutMinutes")
                         .HasColumnType("int");
 
+                    b.Property<string>("EmployeeID")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<Guid>("EmployeeId")
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("HrEmployeeId");
 
                     b.Property<DateTime?>("InTime")
                         .HasColumnType("datetime2");
@@ -97,6 +103,9 @@ namespace AttendanceService.Infrastructure.Persistence.Migrations
                     b.Property<int>("OvertimeMinutes")
                         .HasColumnType("int");
 
+                    b.Property<int>("PunchNumber")
+                        .HasColumnType("int");
+
                     b.Property<string>("Remarks")
                         .HasColumnType("nvarchar(max)");
 
@@ -123,6 +132,8 @@ namespace AttendanceService.Infrastructure.Persistence.Migrations
                     b.HasIndex("CompanyId", "EmployeeId", "AttendanceDate")
                         .IsUnique();
 
+                    b.HasIndex("CompanyId", "PunchNumber", "AttendanceDate");
+
                     b.ToTable("DailyAttendances");
                 });
 
@@ -139,25 +150,32 @@ namespace AttendanceService.Infrastructure.Persistence.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("DeviceSerial")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("EmployeeCode")
-                        .IsRequired()
+                        .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("EmployeeID")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<Guid?>("EmployeeId")
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("HrEmployeeId");
 
                     b.Property<bool>("IsProcessed")
                         .HasColumnType("bit");
+
+                    b.Property<int>("PunchNumber")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("PunchTime")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyId", "EmployeeCode", "PunchTime")
-                        .IsUnique();
+                    b.HasIndex("CompanyId", "PunchNumber", "PunchTime", "DeviceSerial")
+                        .IsUnique()
+                        .HasFilter("[DeviceSerial] IS NOT NULL");
 
                     b.ToTable("DeviceLogs");
                 });

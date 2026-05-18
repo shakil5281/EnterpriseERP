@@ -1,5 +1,6 @@
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { IconRefresh } from "@tabler/icons-react"
+import { IconDeviceDesktop, IconRefresh } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 
 export default function DataProcessPage() {
@@ -11,6 +12,23 @@ export default function DataProcessPage() {
             </div>
 
             <div className="grid gap-6 max-w-2xl">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <IconDeviceDesktop className="size-5 text-primary" />
+                            Online Data Collect
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex items-center justify-between gap-4">
+                        <p className="text-sm text-muted-foreground">
+                            Connect to ZKTeco punch machines on LAN and download attendance punches.
+                        </p>
+                        <Button size="sm" asChild>
+                            <Link href="/management/data-process/online-data-collect">Open</Link>
+                        </Button>
+                    </CardContent>
+                </Card>
+
                 <Card>
                     <CardHeader>
                         <CardTitle>Attendance Sync</CardTitle>

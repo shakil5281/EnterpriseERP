@@ -15,12 +15,22 @@ public class AttendanceDbContext : DbContext, IAttendanceDbContext
     {
         modelBuilder.Entity<DailyAttendance>(entity =>
         {
+            entity.Property(e => e.EmployeeId).HasColumnName("HrEmployeeId");
+            entity.Property(e => e.PunchNumber).IsRequired();
+            entity.Property(e => e.EmployeeID).HasMaxLength(32).IsRequired();
             entity.HasIndex(e => new { e.CompanyId, e.EmployeeId, e.AttendanceDate }).IsUnique();
+            entity.HasIndex(e => new { e.CompanyId, e.PunchNumber, e.AttendanceDate });
         });
 
         modelBuilder.Entity<DeviceLog>(entity =>
         {
-            entity.HasIndex(e => new { e.CompanyId, e.EmployeeCode, e.PunchTime }).IsUnique();
+            entity.Property(e => e.EmployeeId).HasColumnName("HrEmployeeId");
+            entity.Property(e => e.EmployeeID).HasMaxLength(32).IsRequired();
+            entity.Property(e => e.PunchNumber).IsRequired();
+            entity.Property(e => e.DeviceSerial).HasMaxLength(450);
+            entity.HasIndex(e => new { e.CompanyId, e.PunchNumber, e.PunchTime, e.DeviceSerial })
+                .IsUnique()
+                .HasFilter("[DeviceSerial] IS NOT NULL");
         });
     }
 

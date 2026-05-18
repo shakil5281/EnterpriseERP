@@ -46,15 +46,20 @@ func New(opts Options) *gin.Engine {
 		[]string{
 			"SuperAdmin", "Admin", "HRAdmin", "ImportExport",
 			"HR", "HR Officer", "Management",
+			"GroupAdmin", "CompanyAdmin", "AccountsManager", "AccountsOfficer",
+			"CuttingManager", "CuttingOfficer", "Auditor", "Viewer",
 		},
-		[]string{"hr.employees.write"},
+		[]string{
+			"hr.employees.write",
+			"REPORT_VIEW", "LEDGER_VIEW", "CUTTING_REPORT_VIEW",
+		},
 	))
 	{
 		api.POST("/import/:module/preview", opts.Import.Preview)
 		api.POST("/import/:module/confirm", opts.Import.Confirm)
 
 		api.POST("/export/:module", opts.Export.Create)
-		api.POST("/reports/accounts/export", opts.ReportExport.Export)
+		api.POST("/reports/:module/export", opts.ReportExport.Export)
 
 		api.GET("/templates/:module/download", opts.Templates.Download)
 

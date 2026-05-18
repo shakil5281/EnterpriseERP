@@ -35,7 +35,8 @@ api.interceptors.response.use(
       error.response?.status === 401 &&
       !originalRequest._retry &&
       !originalRequest.url?.includes('auth/login') &&
-      !originalRequest.url?.includes('auth/register')
+      !originalRequest.url?.includes('auth/register') &&
+      !originalRequest.url?.includes('auth/verify-2fa')
     ) {
       originalRequest._retry = true;
       try {
@@ -43,6 +44,9 @@ api.interceptors.response.use(
           return Promise.reject(error);
         }
         const refreshToken = localStorage.getItem('refreshToken');
+        if (!refreshToken) {
+          return Promise.reject(error);
+        }
         const refreshUrl = `${getPublicApiBaseUrl()}/auth/refresh-token`;
         const response = await axios.post(refreshUrl, {
           refreshToken,

@@ -8,6 +8,8 @@ public sealed class DailyAttendance : AuditableEntity
     public Guid Id { get; set; }
     public Guid CompanyId { get; set; }
     public Guid EmployeeId { get; set; }
+    public int PunchNumber { get; set; }
+    public string EmployeeID { get; set; } = string.Empty;
     public DateTime AttendanceDate { get; set; }
     public Guid? ShiftId { get; set; }
     public string? ShiftCode { get; set; }

@@ -28,7 +28,8 @@ import {
 } from "@/components/ui/sheet"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-import { type LeaveType } from "@/lib/services/leave"
+import { leaveService, type LeaveType } from "@/lib/services/leave"
+import { companyService } from "@/lib/services/company"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -37,16 +38,15 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
 
-const MOCK_LEAVE_TYPES: LeaveType[] = [
-    { id: 1, name: "Casual Leave", code: "CL", yearlyLimit: 14, isCarryForward: false, description: "Regular casual leave" },
-    { id: 2, name: "Sick Leave", code: "SL", yearlyLimit: 14, isCarryForward: true, description: "Medical leave with carry forward" },
-    { id: 3, name: "Annual Leave", code: "AL", yearlyLimit: 20, isCarryForward: true, description: "Earned annual leave" },
-    { id: 4, name: "Maternity Leave", code: "ML", yearlyLimit: 112, isCarryForward: false, description: "Paid maternity leave" },
-]
+function stableIntFromGuid(guid: string): number {
+    const hex = guid.replace(/-/g, "").slice(0, 8);
+    const n = parseInt(hex, 16);
+    return Number.isFinite(n) ? (n | 0) : 0;
+}
 
 export default function LeaveTypePage() {
     const [isLoading, setIsLoading] = React.useState(false)
-    const [leaveTypes, setLeaveTypes] = React.useState<LeaveType[]>(MOCK_LEAVE_TYPES)
+    const [leaveTypes, setLeaveTypes] = React.useState<LeaveType[]>([])
     const [isSheetOpen, setIsSheetOpen] = React.useState(false)
     const [editingType, setEditingType] = React.useState<LeaveType | null>(null)
 
@@ -58,24 +58,104 @@ export default function LeaveTypePage() {
         description: ""
     })
 
-    const handleSubmit = () => {
+    React.useEffect(() => {
+        loadLeaveTypes()
+    }, [])
+
+    const loadLeaveTypes = async () => {
+        setIsLoading(true)
+        try {
+            const data = await leaveService.getLeaveTypes()
+            setLeaveTypes(data)
+        } catch (error) {
+            toast.error("Failed to load leave types")
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    const handleSubmit = async () => {
         if (!formData.name || !formData.code) {
             toast.error("Please fill in all required fields")
             return
         }
 
-        if (editingType) {
-            setLeaveTypes(prev => prev.map(t => t.id === editingType.id ? { ...t, ...formData } : t))
-            toast.success("Leave type updated successfully")
-        } else {
-            const newType: LeaveType = {
-                id: leaveTypes.length > 0 ? Math.max(...leaveTypes.map(t => t.id)) + 1 : 1,
-                ...formData
+        try {
+            const companies = await companyService.getAll()
+            const companyGuid = companies[0]?.entityId
+            if (!companyGuid) return
+
+            if (editingType) {
+                const list = await leaveService.listLeaveTypes(companyGuid)
+                const realType = list.find(t => stableIntFromGuid(t.id) === editingType.id)
+                if (!realType) throw new Error("Leave type not found")
+
+                await leaveService.updateLeaveType(realType.id, {
+                    leaveName: formData.name,
+                    isPaid: true,
+                    isCarryForward: formData.isCarryForward,
+                    maxCarryForwardDays: formData.isCarryForward ? 10 : 0,
+                    isEncashable: true
+                })
+                
+                try {
+                    const policies = await leaveService.listLeavePolicies(companyGuid)
+                    const policy = policies.find(p => p.leaveTypeId === realType.id)
+                    if (policy) {
+                        await leaveService.updateLeavePolicy(policy.id, {
+                            yearlyEntitlement: formData.yearlyLimit,
+                            monthlyAccrual: parseFloat((formData.yearlyLimit / 12).toFixed(2)),
+                            minServiceMonths: 0,
+                            requiresApproval: true,
+                            allowHalfDay: true,
+                            allowNegativeBalance: false,
+                            excludeHolidaysFromLeaveDays: true,
+                            excludeWeeklyOffFromLeaveDays: true,
+                            approvalLevelCount: 1,
+                            isActive: true
+                        })
+                    }
+                } catch (e) {
+                    console.error("Failed to update leave policy", e)
+                }
+
+                toast.success("Leave type updated successfully")
+            } else {
+                const newType = await leaveService.createLeaveType({
+                    companyId: companyGuid,
+                    leaveCode: formData.code,
+                    leaveName: formData.name,
+                    isPaid: true,
+                    isCarryForward: formData.isCarryForward,
+                    maxCarryForwardDays: formData.isCarryForward ? 10 : 0,
+                    isEncashable: true
+                })
+
+                try {
+                    await leaveService.createLeavePolicy({
+                        companyId: companyGuid,
+                        leaveTypeId: newType.id,
+                        yearlyEntitlement: formData.yearlyLimit,
+                        monthlyAccrual: parseFloat((formData.yearlyLimit / 12).toFixed(2)),
+                        minServiceMonths: 0,
+                        requiresApproval: true,
+                        allowHalfDay: true,
+                        allowNegativeBalance: false,
+                        excludeHolidaysFromLeaveDays: true,
+                        excludeWeeklyOffFromLeaveDays: true,
+                        approvalLevelCount: 1
+                    })
+                } catch (e) {
+                    console.error("Failed to create policy", e)
+                }
+
+                toast.success("New leave type created")
             }
-            setLeaveTypes(prev => [...prev, newType])
-            toast.success("New leave type created")
+            loadLeaveTypes()
+            handleCloseSheet()
+        } catch (error) {
+            toast.error("Failed to save leave type")
         }
-        handleCloseSheet()
     }
 
     const handleEdit = (type: LeaveType) => {
@@ -90,9 +170,22 @@ export default function LeaveTypePage() {
         setIsSheetOpen(true)
     }
 
-    const handleDelete = (id: number) => {
-        setLeaveTypes(prev => prev.filter(t => t.id !== id))
-        toast.success("Leave type deleted")
+    const handleDelete = async (id: number) => {
+        try {
+            const companies = await companyService.getAll()
+            const companyGuid = companies[0]?.entityId
+            if (!companyGuid) return
+
+            const list = await leaveService.listLeaveTypes(companyGuid)
+            const realType = list.find(t => stableIntFromGuid(t.id) === id)
+            if (!realType) throw new Error("Leave type not found")
+
+            await leaveService.deactivateLeaveType(realType.id)
+            toast.success("Leave type deactivated")
+            loadLeaveTypes()
+        } catch (error) {
+            toast.error("Failed to deactivate leave type")
+        }
     }
 
     const handleCloseSheet = () => {

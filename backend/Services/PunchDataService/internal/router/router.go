@@ -16,10 +16,12 @@ type Options struct {
 	Health         *handlers.HealthHandler
 	Logs           *handlers.LogsHandler
 	Punches        *handlers.PunchesHandler
+	Machines       *handlers.MachinesHandler
+	Imports        *handlers.ImportsHandler
+	RemoteCollect  *handlers.RemoteCollectHandler
 }
 
-// New builds a Gin engine wired with middleware, health, and the punch-data
-// routes.
+// New builds a Gin engine wired with middleware, health, and punch-data routes.
 func New(opts Options) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -27,14 +29,9 @@ func New(opts Options) *gin.Engine {
 	r.Use(corsMiddleware(opts.AllowedOrigins))
 
 	r.GET("/health", opts.Health.Get)
-
-	// Direct (dev) swagger UI.
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	r.GET("/", func(c *gin.Context) { c.Redirect(302, "/swagger/index.html") })
 
-	// Gateway-friendly swagger UI: reachable through ApiGateway as
-	// /api/v1/punch-data/swagger/index.html . The URL override makes the UI
-	// fetch its spec from the same prefix so it works behind the proxy too.
 	gatewaySwagger := ginSwagger.WrapHandler(
 		swaggerFiles.Handler,
 		ginSwagger.URL("/api/v1/punch-data/swagger/doc.json"),
@@ -43,6 +40,7 @@ func New(opts Options) *gin.Engine {
 
 	api := r.Group("/api/v1/punch-data")
 	api.Use(middleware.JWTAuth(opts.Jwt))
+	api.Use(middleware.CompanyScope())
 	{
 		logs := api.Group("/logs")
 		{
@@ -57,6 +55,33 @@ func New(opts Options) *gin.Engine {
 
 		api.POST("/process", opts.Logs.ProcessAll)
 		api.GET("/punches", opts.Punches.List)
+		api.POST("/punches/manual", opts.Punches.Manual)
+
+		machines := api.Group("/machines")
+		{
+			machines.POST("", opts.Machines.Create)
+			machines.POST("/bulk", opts.Machines.Bulk)
+			machines.GET("", opts.Machines.List)
+			machines.POST("/:id/connect", opts.Machines.Connect)
+			machines.POST("/:id/sync", opts.Machines.Sync)
+		}
+
+		api.GET("/sync-histories", opts.Machines.ListSyncHistory)
+
+		imports := api.Group("/imports")
+		{
+			imports.GET("", opts.Imports.ListBatches)
+			imports.GET("/:id/errors", opts.Imports.ListErrors)
+		}
+
+		if opts.RemoteCollect != nil {
+			remote := api.Group("/remote")
+			{
+				remote.POST("/collect", opts.RemoteCollect.Collect)
+				remote.GET("/collect/preview", opts.RemoteCollect.Preview)
+				remote.GET("/collect/histories", opts.RemoteCollect.ListHistories)
+			}
+		}
 	}
 
 	return r

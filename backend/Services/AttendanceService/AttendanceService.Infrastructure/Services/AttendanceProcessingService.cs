@@ -1,3 +1,4 @@
+using AttendanceService.Application.Common;
 using AttendanceService.Application.Common.Interfaces;
 using AttendanceService.Domain.Entities;
 using AttendanceService.Domain.Enums;
@@ -7,33 +8,27 @@ namespace AttendanceService.Infrastructure.Services;
 
 public class AttendanceProcessingService : IAttendanceProcessingService
 {
-    public DailyAttendance Process(DailyAttendance record, List<DeviceLog> punches, ShiftDto shift)
+    public DailyAttendance Process(DailyAttendance record, IReadOnlyList<AttendancePunchInput> punches, ShiftDto shift)
     {
-        var sortedPunches = punches.OrderBy(p => p.PunchTime).ToList();
-        
-        // Identify IN/OUT
-        if (!record.IsManualIn)
-            record.InTime = sortedPunches.FirstOrDefault()?.PunchTime;
-            
-        if (!record.IsManualOut)
-            record.OutTime = sortedPunches.Count > 1 ? sortedPunches.Last().PunchTime : null;
+        ApplyPunchTimes(record, punches);
 
-        record.ShiftId = shift.Id;
+        record.ShiftId = shift.Id == Guid.Empty ? null : shift.Id;
         record.ShiftCode = shift.ShiftCode;
 
-        // Basic Info
         var attendanceDate = record.AttendanceDate.Date;
         var shiftStart = attendanceDate.Add(shift.StartTime);
         var shiftEnd = attendanceDate.Add(shift.EndTime);
-        if (shift.IsCrossDay) shiftEnd = shiftEnd.AddDays(1);
+        if (shift.IsCrossDay)
+        {
+            shiftEnd = shiftEnd.AddDays(1);
+        }
 
-        // Reset metrics
         record.LateMinutes = 0;
         record.EarlyOutMinutes = 0;
         record.OTMinutes = 0;
         record.WorkingMinutes = 0;
+        record.Remarks = null;
 
-        // Logic
         if (!record.InTime.HasValue && !record.OutTime.HasValue)
         {
             record.Status = AttendanceStatus.Absent;
@@ -42,43 +37,89 @@ public class AttendanceProcessingService : IAttendanceProcessingService
 
         if (record.InTime.HasValue && !record.OutTime.HasValue)
         {
-            record.Status = AttendanceStatus.MissingPunch;
-            record.Remarks = "Missing OUT punch";
-        }
-        else if (!record.InTime.HasValue && record.OutTime.HasValue)
-        {
-            record.Status = AttendanceStatus.MissingPunch;
-            record.Remarks = "Missing IN punch";
-        }
-        else
-        {
-            // Full cycle
-            record.WorkingMinutes = (int)(record.OutTime!.Value - record.InTime!.Value).TotalMinutes;
-            
-            // Late Calculation (Assuming 10 mins grace from shift rules or global)
-            if (record.InTime > shiftStart.AddMinutes(10)) 
+            record.Remarks = "OUT punch not recorded";
+            if (record.InTime > shiftStart.AddMinutes(10))
             {
                 record.LateMinutes = (int)(record.InTime.Value - shiftStart).TotalMinutes;
+                record.Status = AttendanceStatus.Late;
+            }
+            else
+            {
+                record.Status = AttendanceStatus.Present;
             }
 
-            // Early Out Calculation
+            return record;
+        }
+
+        if (!record.InTime.HasValue && record.OutTime.HasValue)
+        {
+            record.Remarks = "IN punch not recorded";
             if (record.OutTime < shiftEnd.AddMinutes(-5))
             {
                 record.EarlyOutMinutes = (int)(shiftEnd - record.OutTime.Value).TotalMinutes;
+                record.Status = AttendanceStatus.EarlyOut;
             }
-
-            // OT Calculation
-            if (record.OutTime > shiftEnd.AddMinutes(30)) // 30 mins buffer for OT
+            else
             {
-                record.OTMinutes = (int)(record.OutTime.Value - shiftEnd).TotalMinutes;
+                record.Status = AttendanceStatus.Present;
             }
 
-            // Final Status
-            if (record.LateMinutes > 0) record.Status = AttendanceStatus.Late;
-            else if (record.EarlyOutMinutes > 0) record.Status = AttendanceStatus.EarlyOut;
-            else record.Status = AttendanceStatus.Present;
+            return record;
+        }
+
+        record.WorkingMinutes = (int)(record.OutTime!.Value - record.InTime!.Value).TotalMinutes;
+
+        if (record.InTime > shiftStart.AddMinutes(10))
+        {
+            record.LateMinutes = (int)(record.InTime.Value - shiftStart).TotalMinutes;
+        }
+
+        if (record.OutTime < shiftEnd.AddMinutes(-5))
+        {
+            record.EarlyOutMinutes = (int)(shiftEnd - record.OutTime.Value).TotalMinutes;
+        }
+
+        if (record.OutTime > shiftEnd.AddMinutes(30))
+        {
+            record.OTMinutes = (int)(record.OutTime.Value - shiftEnd).TotalMinutes;
+        }
+
+        if (record.LateMinutes > 0)
+        {
+            record.Status = AttendanceStatus.Late;
+        }
+        else if (record.EarlyOutMinutes > 0)
+        {
+            record.Status = AttendanceStatus.EarlyOut;
+        }
+        else
+        {
+            record.Status = AttendanceStatus.Present;
         }
 
         return record;
+    }
+
+    private static void ApplyPunchTimes(DailyAttendance record, IReadOnlyList<AttendancePunchInput> punches)
+    {
+        var orderedTimes = punches
+            .Select(p => p.PunchTime)
+            .OrderBy(t => t)
+            .ToList();
+
+        if (orderedTimes.Count == 0)
+        {
+            return;
+        }
+
+        if (!record.IsManualIn)
+        {
+            record.InTime = orderedTimes[0];
+        }
+
+        if (!record.IsManualOut && orderedTimes.Count > 1)
+        {
+            record.OutTime = orderedTimes[^1];
+        }
     }
 }

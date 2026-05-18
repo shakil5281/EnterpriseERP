@@ -6,7 +6,11 @@ public sealed class Employee
 
     public Guid CompanyId { get; set; }
 
-    public string EmployeeCode { get; set; } = string.Empty;
+    /// <summary>ZKTeco BADGENUMBER / device punch number (numeric).</summary>
+    public int PunchNumber { get; set; }
+
+    /// <summary>Business employee code, e.g. EMP-0001.</summary>
+    public string EmployeeID { get; set; } = string.Empty;
 
     public string FullName { get; set; } = string.Empty;
 
@@ -38,7 +42,6 @@ public sealed class Employee
 
     public DateTimeOffset? DeletedAt { get; set; }
 
-    // Navigation properties
     public ICollection<EmployeeJobInfo> JobInfos { get; set; } = new List<EmployeeJobInfo>();
     public ICollection<EmployeeSalaryInfo> SalaryInfos { get; set; } = new List<EmployeeSalaryInfo>();
     public ICollection<EmployeeAddress> Addresses { get; set; } = new List<EmployeeAddress>();

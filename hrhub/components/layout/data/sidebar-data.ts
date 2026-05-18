@@ -177,6 +177,7 @@ export const sidebarData = {
                     icon: IconRefresh,
                     items: [
                         { title: "Collect Data", url: "/management/data-process/collect-data" },
+                        { title: "Online Data Collect", url: "/management/data-process/online-data-collect" },
                         { title: "Daily Process", url: "/management/data-process/daily-process" },
                         { title: "Monthly Process", url: "/management/data-process/monthly-process" },
                     ],

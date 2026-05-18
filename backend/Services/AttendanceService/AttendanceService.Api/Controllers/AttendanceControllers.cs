@@ -15,16 +15,20 @@ namespace AttendanceService.Api.Controllers;
 public class AttendanceController(IMediator mediator) : ControllerBase
 {
     [HttpPost("process")]
-    public async Task<ActionResult<ApiResponse<bool>>> Process(ProcessDailyAttendanceCommand command)
+    public async Task<ActionResult<ApiResponse<ProcessDailyAttendanceResult>>> Process(ProcessDailyAttendanceCommand command)
     {
-        var success = await mediator.Send(command);
-        return Ok(ApiResponse<bool>.Ok(success, HttpContext.TraceIdentifier));
+        var result = await mediator.Send(command);
+        return Ok(ApiResponse<ProcessDailyAttendanceResult>.Ok(result, HttpContext.TraceIdentifier));
     }
 
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<IEnumerable<DailyAttendanceDto>>>> Get([FromQuery] Guid companyId, [FromQuery] DateTime fromDate, [FromQuery] DateTime toDate, [FromQuery] Guid? employeeId)
+    public async Task<ActionResult<ApiResponse<IEnumerable<DailyAttendanceDto>>>> Get(
+        [FromQuery] Guid companyId,
+        [FromQuery] DateTime fromDate,
+        [FromQuery] DateTime toDate,
+        [FromQuery] string? employeeID = null)
     {
-        var data = await mediator.Send(new GetDailyAttendanceQuery(companyId, fromDate, toDate, employeeId));
+        var data = await mediator.Send(new GetDailyAttendanceQuery(companyId, fromDate, toDate, employeeID));
         return Ok(ApiResponse<IEnumerable<DailyAttendanceDto>>.Ok(data, HttpContext.TraceIdentifier));
     }
 
@@ -43,9 +47,13 @@ public class AttendanceController(IMediator mediator) : ControllerBase
     }
 
     [HttpGet("summary")]
-    public async Task<ActionResult<ApiResponse<IEnumerable<AttendanceSummaryDto>>>> GetSummary([FromQuery] Guid companyId, [FromQuery] DateTime fromDate, [FromQuery] DateTime toDate, [FromQuery] Guid? employeeId)
+    public async Task<ActionResult<ApiResponse<IEnumerable<AttendanceSummaryDto>>>> GetSummary(
+        [FromQuery] Guid companyId,
+        [FromQuery] DateTime fromDate,
+        [FromQuery] DateTime toDate,
+        [FromQuery] string? employeeID = null)
     {
-        var data = await mediator.Send(new GetAttendanceSummaryQuery(companyId, fromDate, toDate, employeeId));
+        var data = await mediator.Send(new GetAttendanceSummaryQuery(companyId, fromDate, toDate, employeeID));
         return Ok(ApiResponse<IEnumerable<AttendanceSummaryDto>>.Ok(data, HttpContext.TraceIdentifier));
     }
 }

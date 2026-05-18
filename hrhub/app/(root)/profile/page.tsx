@@ -9,13 +9,27 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { authService, User, UserProfileUpdateDto } from "@/lib/services/auth"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
+import { authService, User, UserProfileUpdateDto, TwoFactorSetupResponse } from "@/lib/services/auth"
 import { toast } from "sonner"
 
 export default function ProfilePage() {
     const [user, setUser] = useState<User | null>(null)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+    const [twoFactorSetup, setTwoFactorSetup] = useState<TwoFactorSetupResponse | null>(null)
+    const [twoFactorCode, setTwoFactorCode] = useState("")
+    const [recoveryCodes, setRecoveryCodes] = useState<string[]>([])
+    const [disableDialogOpen, setDisableDialogOpen] = useState(false)
+    const [disableForm, setDisableForm] = useState({ password: "", code: "" })
+    const [securityBusy, setSecurityBusy] = useState(false)
     const [formData, setFormData] = useState<UserProfileUpdateDto>({
         fullName: "",
         email: "",
@@ -86,6 +100,53 @@ export default function ProfilePage() {
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { id, value } = e.target
         setFormData(prev => ({ ...prev, [id]: value }))
+    }
+
+    const handleStartTwoFactor = async () => {
+        try {
+            setSecurityBusy(true)
+            const setup = await authService.enableTwoFactor()
+            setTwoFactorSetup(setup)
+            setTwoFactorCode("")
+            setRecoveryCodes([])
+        } catch (error) {
+            console.error(error)
+            toast.error("Failed to start two-factor setup")
+        } finally {
+            setSecurityBusy(false)
+        }
+    }
+
+    const handleVerifyTwoFactor = async () => {
+        try {
+            setSecurityBusy(true)
+            const result = await authService.verifyTwoFactorSetup(twoFactorCode)
+            setRecoveryCodes(result.recoveryCodes)
+            toast.success("Two-factor authentication enabled")
+            await fetchProfile()
+        } catch (error) {
+            console.error(error)
+            toast.error("Invalid two-factor code")
+        } finally {
+            setSecurityBusy(false)
+        }
+    }
+
+    const handleDisableTwoFactor = async () => {
+        try {
+            setSecurityBusy(true)
+            const result = await authService.disableTwoFactor(disableForm.password, disableForm.code)
+            if (result.success) {
+                toast.success(result.message)
+                setDisableDialogOpen(false)
+                setDisableForm({ password: "", code: "" })
+                await fetchProfile()
+            } else {
+                toast.error(result.message)
+            }
+        } finally {
+            setSecurityBusy(false)
+        }
     }
 
     if (loading) {
@@ -195,9 +256,17 @@ export default function ProfilePage() {
                             <div className="flex items-center justify-between">
                                 <div className="space-y-0.5">
                                     <p className="text-sm font-medium">Two-Factor Auth</p>
-                                    <p className="text-xs text-muted-foreground">Not enabled</p>
+                                    <p className="text-xs text-muted-foreground">{user?.twoFactorEnabled ? "Enabled" : "Not enabled"}</p>
                                 </div>
-                                <Button variant="outline" size="sm" disabled>Enable</Button>
+                                {user?.twoFactorEnabled ? (
+                                    <Button variant="outline" size="sm" onClick={() => setDisableDialogOpen(true)}>
+                                        Disable
+                                    </Button>
+                                ) : (
+                                    <Button variant="outline" size="sm" onClick={handleStartTwoFactor} disabled={securityBusy}>
+                                        Enable
+                                    </Button>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
@@ -309,6 +378,94 @@ export default function ProfilePage() {
                     </CardContent>
                 </Card>
             </div>
+
+            <Dialog open={!!twoFactorSetup} onOpenChange={(open) => !open && setTwoFactorSetup(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Enable Two-Factor Auth</DialogTitle>
+                        <DialogDescription>
+                            Add this account to your authenticator app, then enter the generated code.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label>Setup Key</Label>
+                            <p className="rounded-md border bg-muted p-3 font-mono text-xs break-all">
+                                {twoFactorSetup?.sharedKey}
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Authenticator URI</Label>
+                            <p className="rounded-md border bg-muted p-3 font-mono text-xs break-all">
+                                {twoFactorSetup?.otpAuthUri}
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Verification Code</Label>
+                            <Input
+                                inputMode="numeric"
+                                value={twoFactorCode}
+                                onChange={(event) => setTwoFactorCode(event.target.value)}
+                                placeholder="123456"
+                            />
+                        </div>
+                        {recoveryCodes.length > 0 ? (
+                            <div className="space-y-2">
+                                <Label>Recovery Codes</Label>
+                                <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted p-3 font-mono text-xs">
+                                    {recoveryCodes.map(code => <span key={code}>{code}</span>)}
+                                </div>
+                            </div>
+                        ) : null}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setTwoFactorSetup(null)}>Close</Button>
+                        <Button onClick={handleVerifyTwoFactor} disabled={securityBusy || !twoFactorCode || recoveryCodes.length > 0}>
+                            Verify
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={disableDialogOpen} onOpenChange={setDisableDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Disable Two-Factor Auth</DialogTitle>
+                        <DialogDescription>
+                            Confirm your password and current authenticator code.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label>Password</Label>
+                            <Input
+                                type="password"
+                                value={disableForm.password}
+                                onChange={(event) => setDisableForm(prev => ({ ...prev, password: event.target.value }))}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Two-factor code</Label>
+                            <Input
+                                inputMode="numeric"
+                                value={disableForm.code}
+                                onChange={(event) => setDisableForm(prev => ({ ...prev, code: event.target.value }))}
+                                placeholder="123456"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDisableDialogOpen(false)}>Cancel</Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDisableTwoFactor}
+                            disabled={securityBusy || !disableForm.password || !disableForm.code}
+                        >
+                            Disable
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

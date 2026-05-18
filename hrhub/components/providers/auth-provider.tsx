@@ -15,6 +15,7 @@ interface AuthContextType {
     user: User | null
     loading: boolean
     login: (credentials: LoginCredentials) => Promise<LoginResponse>
+    completeTwoFactorLogin: (pendingTwoFactorToken: string, code: string) => Promise<LoginResponse>
     logout: () => void
     hasRole: (role: string) => boolean
     hasPermission: (permission: string) => boolean
@@ -83,10 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => window.removeEventListener('profile-updated', handleProfileUpdate);
     }, [])
 
-    const login = async (credentials: LoginCredentials) => {
-        const response = await authService.login(credentials)
-
-        // Only show full-screen loading if login is successful
+    const finishSuccessfulLogin = async (response: LoginResponse) => {
         if (response.success) {
             setInitializing(true) // Show loading screen during successful login
             setLoading(true)
@@ -119,7 +117,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setLoading(false)
             setInitializing(false)
         }
+    }
 
+    const login = async (credentials: LoginCredentials) => {
+        const response = await authService.login(credentials)
+        await finishSuccessfulLogin(response)
+        return response
+    }
+
+    const completeTwoFactorLogin = async (pendingTwoFactorToken: string, code: string) => {
+        const response = await authService.verifyTwoFactorLogin(pendingTwoFactorToken, code)
+        await finishSuccessfulLogin(response)
         return response
     }
 
@@ -154,7 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, logout, hasRole, hasPermission, hasAnyRole }}>
+        <AuthContext.Provider value={{ user, loading, login, completeTwoFactorLogin, logout, hasRole, hasPermission, hasAnyRole }}>
             {children}
         </AuthContext.Provider>
     )

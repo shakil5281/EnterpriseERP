@@ -124,6 +124,7 @@ export interface Line {
 
 export interface Shift {
   id: number;
+  entityId: string;
   nameEn: string;
   nameBn?: string;
   inTime: string;
@@ -135,6 +136,48 @@ export interface Shift {
   companyId?: number;
   companyName?: string;
   status: string;
+}
+
+interface ShiftApi {
+  id: string;
+  companyId: string;
+  shiftCode: string;
+  shiftName: string;
+  shiftType: string;
+  startTime: string;
+  endTime: string;
+  isCrossDay: boolean;
+  isGeneralDuty: boolean;
+  isDefault: boolean;
+  isActive: boolean;
+}
+
+function mapShift(row: ShiftApi, companyName?: string): Shift {
+  return {
+    id: stableIntFromGuid(row.id),
+    entityId: row.id,
+    nameEn: row.shiftName || row.shiftCode,
+    nameBn: undefined,
+    inTime: row.startTime,
+    outTime: row.endTime,
+    lunchHour: 1,
+    companyId: stableIntFromGuid(row.companyId),
+    companyName,
+    status: row.isActive ? "Active" : "Inactive",
+  };
+}
+
+export async function resolveShiftGuid(
+  shiftId: string | number,
+  companyId: number,
+): Promise<string | undefined> {
+  if (typeof shiftId === "string" && shiftId.includes("-")) {
+    return shiftId;
+  }
+  const n = typeof shiftId === "string" ? parseInt(shiftId, 10) : shiftId;
+  if (!Number.isFinite(n)) return undefined;
+  const all = await organogramService.getShifts({ companyId });
+  return all.find((s) => s.id === n)?.entityId;
 }
 
 interface GroupApi {
@@ -620,18 +663,22 @@ export const organogramService = {
   },
 
   getShifts: async (params?: { companyName?: string; companyId?: number }) => {
-    void params?.companyName;
     let companyGuid: string | undefined;
+    let companyName = params?.companyName;
+    const companies = await listCompanySummaries();
     if (params?.companyId !== undefined) {
-      companyGuid = await companyGuidFromLegacyCompanyId(params.companyId);
+      const match = companies.find((c) => stableIntFromGuid(c.id) === params.companyId);
+      companyGuid = match?.id;
+      companyName = companyName ?? match?.companyNameEn;
     } else {
-      const companies = await listCompanySummaries();
       companyGuid = companies[0]?.id;
+      companyName = companyName ?? companies[0]?.companyNameEn;
     }
     if (!companyGuid) return [];
     try {
       const response = await api.get<unknown>("Shifts", { params: { companyId: companyGuid } });
-      return asArray<Shift>(unwrapApiData<unknown>(response.data));
+      const rawRows = asArray<ShiftApi>(unwrapApiData<unknown>(response.data));
+      return rawRows.map((r) => mapShift(r, companyName));
     } catch {
       return [];
     }

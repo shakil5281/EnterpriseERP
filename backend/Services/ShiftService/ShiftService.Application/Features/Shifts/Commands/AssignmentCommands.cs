@@ -22,7 +22,9 @@ public class AssignmentHandlers(IShiftDbContext db) :
     {
         // One employee can have only one current shift per company.
         var current = await db.EmployeeShiftAssignments
-            .FirstOrDefaultAsync(a => a.EmployeeId == request.EmployeeId && a.IsCurrent, cancellationToken);
+            .FirstOrDefaultAsync(a => a.CompanyId == request.CompanyId
+                && a.EmployeeId == request.EmployeeId
+                && a.IsCurrent, cancellationToken);
 
         if (current != null)
         {
@@ -50,20 +52,29 @@ public class AssignmentHandlers(IShiftDbContext db) :
 
     public async Task<Guid> Handle(AssignTemporaryShiftCommand request, CancellationToken cancellationToken)
     {
-        // Temporary shift overrides regular shift. Unique per EmployeeId + ShiftDate.
-        var assignment = new TemporaryShiftAssignment
-        {
-            Id = Guid.NewGuid(),
-            CompanyId = request.CompanyId,
-            EmployeeId = request.EmployeeId,
-            ShiftId = request.ShiftId,
-            ShiftDate = request.ShiftDate.Date,
-            Reason = request.Reason,
-            CreatedBy = request.CreatedBy,
-            CreatedAt = DateTime.UtcNow
-        };
+        // Temporary shift overrides regular shift. Unique per company, employee, and date.
+        var assignment = await db.TemporaryShiftAssignments
+            .FirstOrDefaultAsync(a => a.CompanyId == request.CompanyId
+                && a.EmployeeId == request.EmployeeId
+                && a.ShiftDate.Date == request.ShiftDate.Date, cancellationToken);
 
-        db.TemporaryShiftAssignments.Add(assignment);
+        if (assignment is null)
+        {
+            assignment = new TemporaryShiftAssignment
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = request.CompanyId,
+                EmployeeId = request.EmployeeId,
+                ShiftDate = request.ShiftDate.Date,
+                CreatedAt = DateTime.UtcNow
+            };
+            db.TemporaryShiftAssignments.Add(assignment);
+        }
+
+        assignment.ShiftId = request.ShiftId;
+        assignment.Reason = request.Reason;
+        assignment.CreatedBy = request.CreatedBy;
+
         await db.SaveChangesAsync(cancellationToken);
         return assignment.Id;
     }

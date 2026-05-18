@@ -7,20 +7,115 @@ namespace HRService.Infrastructure.Services;
 
 public sealed class EmployeeService(HrDbContext db) : IEmployeeService
 {
+    private async Task EnsureDepartmentAndDesignationExistAsync(Guid? departmentId, Guid? designationId, Guid companyId, CancellationToken cancellationToken)
+    {
+        if (departmentId.HasValue)
+        {
+            var deptExists = await db.Departments.AnyAsync(d => d.Id == departmentId.Value, cancellationToken);
+            if (!deptExists)
+            {
+                string name = "Sync-Dept";
+                string? code = null;
+                try
+                {
+                    var raw = await db.Database
+                        .SqlQueryRaw<string>("SELECT CAST(NameEn AS varchar(max)) AS Value FROM CompanyServiceDB.dbo.Departments WHERE Id = {0}", departmentId.Value)
+                        .FirstOrDefaultAsync(cancellationToken);
+                    if (!string.IsNullOrEmpty(raw)) name = raw;
+
+                    var rawCode = await db.Database
+                        .SqlQueryRaw<string>("SELECT CAST(Code AS varchar(max)) AS Value FROM CompanyServiceDB.dbo.Departments WHERE Id = {0}", departmentId.Value)
+                        .FirstOrDefaultAsync(cancellationToken);
+                    if (!string.IsNullOrEmpty(rawCode)) code = rawCode;
+                }
+                catch
+                {
+                    // Fallback
+                }
+
+                db.Departments.Add(new Department
+                {
+                    Id = departmentId.Value,
+                    CompanyId = companyId,
+                    Name = name,
+                    Code = code,
+                    CreatedAt = DateTimeOffset.UtcNow
+                });
+                await db.SaveChangesAsync(cancellationToken);
+            }
+        }
+
+        if (designationId.HasValue)
+        {
+            var desigExists = await db.Designations.AnyAsync(d => d.Id == designationId.Value, cancellationToken);
+            if (!desigExists)
+            {
+                string name = "Sync-Desig";
+                try
+                {
+                    var raw = await db.Database
+                        .SqlQueryRaw<string>("SELECT CAST(NameEn AS varchar(max)) AS Value FROM CompanyServiceDB.dbo.Designations WHERE Id = {0}", designationId.Value)
+                        .FirstOrDefaultAsync(cancellationToken);
+                    if (!string.IsNullOrEmpty(raw)) name = raw;
+                }
+                catch
+                {
+                    // Fallback
+                }
+
+                var defaultGrade = await db.Grades.FirstOrDefaultAsync(cancellationToken);
+                if (defaultGrade == null)
+                {
+                    defaultGrade = new Grade { Id = Guid.NewGuid(), Name = "G1", CreatedAt = DateTimeOffset.UtcNow };
+                    db.Grades.Add(defaultGrade);
+                    await db.SaveChangesAsync(cancellationToken);
+                }
+
+                db.Designations.Add(new Designation
+                {
+                    Id = designationId.Value,
+                    GradeId = defaultGrade.Id,
+                    Name = name,
+                    CreatedAt = DateTimeOffset.UtcNow
+                });
+                await db.SaveChangesAsync(cancellationToken);
+            }
+        }
+    }
+
     public async Task<Guid> CreateAsync(CreateEmployeeDto dto, CancellationToken cancellationToken = default)
     {
-        // Business Rule: EmployeeCode unique within same company
-        var exists = await db.Employees.AnyAsync(e => e.CompanyId == dto.CompanyId && e.EmployeeCode == dto.EmployeeCode && !e.IsDeleted, cancellationToken);
-        if (exists)
+        await EnsureDepartmentAndDesignationExistAsync(dto.DepartmentId, dto.DesignationId, dto.CompanyId, cancellationToken);
+
+        EmployeeIdentityRules.ValidatePunchNumber(dto.PunchNumber);
+
+        var punchExists = await db.Employees.AnyAsync(
+            e => e.CompanyId == dto.CompanyId && e.PunchNumber == dto.PunchNumber && !e.IsDeleted,
+            cancellationToken);
+        if (punchExists)
         {
-            throw new InvalidOperationException($"Employee code {dto.EmployeeCode} already exists in this company.");
+            throw new InvalidOperationException($"PunchNumber {dto.PunchNumber} already exists in this company.");
+        }
+
+        var employeeId = string.IsNullOrWhiteSpace(dto.EmployeeID)
+            ? await GenerateNextEmployeeIdAsync(dto.CompanyId, cancellationToken)
+            : EmployeeIdentityRules.NormalizeEmployeeId(dto.EmployeeID);
+        EmployeeIdentityRules.ValidateEmployeeId(employeeId);
+
+        var idExists = await db.Employees.AnyAsync(
+            e => e.CompanyId == dto.CompanyId && e.EmployeeID == employeeId && !e.IsDeleted,
+            cancellationToken);
+        if (idExists)
+        {
+            throw new InvalidOperationException($"EmployeeID {employeeId} already exists in this company.");
         }
 
         var employee = new Employee
         {
             Id = Guid.NewGuid(),
             CompanyId = dto.CompanyId,
-            EmployeeCode = dto.EmployeeCode,
+            PunchNumber = dto.PunchNumber,
+            EmployeeID = employeeId,
             FullName = dto.FullName,
             BanglaName = dto.BanglaName,
             Gender = dto.Gender,
@@ -104,6 +199,8 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
     {
         var employee = await db.Employees.Include(e => e.JobInfos).FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
         if (employee == null) return;
+
+        await EnsureDepartmentAndDesignationExistAsync(dto.DepartmentId, dto.DesignationId, employee.CompanyId, cancellationToken);
 
         // Business Rule: Current job info only one record
         // Mark all existing job infos as not current
@@ -332,5 +429,25 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
             db.EmployeeDocuments.Remove(doc);
             await db.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    private async Task<string> GenerateNextEmployeeIdAsync(Guid companyId, CancellationToken cancellationToken)
+    {
+        var existing = await db.Employees.AsNoTracking()
+            .Where(e => e.CompanyId == companyId && !e.IsDeleted)
+            .Select(e => e.EmployeeID)
+            .ToListAsync(cancellationToken);
+
+        var max = 0;
+        foreach (var id in existing)
+        {
+            if (id.Length >= 5 && id.StartsWith("EMP-", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(id[4..], out var n) && n > max)
+            {
+                max = n;
+            }
+        }
+
+        return EmployeeIdentityRules.FormatEmployeeId(max + 1);
     }
 }

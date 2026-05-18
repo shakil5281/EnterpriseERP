@@ -3,13 +3,11 @@
 import * as React from "react"
 import {
     IconCalendarStats,
-    IconPlayerPlay,
-    IconBuildingFactory2,
     IconCheck,
     IconLoader2,
     IconInfoCircle,
     IconUser,
-    IconRefresh
+    IconRefresh,
 } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
@@ -17,12 +15,16 @@ import { Progress } from "@/components/ui/progress"
 import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { DateRange } from "react-day-picker"
-import { format } from "date-fns"
+import { eachDayOfInterval, format } from "date-fns"
 import { attendanceService } from "@/lib/services/attendance"
-import { organogramService } from "@/lib/services/organogram"
+import { companyService, type Company } from "@/lib/services/company"
 import { NativeSelect } from "@/components/ui/native-select"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { useRouter } from "next/navigation"
+
+function isGuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
 
 export default function DailyProcessPage() {
     const router = useRouter()
@@ -30,38 +32,71 @@ export default function DailyProcessPage() {
         from: new Date(),
         to: new Date(),
     })
-    const [departmentId, setDepartmentId] = React.useState<string>("all")
-    const [departments, setDepartments] = React.useState<any[]>([])
+    const [companies, setCompanies] = React.useState<Company[]>([])
+    const [companyId, setCompanyId] = React.useState("")
     const [processing, setProcessing] = React.useState(false)
     const [progress, setProgress] = React.useState(0)
     const [result, setResult] = React.useState<string | null>(null)
 
     React.useEffect(() => {
-        organogramService.getDepartments().then(setDepartments).catch(console.error)
+        companyService
+            .getAll()
+            .then((rows) => {
+                setCompanies(rows)
+                if (rows.length === 1) {
+                    setCompanyId(rows[0].entityId)
+                }
+            })
+            .catch((error) => {
+                console.error(error)
+                toast.error("Failed to load companies")
+            })
     }, [])
 
     const handleProcess = async () => {
-        if (!range?.from) return toast.error("Please select a date range")
+        if (!range?.from) {
+            toast.error("Please select a date range")
+            return
+        }
+        if (!companyId || !isGuid(companyId)) {
+            toast.error("Please select a company")
+            return
+        }
+
+        const end = range.to ?? range.from
+        const days = eachDayOfInterval({ start: range.from, end })
 
         setProcessing(true)
-        setProgress(15)
+        setProgress(5)
         setResult(null)
 
         try {
-            const payload = {
-                startDate: format(range.from, "yyyy-MM-dd"),
-                endDate: range.to ? format(range.to, "yyyy-MM-dd") : format(range.from, "yyyy-MM-dd"),
-                departmentId: departmentId !== "all" ? parseInt(departmentId) : undefined,
+            let totalRecords = 0
+            let processed = 0
+            for (const day of days) {
+                const result = await attendanceService.processDaily({
+                    companyId,
+                    date: format(day, "yyyy-MM-dd"),
+                })
+                totalRecords += result.recordsProcessed
+                processed += 1
+                setProgress(Math.round((processed / days.length) * 100))
             }
 
-            setProgress(45)
-            const response = await attendanceService.processDailyData(payload)
-            setProgress(100)
-            setResult(response.message)
-            toast.success("Bulk process completed")
-        } catch (error: any) {
+            const label =
+                days.length === 1
+                    ? format(days[0], "dd MMM yyyy")
+                    : `${format(range.from, "dd MMM yyyy")} – ${format(end, "dd MMM yyyy")}`
+
+            setResult(`Processed ${totalRecords} employee-day records for ${label}.`)
+            toast.success(`Daily process completed (${totalRecords} records)`)
+        } catch (error: unknown) {
             console.error(error)
-            toast.error(error.response?.data?.message || "Processing failed")
+            const message =
+                error instanceof Error
+                    ? error.message
+                    : (error as { response?: { data?: { message?: string } } })?.response?.data?.message
+            toast.error(message || "Processing failed")
             setProgress(0)
         } finally {
             setProcessing(false)
@@ -89,10 +124,29 @@ export default function DailyProcessPage() {
                 <Card className="border shadow-none">
                     <CardHeader>
                         <CardTitle className="text-lg">Bulk Processing Parameters</CardTitle>
-                        <CardDescription>Select the group and date range for massive attendance recalculation.</CardDescription>
+                        <CardDescription>
+                            Select company and date range to run attendance processing via the platform API.
+                        </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold uppercase text-muted-foreground">Company</Label>
+                                <NativeSelect
+                                    value={companyId}
+                                    onChange={(e) => setCompanyId(e.target.value)}
+                                    className="h-10"
+                                    disabled={processing}
+                                >
+                                    <option value="">Select company</option>
+                                    {companies.map((company) => (
+                                        <option key={company.entityId} value={company.entityId}>
+                                            {company.companyNameEn}
+                                        </option>
+                                    ))}
+                                </NativeSelect>
+                            </div>
+
                             <div className="space-y-2">
                                 <Label className="text-xs font-bold uppercase text-muted-foreground">Target Date Range</Label>
                                 <DateRangePicker
@@ -101,21 +155,6 @@ export default function DailyProcessPage() {
                                     className="w-full"
                                 />
                             </div>
-
-                            <div className="space-y-2">
-                                <Label className="text-xs font-bold uppercase text-muted-foreground">Department / Scope</Label>
-                                <NativeSelect
-                                    value={departmentId}
-                                    onChange={(e) => setDepartmentId(e.target.value)}
-                                    className="h-10"
-                                    disabled={processing}
-                                >
-                                    <option value="all">Whole Organization</option>
-                                    {departments.map((d: any) => (
-                                        <option key={d.id} value={d.id}>{d.nameEn}</option>
-                                    ))}
-                                </NativeSelect>
-                            </div>
                         </div>
 
                         {processing ? (
@@ -123,7 +162,7 @@ export default function DailyProcessPage() {
                                 <div className="flex justify-between items-center text-sm font-medium">
                                     <span className="flex items-center gap-2">
                                         <IconLoader2 className="size-4 animate-spin text-primary" />
-                                        Engine is calculating bulk data...
+                                        Processing attendance...
                                     </span>
                                     <span>{progress}%</span>
                                 </div>
@@ -141,7 +180,7 @@ export default function DailyProcessPage() {
                                 <Button
                                     onClick={handleProcess}
                                     className="w-full h-11 font-semibold gap-2 transition-all active:scale-[0.98]"
-                                    disabled={processing || !range?.from}
+                                    disabled={processing || !range?.from || !companyId}
                                 >
                                     <IconRefresh className="size-4" />
                                     Run Bulk Process
@@ -152,7 +191,11 @@ export default function DailyProcessPage() {
                     <CardFooter className="bg-muted/30 border-t py-4">
                         <div className="flex gap-2 items-start text-xs text-muted-foreground">
                             <IconInfoCircle className="size-4 shrink-0 text-primary opacity-70" />
-                            <p>Bulk processing may take a few moments depending on the number of employees and date range selected.</p>
+                            <p>
+                                Each day in the selected range is sent to{" "}
+                                <code className="text-[11px]">POST /api/v1/Attendance/process</code> with{" "}
+                                <code className="text-[11px]">companyId</code> and <code className="text-[11px]">date</code>.
+                            </p>
                         </div>
                     </CardFooter>
                 </Card>

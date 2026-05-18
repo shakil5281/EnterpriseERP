@@ -46,4 +46,6 @@ public static class EventTypes
     public const string MonthlyAttendanceSummaryGenerated = "erp.attendance.monthly.summary.v1";
 
     public const string PayrollRunPosted = "erp.payroll.run.posted.v1";
+
+    public const string PunchLogCollected = "erp.punch.log.collected.v1";
 }

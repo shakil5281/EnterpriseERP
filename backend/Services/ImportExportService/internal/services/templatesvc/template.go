@@ -10,13 +10,13 @@ func BuildEmployeeImportTemplate() (*excelize.File, error) {
 	_ = f.SetSheetName("Sheet1", "Instructions")
 	inst := "Instructions"
 	_ = f.SetCellValue(inst, "A1", "Employee Import Template")
-	_ = f.SetCellValue(inst, "A3", "1. Fill the Template sheet. Required columns: EmployeeCode, EmployeeName, CompanyCode, DepartmentName, DesignationName, JoiningDate, GrossSalary, Phone, Email, Status")
+	_ = f.SetCellValue(inst, "A3", "1. Fill the Template sheet. Required columns: PunchNumber, EmployeeID, EmployeeName, CompanyCode, DepartmentName, DesignationName, JoiningDate, GrossSalary, Phone, Email, Status")
 	_ = f.SetCellValue(inst, "A4", "2. Inactive employees are rejected on import.")
 	_ = f.SetCellValue(inst, "A5", "3. Use Preview API before Confirm.")
 
 	tpl := "Template"
 	f.NewSheet(tpl)
-	headers := []string{"EmployeeCode", "EmployeeName", "CompanyCode", "DepartmentName", "DesignationName", "JoiningDate", "GrossSalary", "Phone", "Email", "Status"}
+	headers := []string{"PunchNumber", "EmployeeID", "EmployeeName", "CompanyCode", "DepartmentName", "DesignationName", "JoiningDate", "GrossSalary", "Phone", "Email", "Status"}
 	for i, h := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		_ = f.SetCellValue(tpl, cell, h)
@@ -31,16 +31,17 @@ func BuildEmployeeImportTemplate() (*excelize.File, error) {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		_ = f.SetCellValue(sample, cell, h)
 	}
-	_ = f.SetCellValue(sample, "A2", "E001")
-	_ = f.SetCellValue(sample, "B2", "Karim Hasan")
-	_ = f.SetCellValue(sample, "C2", "COMP-001")
-	_ = f.SetCellValue(sample, "D2", "HR")
-	_ = f.SetCellValue(sample, "E2", "Executive")
-	_ = f.SetCellValue(sample, "F2", "2024-01-15")
-	_ = f.SetCellValue(sample, "G2", 55000)
-	_ = f.SetCellValue(sample, "H2", "01700000000")
-	_ = f.SetCellValue(sample, "I2", "karim@example.com")
-	_ = f.SetCellValue(sample, "J2", "Active")
+	_ = f.SetCellValue(sample, "A2", 1)
+	_ = f.SetCellValue(sample, "B2", "EMP-0001")
+	_ = f.SetCellValue(sample, "C2", "Karim Hasan")
+	_ = f.SetCellValue(sample, "D2", "COMP-001")
+	_ = f.SetCellValue(sample, "E2", "HR")
+	_ = f.SetCellValue(sample, "F2", "Executive")
+	_ = f.SetCellValue(sample, "G2", "2024-01-15")
+	_ = f.SetCellValue(sample, "H2", 55000)
+	_ = f.SetCellValue(sample, "I2", "01700000000")
+	_ = f.SetCellValue(sample, "J2", "karim@example.com")
+	_ = f.SetCellValue(sample, "K2", "Active")
 
 	idx, _ := f.GetSheetIndex("Template")
 	f.SetActiveSheet(idx)
@@ -68,7 +69,7 @@ func BuildPayrollImportTemplate() (*excelize.File, error) {
 func BuildAttendanceImportTemplate() (*excelize.File, error) {
 	f := excelize.NewFile()
 	f.SetSheetName("Sheet1", "Template")
-	h := []string{"EmployeeCode", "AttendanceDate", "ShiftCode", "InTime", "OutTime", "Status", "Remarks"}
+	h := []string{"EmployeeID", "AttendanceDate", "ShiftCode", "InTime", "OutTime", "Status", "Remarks"}
 	for i, col := range h {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		_ = f.SetCellValue("Template", cell, col)

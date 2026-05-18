@@ -18,8 +18,10 @@
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.2" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.3.1" />
     <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
+    <PackageReference Include="Asp.Versioning.Mvc" Version="8.1.0" />
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="8.1.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -31,6 +33,10 @@
     <ProjectReference Include="..\Services\ShiftService\ShiftService.Api\ShiftService.Api.csproj" />
     <ProjectReference Include="..\Services\PayrollService\PayrollService.Api\PayrollService.Api.csproj" />
     <ProjectReference Include="..\Services\NotificationService\NotificationService.Api\NotificationService.Api.csproj" />
+    <ProjectReference Include="..\Services\FinishingService\FinishingService.API\FinishingService.API.csproj" />
+    <ProjectReference Include="..\Services\QualityService\QualityService.API\QualityService.API.csproj" />
+    <ProjectReference Include="..\Services\SecurityService\SecurityService.API\SecurityService.API.csproj" />
+    <ProjectReference Include="..\Services\AccountsService\AccountsService.API\AccountsService.API.csproj" />
     <!-- Direct refs so IDE/OmniSharp resolves Program.cs types (transitive refs via *.Api are not always indexed). -->
     <ProjectReference Include="..\Services\LeaveService\LeaveService.Application\LeaveService.Application.csproj" />
     <ProjectReference Include="..\Services\LeaveService\LeaveService.Infrastructure\LeaveService.Infrastructure.csproj" />
@@ -40,6 +46,10 @@
     <ProjectReference Include="..\Services\PayrollService\PayrollService.Infrastructure\PayrollService.Infrastructure.csproj" />
     <ProjectReference Include="..\Services\PayrollService\PayrollService.Domain\PayrollService.Domain.csproj" />
     <ProjectReference Include="..\Services\NotificationService\NotificationService.Infrastructure\NotificationService.Infrastructure.csproj" />
+    <ProjectReference Include="..\Services\SecurityService\SecurityService.Infrastructure\SecurityService.Infrastructure.csproj" />
+    <ProjectReference Include="..\Services\QualityService\QualityService.Infrastructure\QualityService.Infrastructure.csproj" />
+    <ProjectReference Include="..\Services\FinishingService\FinishingService.Infrastructure\FinishingService.Infrastructure.csproj" />
+    <ProjectReference Include="..\Services\AccountsService\AccountsService.Infrastructure\AccountsService.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,3 +1,4 @@
+using HRService.Application.Employees;
 using HRService.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,8 +34,10 @@ public sealed class HrDbContext(DbContextOptions<HrDbContext> options) : DbConte
         modelBuilder.Entity<Employee>(b =>
         {
             b.HasKey(x => x.Id);
-            b.HasIndex(x => new { x.CompanyId, x.EmployeeCode }).IsUnique().HasFilter("[IsDeleted] = 0");
-            b.Property(x => x.EmployeeCode).HasMaxLength(50).IsRequired();
+            b.HasIndex(x => new { x.CompanyId, x.PunchNumber }).IsUnique().HasFilter("[IsDeleted] = 0");
+            b.HasIndex(x => new { x.CompanyId, x.EmployeeID }).IsUnique().HasFilter("[IsDeleted] = 0");
+            b.Property(x => x.PunchNumber).IsRequired();
+            b.Property(x => x.EmployeeID).HasColumnName("EmployeeID").HasMaxLength(EmployeeIdentityRules.EmployeeIdMaxLength).IsRequired();
             b.Property(x => x.FullName).HasMaxLength(150).IsRequired();
             b.Property(x => x.BanglaName).HasMaxLength(150);
             b.Property(x => x.Gender).HasMaxLength(20);

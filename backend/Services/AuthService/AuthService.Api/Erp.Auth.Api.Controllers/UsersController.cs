@@ -111,6 +111,20 @@ public sealed class UsersController(
 		return Ok(ApiResponse<IReadOnlyList<UserCompanyAccessDto>>.Ok(data, TraceId));
 	}
 
+	[HttpGet("{id:guid}/companies")]
+	[Authorize(Policy = "Permission:auth.users.read")]
+	public async Task<IActionResult> GetCompanies(Guid id, CancellationToken cancellationToken)
+	{
+		IReadOnlyList<UserCompanyAccessDto>? data;
+		IReadOnlyList<string> errors;
+		(data, errors) = await companyAccessAdmin.GetForUserAsync(id, cancellationToken);
+		if (data == null)
+		{
+			return NotFound(ApiResponse<object>.Fail(TraceId, errors.Select((string e) => new ApiError("NOT_FOUND", e)).ToList()));
+		}
+		return Ok(ApiResponse<IReadOnlyList<UserCompanyAccessDto>>.Ok(data, TraceId));
+	}
+
 	[HttpGet("{id:guid}/login-history")]
 	[Authorize(Policy = "Permission:auth.users.read")]
 	public async Task<IActionResult> LoginHistory(Guid id, CancellationToken cancellationToken)

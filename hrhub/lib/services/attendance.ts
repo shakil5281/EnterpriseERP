@@ -133,7 +133,8 @@ export interface CommonFilterParams {
 
 export interface BackendDailyAttendance {
     id: string;
-    employeeId: string;
+    employeeID: string;
+    punchNumber: number;
     attendanceDate: string;
     inTime: string | null;
     outTime: string | null;
@@ -146,7 +147,8 @@ export interface BackendDailyAttendance {
 }
 
 export interface BackendAttendanceSummary {
-    employeeId: string;
+    employeeID: string;
+    punchNumber: number;
     totalPresent: number;
     totalAbsent: number;
     totalLate: number;
@@ -159,7 +161,8 @@ export interface BackendAttendanceSummary {
 
 export interface PunchLogUploadItem {
     id?: string;
-    employeeCode: string;
+    punchNumber: number;
+    employeeID?: string | null;
     punchTime: string;
     deviceSerial?: string | null;
 }
@@ -168,17 +171,60 @@ export interface BackendAttendanceQuery {
     companyId: string;
     fromDate: string;
     toDate: string;
-    employeeId?: string;
+    employeeID?: string;
+}
+
+export interface ProcessDailyAttendanceResult {
+    recordsProcessed: number;
+    presentCount: number;
+    absentCount: number;
+    lateCount: number;
+}
+
+/** Calendar date only (yyyy-MM-dd) — avoids UTC offset excluding stored attendance rows. */
+function toDateOnlyParam(value: string | Date): string {
+    if (value instanceof Date) {
+        if (Number.isNaN(value.getTime())) {
+            throw new Error('Invalid date');
+        }
+        const y = value.getFullYear();
+        const m = String(value.getMonth() + 1).padStart(2, '0');
+        const d = String(value.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        return trimmed;
+    }
+    if (trimmed.includes('T')) {
+        return trimmed.slice(0, 10);
+    }
+    const parsed = new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) {
+        throw new Error('Invalid date');
+    }
+    return toDateOnlyParam(parsed);
 }
 
 export const attendanceService = {
-    processDaily: async (data: { companyId: string; date: string }) => {
-        const response = await api.post<unknown>(platformApiUrl('/api/v1/Attendance/process'), data);
-        return unwrapResponse<boolean>(response);
+    processDaily: async (data: { companyId: string; date: string | Date }) => {
+        const response = await api.post<unknown>(platformApiUrl('/api/v1/Attendance/process'), {
+            companyId: data.companyId,
+            date: toDateOnlyParam(data.date),
+        });
+        return unwrapResponse<ProcessDailyAttendanceResult>(response);
     },
 
     getDailyAttendance: async (params: BackendAttendanceQuery) => {
-        const response = await api.get<unknown>(platformApiUrl('/api/v1/Attendance'), { params });
+        const query: Record<string, string> = {
+            companyId: params.companyId,
+            fromDate: toDateOnlyParam(params.fromDate),
+            toDate: toDateOnlyParam(params.toDate),
+        };
+        if (params.employeeID?.trim()) {
+            query.employeeID = params.employeeID.trim();
+        }
+        const response = await api.get<unknown>(platformApiUrl('/api/v1/Attendance'), { params: query });
         return unwrapResponse<BackendDailyAttendance[]>(response);
     },
 
@@ -201,7 +247,15 @@ export const attendanceService = {
     },
 
     getAttendanceSummaryRecords: async (params: BackendAttendanceQuery) => {
-        const response = await api.get<unknown>(platformApiUrl('/api/v1/Attendance/summary'), { params });
+        const query: Record<string, string> = {
+            companyId: params.companyId,
+            fromDate: toDateOnlyParam(params.fromDate),
+            toDate: toDateOnlyParam(params.toDate),
+        };
+        if (params.employeeID?.trim()) {
+            query.employeeID = params.employeeID.trim();
+        }
+        const response = await api.get<unknown>(platformApiUrl('/api/v1/Attendance/summary'), { params: query });
         return unwrapResponse<BackendAttendanceSummary[]>(response);
     },
 
@@ -210,7 +264,8 @@ export const attendanceService = {
             companyId: data.companyId,
             logs: data.logs.map((log) => ({
                 id: log.id ?? '00000000-0000-0000-0000-000000000000',
-                employeeCode: log.employeeCode,
+                punchNumber: log.punchNumber,
+                employeeID: log.employeeID ?? null,
                 punchTime: log.punchTime,
                 deviceSerial: log.deviceSerial ?? null
             }))

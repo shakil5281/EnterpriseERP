@@ -17,14 +17,30 @@ public sealed class RoleAdminService(AuthDbContext db, RoleManager<AppRole> role
 {
 	public async Task<(IReadOnlyList<RoleDto>? Items, IReadOnlyList<string> Errors)> ListRolesAsync(CancellationToken cancellationToken = default)
 	{
-		List<RoleDto> list = await (from r in db.Roles.AsNoTracking()
+		var roles = await (from r in db.Roles.AsNoTracking()
 			where !r.IsDeleted && r.Name != null
 			orderby r.Name
-			select new RoleDto
-			{
-				Id = r.Id,
-				Name = r.Name!
-			}).ToListAsync(cancellationToken);
+			select new { r.Id, Name = r.Name! }).ToListAsync(cancellationToken);
+		List<Guid> roleIds = roles.Select(r => r.Id).ToList();
+		Dictionary<Guid, int> userCounts = await db.UserRoles.AsNoTracking()
+			.Where(ur => roleIds.Contains(ur.RoleId))
+			.GroupBy(ur => ur.RoleId)
+			.Select(g => new { RoleId = g.Key, Count = g.Count() })
+			.ToDictionaryAsync(x => x.RoleId, x => x.Count, cancellationToken);
+		var permissionRows = await (from rp in db.RolePermissions.AsNoTracking()
+			join p in db.Permissions.AsNoTracking() on rp.PermissionId equals p.Id
+			where roleIds.Contains(rp.RoleId) && !p.IsDeleted
+			select new { rp.RoleId, p.Code }).ToListAsync(cancellationToken);
+		Dictionary<Guid, List<string>> permissionsByRole = permissionRows
+			.GroupBy(x => x.RoleId)
+			.ToDictionary(g => g.Key, g => g.Select(x => x.Code).OrderBy(x => x).ToList());
+		List<RoleDto> list = roles.Select(r => new RoleDto
+		{
+			Id = r.Id,
+			Name = r.Name,
+			UserCount = userCounts.TryGetValue(r.Id, out int count) ? count : 0,
+			Permissions = permissionsByRole.TryGetValue(r.Id, out List<string>? permissions) ? permissions : Array.Empty<string>()
+		}).ToList();
 		return (list, Array.Empty<string>());
 	}
 
@@ -54,7 +70,9 @@ public sealed class RoleAdminService(AuthDbContext db, RoleManager<AppRole> role
 		return (new RoleDto
 		{
 			Id = role.Id,
-			Name = name
+			Name = name,
+			UserCount = 0,
+			Permissions = Array.Empty<string>()
 		}, Array.Empty<string>());
 	}
 

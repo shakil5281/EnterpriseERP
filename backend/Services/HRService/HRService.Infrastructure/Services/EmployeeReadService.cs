@@ -28,7 +28,9 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var s = query.Search.Trim().ToLower();
-            q = q.Where(e => e.FullName.ToLower().Contains(s) || e.EmployeeCode.ToLower().Contains(s));
+            q = q.Where(e => e.FullName.ToLower().Contains(s)
+                || e.EmployeeID.ToLower().Contains(s)
+                || e.PunchNumber.ToString().Contains(s));
         }
 
         if (query is ManpowerSummaryQuery summaryQuery)
@@ -100,18 +102,22 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var s = query.Search.Trim().ToLower();
-            q = q.Where(e => e.FullName.ToLower().Contains(s) || e.EmployeeCode.ToLower().Contains(s) || (e.Email != null && e.Email.ToLower().Contains(s)));
+            q = q.Where(e => e.FullName.ToLower().Contains(s)
+                || e.EmployeeID.ToLower().Contains(s)
+                || e.PunchNumber.ToString().Contains(s)
+                || (e.Email != null && e.Email.ToLower().Contains(s)));
         }
 
         var total = await q.CountAsync(cancellationToken);
         var items = await q
-            .OrderBy(e => e.EmployeeCode)
+            .OrderBy(e => e.EmployeeID)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .Select(e => new EmployeeListItemDto
             {
                 Id = e.Id,
-                EmployeeCode = e.EmployeeCode,
+                PunchNumber = e.PunchNumber,
+                EmployeeID = e.EmployeeID,
                 FullName = e.FullName,
                 Email = e.Email,
                 CompanyId = e.CompanyId,
@@ -145,7 +151,8 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
             {
                 Id = e.Id,
                 CompanyId = e.CompanyId,
-                EmployeeCode = e.EmployeeCode,
+                PunchNumber = e.PunchNumber,
+                EmployeeID = e.EmployeeID,
                 FullName = e.FullName,
                 BanglaName = e.BanglaName,
                 Gender = e.Gender,
@@ -178,13 +185,14 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
 
         var total = await q.CountAsync(cancellationToken);
         var items = await q
-            .OrderBy(e => e.EmployeeCode)
+            .OrderBy(e => e.EmployeeID)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .Select(e => new ManpowerListItemDto
             {
                 Id = e.Id,
-                EmployeeCode = e.EmployeeCode,
+                PunchNumber = e.PunchNumber,
+                EmployeeID = e.EmployeeID,
                 FullName = e.FullName,
                 DesignationName = e.JobInfos.Where(j => j.IsCurrent).Select(j => j.Designation != null ? j.Designation.Name : null).FirstOrDefault(),
                 DepartmentName = e.JobInfos.Where(j => j.IsCurrent).Select(j => j.Department != null ? j.Department.Name : null).FirstOrDefault(),

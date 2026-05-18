@@ -54,11 +54,15 @@ namespace ShiftService.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ShiftId");
+                      b.HasIndex("ShiftId");
+  
+                      b.HasIndex("CompanyId", "EmployeeId", "IsCurrent");
 
-                    b.HasIndex("CompanyId", "EmployeeId", "IsCurrent");
-
-                    b.ToTable("EmployeeShiftAssignments", (string)null);
+                      b.HasIndex("CompanyId", "EmployeeId")
+                          .IsUnique()
+                          .HasFilter("[IsCurrent] = 1");
+  
+                      b.ToTable("EmployeeShiftAssignments", (string)null);
                 });
 
             modelBuilder.Entity("ShiftService.Domain.Entities.Shift", b =>
@@ -358,8 +362,8 @@ namespace ShiftService.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ShiftId");
 
-                    b.HasIndex("EmployeeId", "ShiftDate")
-                        .IsUnique();
+                      b.HasIndex("CompanyId", "EmployeeId", "ShiftDate")
+                          .IsUnique();
 
                     b.ToTable("TemporaryShiftAssignments", (string)null);
                 });

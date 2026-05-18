@@ -131,7 +131,8 @@ await using (var scope = app.Services.CreateAsyncScope())
         {
             Id = Guid.NewGuid(),
             CompanyId = companyId,
-            EmployeeCode = "EMP-0001",
+            PunchNumber = 1,
+            EmployeeID = "EMP-0001",
             FullName = "Sample Employee",
             Email = "sample@erp.local",
             JoinDate = DateTime.UtcNow.Date,

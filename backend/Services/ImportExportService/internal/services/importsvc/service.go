@@ -804,13 +804,13 @@ func toExportDTO(j models.ExportJob) *dto.ExportJobDTO {
 
 func sampleEmployees() []excelsvc.EmployeeExportRow {
 	return []excelsvc.EmployeeExportRow{
-		{EmployeeCode: "E001", EmployeeName: "Sample User", Department: "HR", Designation: "Executive", JoinDate: time.Now(), Status: "Active", GrossSalary: 55000},
+		{PunchNumber: 1, EmployeeID: "EMP-0001", EmployeeName: "Sample User", Department: "HR", Designation: "Executive", JoinDate: time.Now(), Status: "Active", GrossSalary: 55000},
 	}
 }
 
 func samplePayroll() []excelsvc.PayrollExportRow {
 	return []excelsvc.PayrollExportRow{
-		{EmployeeCode: "E001", EmployeeName: "Sample User", Department: "HR", Designation: "Executive",
+		{EmployeeID: "EMP-0001", EmployeeName: "Sample User", Department: "HR", Designation: "Executive",
 			GrossSalary: 55000, BasicSalary: 27500, HouseRent: 13750, MedicalAllowance: 2750,
 			AttendanceDays: 26, OvertimeHours: 4, OvertimeAmount: 1200, Deduction: 500},
 	}

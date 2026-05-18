@@ -14,7 +14,9 @@ public class ShiftSelectionService(ShiftDbContext db) : IShiftSelectionService
             .AsNoTracking()
             .Include(t => t.Shift)
             .ThenInclude(s => s!.Rule)
-            .FirstOrDefaultAsync(t => t.EmployeeId == employeeId && t.ShiftDate.Date == attendanceDate.Date);
+            .FirstOrDefaultAsync(t => t.CompanyId == companyId
+                && t.EmployeeId == employeeId
+                && t.ShiftDate.Date == attendanceDate.Date);
 
         if (temp?.Shift != null) return temp.Shift;
 
@@ -23,7 +25,11 @@ public class ShiftSelectionService(ShiftDbContext db) : IShiftSelectionService
             .AsNoTracking()
             .Include(a => a.Shift)
             .ThenInclude(s => s!.Rule)
-            .FirstOrDefaultAsync(a => a.EmployeeId == employeeId && a.IsCurrent && a.EffectiveFrom <= attendanceDate && (a.EffectiveTo == null || a.EffectiveTo >= attendanceDate));
+            .FirstOrDefaultAsync(a => a.CompanyId == companyId
+                && a.EmployeeId == employeeId
+                && a.IsCurrent
+                && a.EffectiveFrom <= attendanceDate
+                && (a.EffectiveTo == null || a.EffectiveTo >= attendanceDate));
 
         if (regular?.Shift != null) return regular.Shift;
 

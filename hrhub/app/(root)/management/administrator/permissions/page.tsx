@@ -85,7 +85,7 @@ export default function PermissionsPage() {
             // Enhance roles with permissions data specifically for that role
             const enhancedData: EnhancedRole[] = rolesData.map(role => ({
                 ...role,
-                permissions: [], // Will be loaded on demand or leave empty
+                permissions: role.permissions ?? [],
                 status: "Active",
                 lastUpdated: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
             }))
@@ -136,11 +136,6 @@ export default function PermissionsPage() {
         try {
             const data = await authService.getRolePermissions(role.name)
             setSelectedPermissions(data.permissions)
-            if (data.permissions.length === 0) {
-                toast.message("Role permissions", {
-                    description: "Auth API v1 does not expose current permissions per role. Select the permissions to assign.",
-                })
-            }
         } catch (error) {
             toast.error("Failed to fetch role permissions")
         }

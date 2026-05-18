@@ -1,5 +1,15 @@
 import api from "../api";
+import { getHttpErrorMessage } from "../api-response";
 import { PagedResult, downloadBlob, unwrapResponse } from "./api-helpers";
+
+async function postPunchData<T>(path: string): Promise<T> {
+  try {
+    const response = await api.post<unknown>(path);
+    return unwrapResponse<T>(response);
+  } catch (error) {
+    throw new Error(getHttpErrorMessage(error, "Punch-data request failed"));
+  }
+}
 
 export type PunchDirection = "In" | "Out" | "Unknown";
 export type PunchLogStatus = "Pending" | "Processing" | "Completed" | "Failed";
@@ -8,7 +18,7 @@ export interface PunchRecord {
   id: string;
   logFileId: string;
   companyId: number;
-  employeeCode: string;
+  punchNumber: number;
   deviceId: string;
   punchTime: string;
   direction: PunchDirection;
@@ -32,7 +42,7 @@ export interface PunchLogFile {
 }
 
 export interface PunchRecordInput {
-  employeeCode: string;
+  punchNumber: number;
   punchTime: string;
   deviceId?: string;
   deviceSerial?: string;
@@ -64,11 +74,100 @@ export interface PunchLogQuery {
 }
 
 export interface PunchQuery extends PunchLogQuery {
-  employeeCode?: string;
+  punchNumber?: number;
   direction?: PunchDirection;
   logFileId?: string;
   from?: string;
   to?: string;
+}
+
+export type MachineConnectionStatus = "Unknown" | "Connected" | "Disconnected";
+
+export interface PunchMachine {
+  id: string;
+  companyId: number;
+  deviceCode: string;
+  deviceName: string;
+  machineNo: number;
+  ipAddress: string;
+  port: number;
+  useTcp: boolean;
+  productName?: string;
+  serialNumber?: string;
+  isActive: boolean;
+  lastConnectionStatus: MachineConnectionStatus | string;
+  lastError?: string;
+  lastConnectedAt?: string;
+  lastSyncedAt?: string;
+  lastSyncRecordCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePunchMachinePayload {
+  companyId: number;
+  deviceCode: string;
+  deviceName: string;
+  machineNo: number;
+  ipAddress: string;
+  port: number;
+  useTcp?: boolean;
+  productName?: string;
+  serialNumber?: string;
+  password?: number;
+  isActive?: boolean;
+}
+
+export interface PunchMachineQuery {
+  companyId?: number;
+  status?: string;
+  isActive?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface DeviceSyncHistory {
+  id: string;
+  companyId: number;
+  machineId: string;
+  triggerType: string;
+  syncStartedAt: string;
+  syncEndedAt?: string;
+  totalLogs: number;
+  newLogs: number;
+  duplicateLogs: number;
+  failedLogs: number;
+  status: string;
+  errorMessage?: string;
+  logFileId?: string;
+}
+
+export interface SyncHistoryQuery {
+  companyId?: number;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface MachineConnectionResult {
+  connected: boolean;
+  checkedAt: string;
+  deviceId?: string;
+  firmware?: string;
+  deviceClock?: string;
+  totalRecords: number;
+  totalUsers: number;
+}
+
+export interface MachineSyncResult {
+  history: DeviceSyncHistory;
+  logFile?: PunchLogFile;
+  process?: {
+    processedCount?: number;
+    skippedCount?: number;
+    errorCount?: number;
+  };
+  connection?: MachineConnectionResult;
 }
 
 export const punchDataService = {
@@ -135,5 +234,65 @@ export const punchDataService = {
   getPunches: async (params: PunchQuery = {}): Promise<PagedResult<PunchRecord>> => {
     const response = await api.get<unknown>("punch-data/punches", { params });
     return unwrapResponse<PagedResult<PunchRecord>>(response);
+  },
+
+  listMachines: async (params: PunchMachineQuery = {}): Promise<PagedResult<PunchMachine>> => {
+    const response = await api.get<unknown>("punch-data/machines", { params });
+    return unwrapResponse<PagedResult<PunchMachine>>(response);
+  },
+
+  saveMachine: async (payload: CreatePunchMachinePayload): Promise<PunchMachine> => {
+    const response = await api.post<unknown>("punch-data/machines", payload);
+    return unwrapResponse<PunchMachine>(response);
+  },
+
+  testConnection: async (machineId: string): Promise<MachineConnectionResult> => {
+    return postPunchData<MachineConnectionResult>(
+      `punch-data/machines/${encodeURIComponent(machineId)}/connect`,
+    );
+  },
+
+  syncMachine: async (machineId: string, options?: { useRemote?: boolean }): Promise<MachineSyncResult> => {
+    try {
+      const params: Record<string, string> = {};
+      if (options?.useRemote) {
+        params.useRemote = "true";
+      }
+      const response = await api.post<unknown>(
+        `punch-data/machines/${encodeURIComponent(machineId)}/sync`,
+        null,
+        { params },
+      );
+      return unwrapResponse<MachineSyncResult>(response);
+    } catch (error) {
+      throw new Error(getHttpErrorMessage(error, "Machine sync failed"));
+    }
+  },
+
+  collectRemote: async (data: {
+    companyId: number;
+    from?: string;
+    to?: string;
+    batchSize?: number;
+  }) => {
+    const response = await api.post<unknown>("punch-data/remote/collect", {
+      companyId: data.companyId,
+      from: data.from,
+      to: data.to,
+      batchSize: data.batchSize,
+    });
+    return unwrapResponse<{
+      inserted: number;
+      duplicates: number;
+      remoteRows: number;
+      pages: number;
+    }>(response);
+  },
+
+  listSyncHistories: async (
+    params: SyncHistoryQuery = {},
+  ): Promise<PagedResult<DeviceSyncHistory>> => {
+    const response = await api.get<unknown>("punch-data/sync-histories", { params });
+    return unwrapResponse<PagedResult<DeviceSyncHistory>>(response);
   },
 };

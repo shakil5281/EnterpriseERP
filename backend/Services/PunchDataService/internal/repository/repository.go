@@ -32,7 +32,7 @@ func (r *Repository) UpdateLogFile(ctx context.Context, lf *models.PunchLogFile)
 func (r *Repository) GetLogFile(ctx context.Context, id uuid.UUID) (*models.PunchLogFile, error) {
 	var lf models.PunchLogFile
 	err := r.db.WithContext(ctx).
-		Select("Id, FileName, SourceType, ContentType, DeviceId, CompanyId, SizeBytes, RecordCount, Status, ErrorMessage, UploadedAt, ProcessedAt").
+		Select("Id, ImportBatchId, FileName, SourceType, ContentType, DeviceId, CompanyId, SizeBytes, RecordCount, Status, ErrorMessage, UploadedAt, ProcessedAt").
 		First(&lf, "Id = ?", id).Error
 	if err != nil {
 		return nil, err
@@ -91,7 +91,7 @@ func (r *Repository) ListLogFiles(ctx context.Context, f LogFileFilter) ([]model
 
 	var items []models.PunchLogFile
 	err := applyFilters(r.db.WithContext(ctx)).
-		Select("Id, FileName, SourceType, ContentType, DeviceId, CompanyId, SizeBytes, RecordCount, Status, ErrorMessage, UploadedAt, ProcessedAt").
+		Select("Id, ImportBatchId, FileName, SourceType, ContentType, DeviceId, CompanyId, SizeBytes, RecordCount, Status, ErrorMessage, UploadedAt, ProcessedAt").
 		Order("UploadedAt DESC").
 		Offset((page - 1) * size).
 		Limit(size).
@@ -134,12 +134,11 @@ func (r *Repository) DeletePunchRecordsForLog(ctx context.Context, logID uuid.UU
 
 // PunchFilter describes filters for the punches list endpoint.
 type PunchFilter struct {
-	CompanyID    *int
-	EmployeeCode string
-	DeviceID     string
+	CompanyID   *int
+	PunchNumber *int
+	DeviceID    string
 	From         *time.Time
 	To           *time.Time
-	Direction    string
 	LogFileID    *uuid.UUID
 	Page         int
 	PageSize     int
@@ -152,14 +151,11 @@ func (r *Repository) ListPunches(ctx context.Context, f PunchFilter) ([]models.P
 		if f.CompanyID != nil && *f.CompanyID > 0 {
 			q = q.Where("CompanyId = ?", *f.CompanyID)
 		}
-		if f.EmployeeCode != "" {
-			q = q.Where("EmployeeCode = ?", f.EmployeeCode)
+		if f.PunchNumber != nil && *f.PunchNumber > 0 {
+			q = q.Where("PunchNumber = ?", *f.PunchNumber)
 		}
 		if f.DeviceID != "" {
 			q = q.Where("DeviceId = ?", f.DeviceID)
-		}
-		if f.Direction != "" {
-			q = q.Where("Direction = ?", f.Direction)
 		}
 		if f.LogFileID != nil {
 			q = q.Where("LogFileId = ?", *f.LogFileID)

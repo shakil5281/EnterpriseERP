@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -11,28 +12,46 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/enterprise-erp/punchdata/internal/collector"
 	"github.com/enterprise-erp/punchdata/internal/config"
 	"github.com/enterprise-erp/punchdata/internal/db"
+	"github.com/enterprise-erp/punchdata/internal/devices/zkteco"
 	_ "github.com/enterprise-erp/punchdata/internal/docs"
+	"github.com/enterprise-erp/punchdata/internal/events"
 	"github.com/enterprise-erp/punchdata/internal/handlers"
 	"github.com/enterprise-erp/punchdata/internal/middleware"
 	"github.com/enterprise-erp/punchdata/internal/processor"
+	"github.com/enterprise-erp/punchdata/internal/remote"
 	"github.com/enterprise-erp/punchdata/internal/repository"
 	"github.com/enterprise-erp/punchdata/internal/router"
+	"github.com/enterprise-erp/punchdata/internal/sync"
 	"github.com/gin-gonic/gin"
 )
 
 // @title           PunchDataService API
 // @version         1.0
-// @description     Punch / attendance log collection + processing service for EnterpriseERP. Ingests device payloads (CSV / JSON), normalises them into punch records, and exposes them for downstream services.
+// @description     Collects raw punch logs from biometric devices, file uploads, manual entry, and read-only import from a public ZKTeco SQL Server. Stores normalised rows in PunchRecords with deduplication. Does not calculate attendance (see AttendanceService).
 // @contact.name    EnterpriseERP Platform Team
 // @BasePath        /
 // @schemes         http https
 //
+// @tag.name        health
+// @tag.description Liveness and database connectivity
+// @tag.name        logs
+// @tag.description Upload, batch ingest, and process raw punch payloads
+// @tag.name        punches
+// @tag.description Query and manually add normalised punch records
+// @tag.name        machines
+// @tag.description ZKTeco device registry, connectivity test, and LAN sync
+// @tag.name        imports
+// @tag.description CSV/Excel import batch history and row errors
+// @tag.name        remote-collect
+// @tag.description Read-only collect from public ZKTeco SQL (CHECKINOUT) into PunchRecords
+//
 // @securityDefinitions.apikey  BearerAuth
 // @in                          header
 // @name                        Authorization
-// @description                 JWT issued by AuthService. Send as: `Bearer <token>`.
+// @description                 JWT issued by AuthService. Send as: `Bearer <token>`. Pass companyId in body or query when needed.
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -59,8 +78,54 @@ func main() {
 		os.Exit(1)
 	}
 
+	var publisher events.Publisher = events.NoopPublisher{}
+	var rabbitCloser *events.RabbitPublisher
+	if cfg.RabbitMQ.Enabled {
+		rabbitCloser = events.NewRabbitPublisher(events.RabbitMQConfig{
+			HostName:     cfg.RabbitMQ.HostName,
+			UserName:     cfg.RabbitMQ.UserName,
+			Password:     cfg.RabbitMQ.Password,
+			ExchangeName: cfg.RabbitMQ.ExchangeName,
+		}, logger)
+		publisher = rabbitCloser
+	}
+
 	repo := repository.New(gormDB)
-	procSvc := processor.NewService(repo, logger, cfg.PunchData.Source)
+	procSvc := processor.NewService(repo, logger, publisher, cfg.PunchData.Source)
+	zkClient := zkteco.NewClient("", 0)
+
+	var remoteSQL *sql.DB
+	var remoteColSvc *collector.RemoteService
+	remoteEnabled := strings.TrimSpace(cfg.ConnectionStrings.RemoteZktecoDb) != ""
+	if remoteEnabled {
+		remoteSQL, err = db.OpenRemote(cfg.ConnectionStrings.RemoteZktecoDb)
+		if err != nil {
+			remoteEnabled = false
+			logger.Warn("remote ZKTeco collect disabled because database connection failed", "error", err)
+		} else {
+			remoteColSvc = collector.NewRemoteService(
+				repo,
+				remote.NewReader(remoteSQL),
+				publisher,
+				logger,
+				collector.RemoteOptions{
+					Source:              cfg.RemoteCollect.Source,
+					PageSize:            cfg.RemoteCollect.DefaultBatchSize,
+					MaxPageSize:         cfg.RemoteCollect.MaxBatchSize,
+					MaxRowsPerCollect:   cfg.RemoteCollect.MaxRowsPerCollect,
+					DefaultLookbackDays: cfg.RemoteCollect.DefaultLookbackDays,
+				},
+			)
+			logger.Info("remote ZKTeco collect enabled (read-only)")
+		}
+	}
+
+	var syncSvc *sync.Service
+	if remoteColSvc != nil {
+		syncSvc = sync.NewServiceWithRemote(repo, procSvc, zkClient, remoteColSvc, cfg.RemoteCollect.DefaultLookbackDays)
+	} else {
+		syncSvc = sync.NewService(repo, procSvc, zkClient)
+	}
 
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.ReleaseMode)
@@ -73,15 +138,27 @@ func main() {
 			Audience:   cfg.Jwt.Audience,
 			SigningKey: cfg.Jwt.SigningKey,
 		},
-		Health:  handlers.NewHealthHandler(gormDB),
-		Logs:    handlers.NewLogsHandler(repo, procSvc, cfg.PunchData.MaxUploadMB),
-		Punches: handlers.NewPunchesHandler(repo),
+		Health:        handlers.NewHealthHandler(gormDB, remoteSQL),
+		Logs:          handlers.NewLogsHandler(repo, procSvc, cfg.PunchData.MaxUploadMB),
+		Punches:       handlers.NewPunchesHandler(repo, procSvc),
+		Machines:      handlers.NewMachinesHandler(repo, zkClient, syncSvc),
+		Imports:       handlers.NewImportsHandler(repo),
+		RemoteCollect: handlers.NewRemoteCollectHandler(remoteColSvc, repo, remoteEnabled),
 	})
 
 	srv := &http.Server{
 		Addr:              cfg.Server.Address,
 		Handler:           engine,
 		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if cfg.PunchData.EnableBackgroundSync {
+		interval := time.Duration(cfg.PunchData.SyncIntervalMinutes) * time.Minute
+		go sync.NewScheduler(repo, syncSvc, logger, interval).Run(ctx)
+		logger.Info("background device sync enabled", "interval", interval.String())
 	}
 
 	go func() {
@@ -97,12 +174,19 @@ func main() {
 	<-stop
 
 	logger.Info("shutting down")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
+	cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Warn("graceful shutdown failed", "error", err)
+	}
+	if rabbitCloser != nil {
+		_ = rabbitCloser.Close()
 	}
 	if sqlDB, err := gormDB.DB(); err == nil {
 		_ = sqlDB.Close()
+	}
+	if remoteSQL != nil {
+		_ = remoteSQL.Close()
 	}
 }

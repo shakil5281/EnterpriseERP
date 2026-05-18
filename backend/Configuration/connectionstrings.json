@@ -9,7 +9,12 @@
     "PayrollDb": "Server=unity3\\SQLEXPRESS;Database=PayrollServiceDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
     "NotificationDb": "Server=unity3\\SQLEXPRESS;Database=NotificationServiceDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
     "PunchDataDb": "Server=unity3\\SQLEXPRESS;Database=PunchDataDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "RemoteZktecoDb": "Server=103.87.136.72,1433;Database=zkteco;User Id=sa;Password=12345;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true",
     "ImportExportDb": "Server=unity3\\SQLEXPRESS;Database=ImportExportDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "QualityDb": "Server=unity3\\SQLEXPRESS;Database=QualityServiceDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "FinishingDb": "Server=unity3\\SQLEXPRESS;Database=FinishingServiceDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "SecurityDb": "Server=unity3\\SQLEXPRESS;Database=SecurityServiceDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "AccountsDb": "Server=unity3\\SQLEXPRESS;Database=AccountsServiceDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true",
     "Redis": "localhost:6379"
   }
 }

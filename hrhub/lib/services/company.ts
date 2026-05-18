@@ -196,8 +196,8 @@ export const companyService = {
   },
 
   getUserCompanies: async (userId: string) => {
-    void userId;
-    const rows = await companyService.getMyCompanies();
+    const response = await api.get<unknown>(`users/${encodeURIComponent(userId)}/companies`);
+    const rows = unwrapResponse<UserCompanyAccess[]>(response);
     return rows.map((row) => ({
       id: row.companyId,
       companyId: row.companyId,

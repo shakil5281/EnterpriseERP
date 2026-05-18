@@ -16,6 +16,8 @@ type AppConfig struct {
 	Jwt               JwtConfig               `json:"Jwt"`
 	Cors              CorsConfig              `json:"Cors"`
 	PunchData         PunchDataConfig         `json:"PunchData"`
+	RemoteCollect     RemoteCollectConfig     `json:"RemoteCollect"`
+	RabbitMQ          RabbitMQConfig          `json:"RabbitMQ"`
 	Logging           LoggingConfig           `json:"Logging"`
 }
 
@@ -24,7 +26,8 @@ type ServerConfig struct {
 }
 
 type ConnectionStringsConfig struct {
-	PunchDataDb string `json:"PunchDataDb"`
+	PunchDataDb    string `json:"PunchDataDb"`
+	RemoteZktecoDb string `json:"RemoteZktecoDb"`
 }
 
 type JwtConfig struct {
@@ -39,8 +42,26 @@ type CorsConfig struct {
 }
 
 type PunchDataConfig struct {
-	MaxUploadMB int    `json:"MaxUploadMB"`
-	Source      string `json:"Source"`
+	MaxUploadMB            int  `json:"MaxUploadMB"`
+	Source                 string `json:"Source"`
+	EnableBackgroundSync   bool `json:"EnableBackgroundSync"`
+	SyncIntervalMinutes    int  `json:"SyncIntervalMinutes"`
+}
+
+type RemoteCollectConfig struct {
+	Source              string `json:"Source"`
+	DefaultBatchSize    int    `json:"DefaultBatchSize"`
+	MaxBatchSize        int    `json:"MaxBatchSize"`
+	MaxRowsPerCollect   int    `json:"MaxRowsPerCollect"`
+	DefaultLookbackDays int    `json:"DefaultLookbackDays"`
+}
+
+type RabbitMQConfig struct {
+	HostName     string `json:"HostName"`
+	UserName     string `json:"UserName"`
+	Password     string `json:"Password"`
+	ExchangeName string `json:"ExchangeName"`
+	Enabled      bool   `json:"Enabled"`
 }
 
 type LoggingConfig struct {
@@ -86,12 +107,15 @@ func Load() (*AppConfig, error) {
 	central := filepath.Clean(filepath.Join(root, "..", "..", "Configuration", "connectionstrings.json"))
 	if _, err := os.Stat(central); err == nil {
 		var centralCfg struct {
-			ConnectionStrings struct {
-				PunchDataDb string `json:"PunchDataDb"`
-			} `json:"ConnectionStrings"`
+			ConnectionStrings ConnectionStringsConfig `json:"ConnectionStrings"`
 		}
-		if err := readJSON(central, &centralCfg); err == nil && strings.TrimSpace(centralCfg.ConnectionStrings.PunchDataDb) != "" {
-			cfg.ConnectionStrings.PunchDataDb = centralCfg.ConnectionStrings.PunchDataDb
+		if err := readJSON(central, &centralCfg); err == nil {
+			if strings.TrimSpace(centralCfg.ConnectionStrings.PunchDataDb) != "" {
+				cfg.ConnectionStrings.PunchDataDb = centralCfg.ConnectionStrings.PunchDataDb
+			}
+			if strings.TrimSpace(centralCfg.ConnectionStrings.RemoteZktecoDb) != "" {
+				cfg.ConnectionStrings.RemoteZktecoDb = centralCfg.ConnectionStrings.RemoteZktecoDb
+			}
 		}
 	}
 
@@ -115,6 +139,9 @@ func applyEnvOverrides(cfg *AppConfig) {
 	if v := os.Getenv("PUNCHDATA_CONNECTIONSTRING"); v != "" {
 		cfg.ConnectionStrings.PunchDataDb = v
 	}
+	if v := os.Getenv("PUNCHDATA_REMOTE_CONNECTIONSTRING"); v != "" {
+		cfg.ConnectionStrings.RemoteZktecoDb = v
+	}
 	if v := os.Getenv("PUNCHDATA_JWT_SIGNINGKEY"); v != "" {
 		cfg.Jwt.SigningKey = v
 	}
@@ -135,6 +162,36 @@ func applyDefaults(cfg *AppConfig) {
 	}
 	if cfg.PunchData.Source == "" {
 		cfg.PunchData.Source = "Device"
+	}
+	if cfg.PunchData.SyncIntervalMinutes <= 0 {
+		cfg.PunchData.SyncIntervalMinutes = 30
+	}
+	if cfg.RemoteCollect.Source == "" {
+		cfg.RemoteCollect.Source = "ZKTecoRemote"
+	}
+	if cfg.RemoteCollect.DefaultBatchSize <= 0 {
+		cfg.RemoteCollect.DefaultBatchSize = 500
+	}
+	if cfg.RemoteCollect.MaxBatchSize <= 0 {
+		cfg.RemoteCollect.MaxBatchSize = 2000
+	}
+	if cfg.RemoteCollect.MaxRowsPerCollect <= 0 {
+		cfg.RemoteCollect.MaxRowsPerCollect = 200000
+	}
+	if cfg.RemoteCollect.DefaultLookbackDays <= 0 {
+		cfg.RemoteCollect.DefaultLookbackDays = 62
+	}
+	if cfg.RabbitMQ.ExchangeName == "" {
+		cfg.RabbitMQ.ExchangeName = "erp.events"
+	}
+	if cfg.RabbitMQ.UserName == "" {
+		cfg.RabbitMQ.UserName = "erp"
+	}
+	if cfg.RabbitMQ.Password == "" {
+		cfg.RabbitMQ.Password = "erp_dev_password"
+	}
+	if cfg.RabbitMQ.HostName == "" {
+		cfg.RabbitMQ.HostName = "localhost"
 	}
 	if cfg.Logging.Level == "" {
 		cfg.Logging.Level = "info"

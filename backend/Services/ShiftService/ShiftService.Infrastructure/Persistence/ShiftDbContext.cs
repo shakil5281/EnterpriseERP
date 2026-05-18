@@ -48,6 +48,9 @@ public sealed class ShiftDbContext(DbContextOptions<ShiftDbContext> options) : D
             b.HasKey(x => x.Id);
             b.HasOne(x => x.Shift).WithMany().HasForeignKey(x => x.ShiftId);
             b.HasIndex(x => new { x.CompanyId, x.EmployeeId, x.IsCurrent });
+            b.HasIndex(x => new { x.CompanyId, x.EmployeeId })
+                .HasFilter("[IsCurrent] = 1")
+                .IsUnique();
         });
 
         modelBuilder.Entity<TemporaryShiftAssignment>(b =>
@@ -55,7 +58,7 @@ public sealed class ShiftDbContext(DbContextOptions<ShiftDbContext> options) : D
             b.ToTable("TemporaryShiftAssignments");
             b.HasKey(x => x.Id);
             b.HasOne(x => x.Shift).WithMany().HasForeignKey(x => x.ShiftId);
-            b.HasIndex(x => new { x.EmployeeId, x.ShiftDate }).IsUnique();
+            b.HasIndex(x => new { x.CompanyId, x.EmployeeId, x.ShiftDate }).IsUnique();
         });
 
         modelBuilder.Entity<ShiftCalendar>(b =>

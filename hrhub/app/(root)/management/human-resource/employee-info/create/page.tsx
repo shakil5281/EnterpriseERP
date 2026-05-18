@@ -79,7 +79,7 @@ export default function CreateEmployeePage() {
 
     // Fetch organogram data when company changes
     React.useEffect(() => {
-        if (selectedCompanyId > 0) {
+        if (selectedCompanyId !== 0) {
             console.log(`[CreateEmployee] Fetching data for company ID: ${selectedCompanyId}`);
 
             // Clear previous data while loading
@@ -141,7 +141,7 @@ export default function CreateEmployeePage() {
 
     // Fetch sections when department changes
     React.useEffect(() => {
-        if (departmentId > 0) {
+        if (departmentId !== 0) {
             organogramService.getSections({ departmentId })
                 .then(setSections)
                 .catch(console.error)
@@ -152,7 +152,7 @@ export default function CreateEmployeePage() {
 
     // Fetch designations and lines when section changes
     React.useEffect(() => {
-        if (sectionId > 0) {
+        if (sectionId !== 0) {
             const fetchData = async () => {
                 try {
                     const [desigs, lns] = await Promise.all([
@@ -273,12 +273,12 @@ export default function CreateEmployeePage() {
                 gender: gender || undefined,
                 religion: religion || undefined,
                 departmentId,
-                sectionId: sectionId > 0 ? sectionId : undefined,
+                sectionId: sectionId !== 0 ? sectionId : undefined,
                 designationId,
-                lineId: lineId > 0 ? lineId : undefined,
-                shiftId: shiftId > 0 ? shiftId : undefined,
-                groupId: groupId > 0 ? groupId : undefined,
-                floorId: floorId > 0 ? floorId : undefined,
+                lineId: lineId !== 0 ? lineId : undefined,
+                shiftId: shiftId !== 0 ? shiftId : undefined,
+                groupId: groupId !== 0 ? groupId : undefined,
+                floorId: floorId !== 0 ? floorId : undefined,
                 status,
                 joinDate: joinDate.toISOString(),
                 email: email || undefined,
@@ -286,7 +286,7 @@ export default function CreateEmployeePage() {
                 profileImageUrl: profileImageUrl || undefined,
                 signatureImageUrl: signatureImageUrl || undefined,
                 isOtEnabled,
-                companyId: selectedCompanyId > 0 ? selectedCompanyId : undefined,
+                companyId: selectedCompanyId !== 0 ? selectedCompanyId : undefined,
                 companyName: companyName || undefined,
                 bloodGroup: bloodGroup || undefined,
             }
@@ -517,7 +517,14 @@ export default function CreateEmployeePage() {
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div className="grid gap-2">
                                         <Label htmlFor="dob">Date of Birth</Label>
-                                        <DatePicker date={dob} setDate={setDob} placeholder="Select Date of Birth" />
+                                        <DatePicker 
+                                            date={dob} 
+                                            setDate={setDob} 
+                                            placeholder="Select Date of Birth" 
+                                            captionLayout="dropdown"
+                                            fromYear={1940}
+                                            toYear={new Date().getFullYear()}
+                                        />
                                     </div>
                                     <div className="grid gap-2">
                                         <Label htmlFor="gender">Gender</Label>

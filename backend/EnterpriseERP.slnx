@@ -20,6 +20,38 @@
     <Project Path="Services/CompanyService/CompanyService.Domain/CompanyService.Domain.csproj" />
     <Project Path="Services/CompanyService/CompanyService.Infrastructure/CompanyService.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/Services/CuttingService/">
+    <Project Path="Services/CuttingService/CuttingService.API/CuttingService.API.csproj" />
+    <Project Path="Services/CuttingService/CuttingService.Application/CuttingService.Application.csproj" />
+    <Project Path="Services/CuttingService/CuttingService.Contracts/CuttingService.Contracts.csproj" />
+    <Project Path="Services/CuttingService/CuttingService.Domain/CuttingService.Domain.csproj" />
+    <Project Path="Services/CuttingService/CuttingService.Infrastructure/CuttingService.Infrastructure.csproj" />
+    <Project Path="Services/CuttingService/CuttingService.Tests/CuttingService.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Services/FinishingService/">
+    <Project Path="Services/FinishingService/FinishingService.API/FinishingService.API.csproj" />
+    <Project Path="Services/FinishingService/FinishingService.Application/FinishingService.Application.csproj" />
+    <Project Path="Services/FinishingService/FinishingService.Contracts/FinishingService.Contracts.csproj" />
+    <Project Path="Services/FinishingService/FinishingService.Domain/FinishingService.Domain.csproj" />
+    <Project Path="Services/FinishingService/FinishingService.Infrastructure/FinishingService.Infrastructure.csproj" />
+    <Project Path="Services/FinishingService/FinishingService.Tests/FinishingService.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Services/QualityService/">
+    <Project Path="Services/QualityService/QualityService.API/QualityService.API.csproj" />
+    <Project Path="Services/QualityService/QualityService.Application/QualityService.Application.csproj" />
+    <Project Path="Services/QualityService/QualityService.Contracts/QualityService.Contracts.csproj" />
+    <Project Path="Services/QualityService/QualityService.Domain/QualityService.Domain.csproj" />
+    <Project Path="Services/QualityService/QualityService.Infrastructure/QualityService.Infrastructure.csproj" />
+    <Project Path="Services/QualityService/QualityService.Tests/QualityService.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Services/SecurityService/">
+    <Project Path="Services/SecurityService/SecurityService.API/SecurityService.API.csproj" />
+    <Project Path="Services/SecurityService/SecurityService.Application/SecurityService.Application.csproj" />
+    <Project Path="Services/SecurityService/SecurityService.Contracts/SecurityService.Contracts.csproj" />
+    <Project Path="Services/SecurityService/SecurityService.Domain/SecurityService.Domain.csproj" />
+    <Project Path="Services/SecurityService/SecurityService.Infrastructure/SecurityService.Infrastructure.csproj" />
+    <Project Path="Services/SecurityService/SecurityService.Tests/SecurityService.Tests.csproj" />
+  </Folder>
   <Folder Name="/Services/HRService/">
     <Project Path="Services/HRService/HRService.Api/HRService.Api.csproj" />
     <Project Path="Services/HRService/HRService.Application/HRService.Application.csproj" />

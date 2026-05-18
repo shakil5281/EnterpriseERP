@@ -7,6 +7,7 @@ import {
     IconX,
     IconBuildingCommunity,
     IconDotsVertical,
+    IconHistory,
     IconUserPlus,
     IconLoader,
     IconUsers
@@ -26,7 +27,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Card, CardContent } from "@/components/ui/card"
-import { authService, type User, type RoleDetails } from "@/lib/services/auth"
+import { authService, type User, type RoleDetails, type UserLoginHistory } from "@/lib/services/auth"
 import { companyService, Company } from "@/lib/services/company"
 import { LoadingOverlay } from "@/components/loading-state"
 import {
@@ -92,20 +93,29 @@ export default function UsersPage() {
     const [isCompanyDialogOpen, setIsCompanyDialogOpen] = React.useState(false)
     const [isAssigningCompanies, setIsAssigningCompanies] = React.useState(false)
 
+    // Login History State
+    const [isLoginHistoryOpen, setIsLoginHistoryOpen] = React.useState(false)
+    const [isLoadingHistory, setIsLoadingHistory] = React.useState(false)
+    const [loginHistory, setLoginHistory] = React.useState<UserLoginHistory[]>([])
+
     const fetchUsers = React.useCallback(async (silent = false) => {
         if (silent) setIsRefreshing(true)
         else setIsLoading(true)
 
         try {
-            const [userData, rolesData, companiesData] = await Promise.all([
+            const [userData, rolesData] = await Promise.all([
                 authService.getUsers(),
                 authService.getRoles(),
-                companyService.getAll(),
                 new Promise(resolve => setTimeout(resolve, 800))
             ])
             setUsers(userData)
             setRoles(rolesData)
-            setAllCompanies(companiesData)
+            try {
+                setAllCompanies(await companyService.getAll())
+            } catch (companyError) {
+                console.error(companyError)
+                setAllCompanies([])
+            }
         } catch (error: any) {
             toast.error("Failed to fetch users")
         } finally {
@@ -240,7 +250,7 @@ export default function UsersPage() {
 
     const openCompanyAssignment = async (user: User) => {
         setSelectedUser(user)
-        setSelectedCompanyIds([]) // Clear while loading
+        setSelectedCompanyIds(user.assignedCompanyIds ?? [])
         setIsCompanyDialogOpen(true)
 
         try {
@@ -249,6 +259,23 @@ export default function UsersPage() {
         } catch (error) {
             console.error(error)
             toast.error("Failed to fetch assigned branches")
+        }
+    }
+
+    const openLoginHistory = async (user: User) => {
+        setSelectedUser(user)
+        setLoginHistory([])
+        setIsLoginHistoryOpen(true)
+        setIsLoadingHistory(true)
+
+        try {
+            const rows = await authService.getUserLoginHistory(user.id)
+            setLoginHistory(rows)
+        } catch (error) {
+            console.error(error)
+            toast.error("Failed to fetch login history")
+        } finally {
+            setIsLoadingHistory(false)
         }
     }
 
@@ -332,6 +359,12 @@ export default function UsersPage() {
                                     onClick={() => openCompanyAssignment(user)}
                                 >
                                     Branch Access
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => openLoginHistory(user)}
+                                >
+                                    <IconHistory className="mr-2 size-4" />
+                                    Login History
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                     onClick={() => {
@@ -624,6 +657,58 @@ export default function UsersPage() {
                                 "Save Assignments"
                             )}
                         </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Login History Dialog */}
+            <Dialog open={isLoginHistoryOpen} onOpenChange={setIsLoginHistoryOpen}>
+                <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>Login History</DialogTitle>
+                        <DialogDescription>
+                            Recent sign-in activity for <b>{selectedUser?.fullName || selectedUser?.username}</b>.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="max-h-[420px] overflow-y-auto rounded-md border">
+                        {isLoadingHistory ? (
+                            <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                                <IconLoader className="mr-2 size-4 animate-spin" />
+                                Loading history...
+                            </div>
+                        ) : loginHistory.length > 0 ? (
+                            <div className="divide-y">
+                                {loginHistory.map(row => (
+                                    <div key={row.id} className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 p-3 text-sm">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant={row.isSuccess ? "default" : "destructive"} className="text-[10px]">
+                                                    {row.isSuccess ? "Success" : "Failed"}
+                                                </Badge>
+                                                <span className="font-medium">{new Date(row.loginAt).toLocaleString()}</span>
+                                            </div>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                {[row.browser, row.operatingSystem, row.deviceName].filter(Boolean).join(" / ") || "Unknown device"}
+                                            </p>
+                                            {row.failureReason ? (
+                                                <p className="mt-1 text-xs text-destructive">{row.failureReason}</p>
+                                            ) : null}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground md:text-right">
+                                            <div>{row.ipAddress || "No IP"}</div>
+                                            <div>{row.macAddress || ""}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="py-10 text-center text-sm text-muted-foreground">
+                                No login history found.
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsLoginHistoryOpen(false)}>Close</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

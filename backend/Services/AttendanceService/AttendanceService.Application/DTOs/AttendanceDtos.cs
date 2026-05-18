@@ -16,9 +16,9 @@ public record ShiftBreakDto(
     TimeSpan BreakEndTime, int BreakMinutes, bool IsPaidBreak, bool IsActive);
 
 public record DailyAttendanceDto(
-    Guid Id, Guid EmployeeId, DateTime AttendanceDate, DateTime? InTime,
+    Guid Id, string EmployeeID, int PunchNumber, DateTime AttendanceDate, DateTime? InTime,
     DateTime? OutTime, string? ShiftCode, int LateMinutes, int OTMinutes,
     int WorkingMinutes, string Status, string? Remarks);
 
 public record PunchLogDto(
-    Guid Id, string EmployeeCode, DateTime PunchTime, string? DeviceSerial);
+    Guid Id, int PunchNumber, string? EmployeeID, DateTime PunchTime, string? DeviceSerial);

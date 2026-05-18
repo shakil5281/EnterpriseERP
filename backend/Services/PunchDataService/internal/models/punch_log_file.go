@@ -17,7 +17,8 @@ const (
 // PunchLogFile is the raw payload (CSV/JSON) received from a device or upstream
 // system, retained for re-processing and download.
 type PunchLogFile struct {
-	ID           uuid.UUID `gorm:"type:nvarchar(36);primaryKey;column:Id" json:"id"`
+	ID            uuid.UUID  `gorm:"type:nvarchar(36);primaryKey;column:Id" json:"id"`
+	ImportBatchID *uuid.UUID `gorm:"type:nvarchar(36);column:ImportBatchId;index" json:"importBatchId,omitempty"`
 	FileName     string    `gorm:"type:nvarchar(256);column:FileName"        json:"fileName"`
 	SourceType   string    `gorm:"type:nvarchar(32);column:SourceType"       json:"sourceType"`
 	ContentType  string    `gorm:"type:nvarchar(128);column:ContentType"     json:"contentType"`

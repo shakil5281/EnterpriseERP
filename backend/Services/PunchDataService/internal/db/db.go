@@ -59,13 +59,39 @@ func Open(connectionString string, slogger *slog.Logger) (*gorm.DB, error) {
 	return gdb, nil
 }
 
-// AutoMigrate creates the schema for PunchLogFiles and PunchRecords. Safe to
-// call on every startup.
+// AutoMigrate creates the PunchData schema. Safe to call on every startup.
 func AutoMigrate(gdb *gorm.DB) error {
 	return gdb.AutoMigrate(
 		&models.PunchLogFile{},
 		&models.PunchRecord{},
+		&models.PunchMachine{},
+		&models.DeviceSyncHistory{},
+		&models.PunchImportBatch{},
+		&models.PunchImportError{},
+		&models.RemoteCollectHistory{},
 	)
+}
+
+// OpenRemote opens a read-only connection to the public ZKTeco SQL Server.
+func OpenRemote(connectionString string) (*sql.DB, error) {
+	if strings.TrimSpace(connectionString) == "" {
+		return nil, fmt.Errorf("RemoteZktecoDb connection string is empty")
+	}
+	dsn := normalizeDSN(connectionString)
+	conn, err := sql.Open("sqlserver", dsn)
+	if err != nil {
+		return nil, err
+	}
+	conn.SetMaxOpenConns(5)
+	conn.SetMaxIdleConns(2)
+	conn.SetConnMaxLifetime(15 * time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := conn.PingContext(ctx); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("ping remote zkteco: %w", err)
+	}
+	return conn, nil
 }
 
 // normalizeDSN converts an ADO-style SQL Server connection string into the

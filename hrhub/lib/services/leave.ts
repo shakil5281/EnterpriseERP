@@ -1,6 +1,15 @@
 import api from "../api";
 import { platformApiUrl, unwrapResponse } from "./api-helpers";
 import { toast } from "sonner";
+import { companyService } from "./company";
+import { employeeService } from "./employee";
+
+function stableIntFromGuid(guid: string): number {
+    const hex = guid.replace(/-/g, "").slice(0, 8);
+    const n = parseInt(hex, 16);
+    return Number.isFinite(n) ? (n | 0) : 0;
+}
+
 
 export interface LeaveType {
     id: number;
@@ -354,92 +363,323 @@ export const leaveService = {
     },
 
     getLeaveTypes: async () => {
-        const response = await api.get<LeaveType[]>("/Leave/types");
-        return response.data;
+        const companies = await companyService.getAll();
+        const companyGuid = companies[0]?.entityId;
+        if (!companyGuid) return [];
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/leave-types"), { params: { companyId: companyGuid } });
+        const list = unwrapResponse<BackendLeaveType[]>(response);
+        
+        const mapped = list.map(t => ({
+            id: stableIntFromGuid(t.id),
+            name: t.leaveName,
+            code: t.leaveCode,
+            yearlyLimit: 0,
+            isCarryForward: t.isCarryForward,
+            description: t.leaveName
+        }));
+
+        try {
+            const policies = await leaveService.listLeavePolicies(companyGuid);
+            mapped.forEach(t => {
+                const policy = policies.find(p => p.leaveTypeId === list.find(l => stableIntFromGuid(l.id) === t.id)?.id);
+                if (policy) {
+                    t.yearlyLimit = policy.yearlyEntitlement;
+                }
+            });
+        } catch (e) {
+            console.error("Failed to load policies inside getLeaveTypes", e);
+        }
+
+        return mapped;
     },
     getApplications: async (params: { employeeCard?: number; status?: string } = {}) => {
-        const response = await api.get<LeaveApplication[]>("/Leave/applications", { params });
-        return response.data;
-    },
-    getApplication: async (id: number) => {
-        const response = await api.get<LeaveApplication>(`/Leave/applications/${id}`);
-        return response.data;
-    },
-    applyLeave: async (data: any) => {
-        const response = await api.post("/Leave/apply", data);
-        return response.data;
-    },
-    updateLeave: async (id: number, data: any) => {
-        const response = await api.put(`/Leave/${id}`, data);
-        return response.data;
-    },
-    deleteLeave: async (id: number) => {
-        const response = await api.delete(`/Leave/${id}`);
-        return response.data;
-    },
-    actionLeave: async (data: { id: number; status: string; remarks?: string }) => {
-        const response = await api.post("/Leave/action", data);
-        return response.data;
-    },
-    getBalance: async (employeeCard: number) => {
-        const response = await api.get<LeaveBalance[]>(`/Leave/balance/${employeeCard}`);
-        return response.data;
-    },
-    getMonthlyReport: async (params: { year: number; month: number }) => {
-        const response = await api.get<any[]>("/Leave/monthly-report", { params });
-        return response.data;
-    },
-    exportExcel: async () => {
-        const response = await api.get("/Leave/export/excel", {
-            responseType: 'blob'
+        const companies = await companyService.getAll();
+        const companyGuid = companies[0]?.entityId;
+        if (!companyGuid) return [];
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/leaves/applications"), { params: { companyId: companyGuid } });
+        const list = unwrapResponse<BackendLeaveApplication[]>(response);
+        
+        const employees = await employeeService.getEmployees({ companyId: stableIntFromGuid(companyGuid) });
+        const leaveTypes = await api.get<unknown>(platformApiUrl("/api/v1/leave-types"), { params: { companyId: companyGuid } }).then(res => unwrapResponse<BackendLeaveType[]>(res));
+        
+        let result = list.map(app => {
+            const emp = employees.find(e => e.entityId === app.employeeId);
+            const lt = leaveTypes.find(t => t.id === app.leaveTypeId);
+            return {
+                id: stableIntFromGuid(app.id),
+                employeeCard: emp ? emp.id : 0,
+                employeeId: emp ? emp.employeeId : "UNKNOWN",
+                employeeName: emp ? emp.fullNameEn : "Unknown Employee",
+                department: emp ? emp.departmentName || "" : "",
+                designation: emp ? emp.designationName || "" : "",
+                leaveTypeId: stableIntFromGuid(app.leaveTypeId),
+                leaveTypeName: lt ? lt.leaveName : app.leaveCode || "Leave",
+                startDate: app.fromDate,
+                endDate: app.toDate,
+                totalDays: app.totalDays,
+                reason: app.reason || "",
+                status: app.status,
+                appliedDate: app.appliedAt,
+                remarks: app.steps?.[0]?.remarks || undefined
+            };
         });
 
-        const url = window.URL.createObjectURL(new Blob([response.data]));
+        if (params.employeeCard) {
+            result = result.filter(r => r.employeeCard === params.employeeCard);
+        }
+        if (params.status && params.status !== "All") {
+            result = result.filter(r => r.status.toLowerCase() === params.status?.toLowerCase());
+        }
+
+        return result;
+    },
+    getApplication: async (id: number) => {
+        const companies = await companyService.getAll();
+        const companyGuid = companies[0]?.entityId;
+        if (!companyGuid) throw new Error("No company found");
+        
+        const responseList = await api.get<unknown>(platformApiUrl("/api/v1/leaves/applications"), { params: { companyId: companyGuid } });
+        const list = unwrapResponse<BackendLeaveApplication[]>(responseList);
+        const match = list.find(app => stableIntFromGuid(app.id) === id);
+        if (!match) throw new Error("Leave application not found");
+        
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/leaves/applications/${match.id}`));
+        const app = unwrapResponse<BackendLeaveApplication>(response);
+        
+        const emp = await employeeService.getEmployee(app.employeeId, stableIntFromGuid(companyGuid));
+        const leaveTypes = await api.get<unknown>(platformApiUrl("/api/v1/leave-types"), { params: { companyId: companyGuid } }).then(res => unwrapResponse<BackendLeaveType[]>(res));
+        const lt = leaveTypes.find(t => t.id === app.leaveTypeId);
+        
+        return {
+            id: stableIntFromGuid(app.id),
+            employeeCard: emp ? emp.id : 0,
+            employeeId: emp ? emp.employeeId : "UNKNOWN",
+            employeeName: emp ? emp.fullNameEn : "Unknown Employee",
+            department: emp ? emp.departmentName || "" : "",
+            designation: emp ? emp.designationName || "" : "",
+            leaveTypeId: stableIntFromGuid(app.leaveTypeId),
+            leaveTypeName: lt ? lt.leaveName : app.leaveCode || "Leave",
+            startDate: app.fromDate,
+            endDate: app.toDate,
+            totalDays: app.totalDays,
+            reason: app.reason || "",
+            status: app.status,
+            appliedDate: app.appliedAt,
+            remarks: app.steps?.[0]?.remarks || undefined
+        };
+    },
+    applyLeave: async (data: any) => {
+        const companies = await companyService.getAll();
+        const companyGuid = companies[0]?.entityId;
+        if (!companyGuid) throw new Error("No company found");
+        
+        const emp = await employeeService.getEmployeeById(data.employeeCard);
+        if (!emp || !emp.entityId) throw new Error("Employee not found");
+        
+        const leaveTypes = await api.get<unknown>(platformApiUrl("/api/v1/leave-types"), { params: { companyId: companyGuid } }).then(res => unwrapResponse<BackendLeaveType[]>(res));
+        const lt = leaveTypes.find(t => stableIntFromGuid(t.id) === data.leaveTypeId);
+        if (!lt) throw new Error("Leave type not found");
+        
+        const payload = {
+            companyId: companyGuid,
+            employeeId: emp.entityId,
+            leaveTypeId: lt.id,
+            fromDate: data.startDate.split('T')[0],
+            toDate: data.endDate.split('T')[0],
+            isHalfDay: false,
+            halfDayType: null,
+            reason: data.reason,
+            attachmentUrl: null,
+            appliedBy: emp.entityId,
+            approvalSteps: null
+        };
+        
+        const response = await api.post<unknown>(platformApiUrl("/api/v1/leaves/apply"), payload);
+        return unwrapResponse<BackendLeaveApplication>(response);
+    },
+    updateLeave: async (id: number, data: any) => {
+        const companies = await companyService.getAll();
+        const companyGuid = companies[0]?.entityId;
+        if (!companyGuid) throw new Error("No company found");
+        
+        const responseList = await api.get<unknown>(platformApiUrl("/api/v1/leaves/applications"), { params: { companyId: companyGuid } });
+        const list = unwrapResponse<BackendLeaveApplication[]>(responseList);
+        const match = list.find(app => stableIntFromGuid(app.id) === id);
+        if (!match) throw new Error("Leave application not found");
+        
+        const emp = await employeeService.getEmployee(match.employeeId, stableIntFromGuid(companyGuid));
+        await api.patch<unknown>(platformApiUrl(`/api/v1/leaves/applications/${match.id}/cancel`), {
+            leaveApplicationId: match.id,
+            cancelledBy: emp.entityId
+        });
+        
+        return leaveService.applyLeave(data);
+    },
+    deleteLeave: async (id: number) => {
+        const companies = await companyService.getAll();
+        const companyGuid = companies[0]?.entityId;
+        if (!companyGuid) throw new Error("No company found");
+        
+        const responseList = await api.get<unknown>(platformApiUrl("/api/v1/leaves/applications"), { params: { companyId: companyGuid } });
+        const list = unwrapResponse<BackendLeaveApplication[]>(responseList);
+        const match = list.find(app => stableIntFromGuid(app.id) === id);
+        if (!match) throw new Error("Leave application not found");
+        
+        const emp = await employeeService.getEmployee(match.employeeId, stableIntFromGuid(companyGuid));
+        const response = await api.patch<unknown>(platformApiUrl(`/api/v1/leaves/applications/${match.id}/cancel`), {
+            leaveApplicationId: match.id,
+            cancelledBy: emp.entityId
+        });
+        return unwrapResponse<BackendLeaveApplication>(response);
+    },
+    actionLeave: async (data: { id: number; status: string; remarks?: string }) => {
+        const companies = await companyService.getAll();
+        const companyGuid = companies[0]?.entityId;
+        if (!companyGuid) throw new Error("No company found");
+        
+        const responseList = await api.get<unknown>(platformApiUrl("/api/v1/leaves/applications"), { params: { companyId: companyGuid } });
+        const list = unwrapResponse<BackendLeaveApplication[]>(responseList);
+        const match = list.find(app => stableIntFromGuid(app.id) === data.id);
+        if (!match) throw new Error("Leave application not found");
+        
+        const emp = await employeeService.getEmployee(match.employeeId, stableIntFromGuid(companyGuid));
+        
+        if (data.status === "Approved") {
+            const response = await api.patch<unknown>(platformApiUrl(`/api/v1/leaves/applications/${match.id}/approve`), {
+                leaveApplicationId: match.id,
+                approvedBy: emp.entityId,
+                approverUserId: null
+            });
+            return unwrapResponse<BackendLeaveApplication>(response);
+        } else {
+            const response = await api.patch<unknown>(platformApiUrl(`/api/v1/leaves/applications/${match.id}/reject`), {
+                leaveApplicationId: match.id,
+                rejectedBy: emp.entityId,
+                remarks: data.remarks || "Rejected via UI",
+                approverUserId: null
+            });
+            return unwrapResponse<BackendLeaveApplication>(response);
+        }
+    },
+    getBalance: async (employeeCard: number) => {
+        const companies = await companyService.getAll();
+        const companyGuid = companies[0]?.entityId;
+        if (!companyGuid) throw new Error("No company found");
+        
+        const emp = await employeeService.getEmployeeById(employeeCard);
+        if (!emp || !emp.entityId) throw new Error("Employee not found");
+        
+        const response = await api.get<unknown>(platformApiUrl(`/api/v1/leave-balances/${encodeURIComponent(emp.entityId)}`), {
+            params: {
+                companyId: companyGuid,
+                year: new Date().getFullYear()
+            }
+        });
+        const list = unwrapResponse<BackendLeaveBalance[]>(response);
+        return list.map(b => ({
+            leaveTypeId: stableIntFromGuid(b.leaveTypeId),
+            leaveTypeName: b.leaveName || b.leaveCode || "Leave",
+            totalAllocated: b.entitledDays,
+            totalTaken: b.usedDays,
+            balance: b.balanceDays
+        }));
+    },
+    getMonthlyReport: async (params: { year: number; month: number }) => {
+        const companies = await companyService.getAll();
+        const companyGuid = companies[0]?.entityId;
+        if (!companyGuid) return [];
+        
+        const responseList = await api.get<unknown>(platformApiUrl("/api/v1/leaves/applications"), { params: { companyId: companyGuid } });
+        const list = unwrapResponse<BackendLeaveApplication[]>(responseList);
+        const employees = await employeeService.getEmployees({ companyId: stableIntFromGuid(companyGuid) });
+        const leaveTypes = await api.get<unknown>(platformApiUrl("/api/v1/leave-types"), { params: { companyId: companyGuid } }).then(res => unwrapResponse<BackendLeaveType[]>(res));
+        
+        const agg: Record<string, any> = {};
+        
+        for (const app of list) {
+            if (app.status !== "Approved") continue;
+            
+            const start = new Date(app.fromDate);
+            const startYear = start.getFullYear();
+            const startMonth = start.getMonth() + 1;
+            
+            if (startYear !== params.year || startMonth !== params.month) continue;
+            
+            const emp = employees.find(e => e.entityId === app.employeeId);
+            if (!emp) continue;
+            
+            if (!agg[app.employeeId]) {
+                agg[app.employeeId] = {
+                    employeeId: emp.employeeId,
+                    employeeName: emp.fullNameEn,
+                    department: emp.departmentName || "",
+                    sickLeave: 0,
+                    casualLeave: 0,
+                    earnedLeave: 0,
+                    paternityLeave: 0,
+                    maternityLeave: 0,
+                    lwp: 0,
+                    otherLeave: 0,
+                    totalDays: 0
+                };
+            }
+            
+            const item = agg[app.employeeId];
+            const lt = leaveTypes.find(t => t.id === app.leaveTypeId);
+            const code = lt ? lt.leaveCode.toUpperCase() : (app.leaveCode ? app.leaveCode.toUpperCase() : "");
+            
+            if (code === "SL" || code === "SICK") {
+                item.sickLeave += app.totalDays;
+            } else if (code === "CL" || code === "CASUAL") {
+                item.casualLeave += app.totalDays;
+            } else if (code === "EL" || code === "AL" || code === "EARNED" || code === "ANNUAL") {
+                item.earnedLeave += app.totalDays;
+            } else if (code === "PL" || code === "PATERNITY") {
+                item.paternityLeave += app.totalDays;
+            } else if (code === "ML" || code === "MATERNITY") {
+                item.maternityLeave += app.totalDays;
+            } else if (code === "LWP") {
+                item.lwp += app.totalDays;
+            } else {
+                item.otherLeave += app.totalDays;
+            }
+            item.totalDays += app.totalDays;
+        }
+        
+        return Object.values(agg);
+    },
+    exportExcel: async () => {
+        const companies = await companyService.getAll();
+        const companyGuid = companies[0]?.entityId;
+        if (!companyGuid) return;
+        
+        const response = await api.get<unknown>(platformApiUrl("/api/v1/leaves/applications"), { params: { companyId: companyGuid } });
+        const list = unwrapResponse<BackendLeaveApplication[]>(response);
+        
+        const headers = ["Application ID", "Employee ID", "Leave Type", "Start Date", "End Date", "Total Days", "Status", "Applied At"];
+        const rows = list.map(app => [
+            app.id,
+            app.employeeId,
+            app.leaveCode || "Leave",
+            app.fromDate,
+            app.toDate,
+            app.totalDays,
+            app.status,
+            app.appliedAt
+        ]);
+        
+        const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', 'Leave_Applications.xlsx');
+        link.setAttribute('download', 'Leave_Applications.csv');
         document.body.appendChild(link);
         link.click();
         link.remove();
         window.URL.revokeObjectURL(url);
     },
     downloadPdf: async (id: number) => {
-        try {
-            console.log(`Starting PDF download for ID: ${id}`);
-            const response = await api.get(`/Leave/export/pdf/${id}`, {
-                responseType: 'arraybuffer',
-                headers: {
-                    'Accept': 'application/pdf'
-                }
-            });
-
-            console.log("PDF data received, processing blob...");
-            const blob = new Blob([response.data], { type: 'application/pdf' });
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `Leave_Application_${id}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-
-            setTimeout(() => {
-                document.body.removeChild(link);
-                window.URL.revokeObjectURL(url);
-            }, 100);
-        } catch (error: any) {
-            console.error("PDF Download Detailed Error:", error);
-            if (error.response) {
-                // The request was made and the server responded with a status code
-                // that falls out of the range of 2xx
-                console.error("Server Response Data:", error.response.data);
-                toast.error(`Server error: ${error.response.status}. Check backend logs.`);
-            } else if (error.request) {
-                // The request was made but no response was received
-                toast.error("Network error: Server is unreachable. Check if API is running on port 5011.");
-            } else {
-                toast.error(`Error: ${error.message}`);
-            }
-            throw error;
-        }
+        window.location.href = `/management/leave/application/${id}/export`;
     },
 };

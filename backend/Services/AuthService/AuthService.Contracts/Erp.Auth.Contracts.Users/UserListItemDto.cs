@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using AuthService.Contracts.Common;
+using AuthService.Contracts.CompanyAccess;
 
 namespace AuthService.Contracts.Users;
 
@@ -22,4 +24,8 @@ public sealed class UserListItemDto
 	public bool IsLocked { get; init; }
 
 	public DateTimeOffset? LastLoginAt { get; init; }
+
+	public IReadOnlyList<string> Roles { get; init; } = Array.Empty<string>();
+
+	public IReadOnlyList<UserCompanyAccessDto> CompanyAccess { get; init; } = Array.Empty<UserCompanyAccessDto>();
 }

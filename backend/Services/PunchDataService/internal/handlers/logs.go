@@ -77,21 +77,44 @@ func (h *LogsHandler) Upload(c *gin.Context) {
 		return
 	}
 
-	companyID, _ := strconv.Atoi(c.PostForm("companyId"))
+	formCompanyID, _ := strconv.Atoi(c.PostForm("companyId"))
+	companyID, ok := middleware.ResolveCompanyID(c, formCompanyID)
+	if !ok {
+		return
+	}
 	deviceID := strings.TrimSpace(c.PostForm("deviceId"))
 	autoProcess := strings.EqualFold(c.DefaultPostForm("autoProcess", "true"), "true")
 
-	lf := &models.PunchLogFile{
+	now := time.Now().UTC()
+	userID := middleware.UserID(c)
+	importBatch := &models.PunchImportBatch{
 		ID:          uuid.New(),
-		FileName:    fileHeader.Filename,
-		SourceType:  "Upload",
-		ContentType: fileHeader.Header.Get("Content-Type"),
-		DeviceID:    deviceID,
 		CompanyID:   companyID,
-		SizeBytes:   int64(len(payload)),
-		Status:      models.StatusPending,
-		UploadedAt:  time.Now().UTC(),
-		RawPayload:  payload,
+		FileName:    fileHeader.Filename,
+		ContentType: fileHeader.Header.Get("Content-Type"),
+		Status:      models.ImportStatusPending,
+		UploadedAt:  now,
+	}
+	if userID != uuid.Nil {
+		importBatch.UploadedBy = &userID
+	}
+	if err := h.repo.CreateImportBatch(c.Request.Context(), importBatch); err != nil {
+		response.Fail(c, http.StatusInternalServerError, response.Err("IMPORT_BATCH_FAILED", err.Error()))
+		return
+	}
+
+	lf := &models.PunchLogFile{
+		ID:            uuid.New(),
+		ImportBatchID: &importBatch.ID,
+		FileName:      fileHeader.Filename,
+		SourceType:    "Upload",
+		ContentType:   fileHeader.Header.Get("Content-Type"),
+		DeviceID:      deviceID,
+		CompanyID:     companyID,
+		SizeBytes:     int64(len(payload)),
+		Status:        models.StatusPending,
+		UploadedAt:    now,
+		RawPayload:    payload,
 	}
 	if err := h.repo.CreateLogFile(c.Request.Context(), lf); err != nil {
 		response.Fail(c, http.StatusInternalServerError, response.Err("UPLOAD_SAVE_FAILED", err.Error()))
@@ -99,7 +122,7 @@ func (h *LogsHandler) Upload(c *gin.Context) {
 	}
 
 	if autoProcess {
-		if _, err := h.proc.ProcessLogFile(c.Request.Context(), lf.ID); err != nil {
+		if _, err := h.proc.ProcessLogFile(c.Request.Context(), lf.ID, processor.ProcessOptions{ImportBatchID: &importBatch.ID}); err != nil {
 			response.Fail(c, http.StatusUnprocessableEntity, response.Err("PROCESS_FAILED", err.Error()))
 			return
 		}
@@ -141,24 +164,47 @@ func (h *LogsHandler) Batch(c *gin.Context) {
 		return
 	}
 
-	companyID := 0
+	reqCompanyID := 0
 	if batch.CompanyID != nil {
-		companyID = *batch.CompanyID
+		reqCompanyID = *batch.CompanyID
 	}
+	companyID, ok := middleware.ResolveCompanyID(c, reqCompanyID)
+	if !ok {
+		return
+	}
+	batch.CompanyID = &companyID
 
 	autoProcess := strings.EqualFold(c.DefaultQuery("autoProcess", "true"), "true")
+	now := time.Now().UTC()
+	userID := middleware.UserID(c)
+	importBatch := &models.PunchImportBatch{
+		ID:          uuid.New(),
+		CompanyID:   companyID,
+		FileName:    "batch.json",
+		ContentType: "application/json",
+		Status:      models.ImportStatusPending,
+		UploadedAt:  now,
+	}
+	if userID != uuid.Nil {
+		importBatch.UploadedBy = &userID
+	}
+	if err := h.repo.CreateImportBatch(c.Request.Context(), importBatch); err != nil {
+		response.Fail(c, http.StatusInternalServerError, response.Err("IMPORT_BATCH_FAILED", err.Error()))
+		return
+	}
 
 	lf := &models.PunchLogFile{
-		ID:          uuid.New(),
-		FileName:    "batch.json",
-		SourceType:  "Batch",
-		ContentType: "application/json",
-		DeviceID:    batch.DeviceID,
-		CompanyID:   companyID,
-		SizeBytes:   int64(len(body)),
-		Status:      models.StatusPending,
-		UploadedAt:  time.Now().UTC(),
-		RawPayload:  body,
+		ID:            uuid.New(),
+		ImportBatchID: &importBatch.ID,
+		FileName:      "batch.json",
+		SourceType:    "Batch",
+		ContentType:   "application/json",
+		DeviceID:      batch.DeviceID,
+		CompanyID:     companyID,
+		SizeBytes:     int64(len(body)),
+		Status:        models.StatusPending,
+		UploadedAt:    now,
+		RawPayload:    body,
 	}
 	if err := h.repo.CreateLogFile(c.Request.Context(), lf); err != nil {
 		response.Fail(c, http.StatusInternalServerError, response.Err("BATCH_SAVE_FAILED", err.Error()))
@@ -166,7 +212,7 @@ func (h *LogsHandler) Batch(c *gin.Context) {
 	}
 
 	if autoProcess {
-		if _, err := h.proc.ProcessLogFile(c.Request.Context(), lf.ID); err != nil {
+		if _, err := h.proc.ProcessLogFile(c.Request.Context(), lf.ID, processor.ProcessOptions{ImportBatchID: &importBatch.ID}); err != nil {
 			response.Fail(c, http.StatusUnprocessableEntity, response.Err("PROCESS_FAILED", err.Error()))
 			return
 		}
@@ -201,10 +247,8 @@ func (h *LogsHandler) List(c *gin.Context) {
 		Page:     page,
 		PageSize: size,
 	}
-	if v := c.Query("companyId"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			f.CompanyID = &n
-		}
+	if companyID, ok := middleware.CompanyID(c); ok {
+		f.CompanyID = &companyID
 	}
 
 	items, total, err := h.repo.ListLogFiles(c.Request.Context(), f)
@@ -244,6 +288,9 @@ func (h *LogsHandler) Get(c *gin.Context) {
 		response.Fail(c, http.StatusNotFound, response.Err("LOG_NOT_FOUND", err.Error()))
 		return
 	}
+	if !h.ensureLogCompany(c, lf) {
+		return
+	}
 	response.OK(c, lf)
 }
 
@@ -268,6 +315,9 @@ func (h *LogsHandler) Download(c *gin.Context) {
 	lf, err := h.repo.GetLogFileWithPayload(c.Request.Context(), id)
 	if err != nil {
 		response.Fail(c, http.StatusNotFound, response.Err("LOG_NOT_FOUND", err.Error()))
+		return
+	}
+	if !h.ensureLogCompany(c, lf) {
 		return
 	}
 	ct := lf.ContentType
@@ -296,7 +346,19 @@ func (h *LogsHandler) ProcessOne(c *gin.Context) {
 		response.Fail(c, http.StatusBadRequest, response.Err("INVALID_ID", "Invalid log id."))
 		return
 	}
-	res, err := h.proc.ProcessLogFile(c.Request.Context(), id)
+	lf, err := h.repo.GetLogFile(c.Request.Context(), id)
+	if err != nil {
+		response.Fail(c, http.StatusNotFound, response.Err("LOG_NOT_FOUND", err.Error()))
+		return
+	}
+	if !h.ensureLogCompany(c, lf) {
+		return
+	}
+	opts := processor.ProcessOptions{}
+	if lf.ImportBatchID != nil {
+		opts.ImportBatchID = lf.ImportBatchID
+	}
+	res, err := h.proc.ProcessLogFile(c.Request.Context(), id, opts)
 	if err != nil {
 		response.Fail(c, http.StatusUnprocessableEntity, response.Err("PROCESS_FAILED", err.Error()))
 		return
@@ -325,8 +387,9 @@ func (h *LogsHandler) ProcessAll(c *gin.Context) {
 	response.OK(c, res)
 }
 
-// _ keeps middleware imported even when no claims are needed by future code.
-var _ = middleware.ContextUserID
+func (h *LogsHandler) ensureLogCompany(c *gin.Context, lf *models.PunchLogFile) bool {
+	return middleware.EnsureResourceCompany(c, lf.CompanyID)
+}
 
 func sanitiseFileName(name string) string {
 	name = strings.TrimSpace(name)

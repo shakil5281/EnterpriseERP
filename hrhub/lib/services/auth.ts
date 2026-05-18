@@ -42,8 +42,9 @@ interface UserListItemEnvelope {
   isActive: boolean;
   isLocked: boolean;
   lastLoginAt?: string | null;
+  roles?: string[];
+  companyAccess?: Array<{ id: string; companyId: number; isDefaultCompany: boolean }>;
 }
-
 export interface LoginResponse {
   token: string;
   refreshToken: string;
@@ -52,6 +53,8 @@ export interface LoginResponse {
   username: string;
   fullName: string;
   roles: string[];
+  requiresTwoFactor?: boolean;
+  pendingTwoFactorToken?: string | null;
 }
 
 export interface User {
@@ -63,6 +66,10 @@ export interface User {
   country?: string;
   city?: string;
   isActive: boolean;
+  status?: number;
+  isLocked?: boolean;
+  lastLoginAt?: string | null;
+  twoFactorEnabled?: boolean;
   roles: string[];
   /** Populated from `auth/me` when available */
   permissions?: string[];
@@ -73,6 +80,7 @@ export interface RoleDetails {
   id: string;
   name: string;
   userCount: number;
+  permissions?: string[];
 }
 
 export interface PermissionDto {
@@ -89,6 +97,33 @@ export interface AuthPermissionItem {
 export interface UpdatePermissionDto {
   roleId: string;
   permissions: string[];
+}
+
+export interface UserCompanyAccess {
+  id: string;
+  companyId: number;
+  isDefaultCompany: boolean;
+}
+
+export interface UserLoginHistory {
+  id: string;
+  ipAddress?: string | null;
+  macAddress?: string | null;
+  deviceName?: string | null;
+  browser?: string | null;
+  operatingSystem?: string | null;
+  isSuccess: boolean;
+  failureReason?: string | null;
+  loginAt: string;
+}
+
+export interface TwoFactorSetupResponse {
+  sharedKey: string;
+  otpAuthUri: string;
+}
+
+export interface TwoFactorVerifyResponse {
+  recoveryCodes: string[];
 }
 
 export interface UserProfileUpdateDto {
@@ -122,6 +157,7 @@ function storeSessionFromLogin(data: LoginEnvelope) {
       username: data.username,
       fullName: data.fullName,
       email: data.email,
+      id: data.userId,
       roles: data.roles,
     }),
   );
@@ -135,6 +171,10 @@ function mapProfileToUser(p: UserProfileEnvelope): User {
     fullName: p.fullName,
     phoneNumber: p.phoneNumber ?? undefined,
     isActive: p.isActive,
+    status: p.status,
+    isLocked: p.isLocked,
+    lastLoginAt: p.lastLoginAt,
+    twoFactorEnabled: p.twoFactorEnabled,
     roles: [...p.roles],
     permissions: [...p.permissions],
     assignedCompanyIds: p.companyAccess.map((c) => c.companyId),
@@ -149,7 +189,11 @@ function mapListItemToUser(row: UserListItemEnvelope): User {
     fullName: row.fullName,
     phoneNumber: row.phoneNumber ?? undefined,
     isActive: row.isActive,
-    roles: [],
+    status: row.status,
+    isLocked: row.isLocked,
+    lastLoginAt: row.lastLoginAt,
+    roles: [...(row.roles ?? [])],
+    assignedCompanyIds: (row.companyAccess ?? []).map((c) => c.companyId),
   };
 }
 
@@ -164,12 +208,14 @@ export const authService = {
       if (data.requiresTwoFactor) {
         return {
           success: false,
-          message: "Two-factor authentication is required (not yet supported in this UI).",
+          message: "Two-factor authentication code is required.",
           token: "",
           refreshToken: "",
           username: data.username,
           fullName: data.fullName,
           roles: data.roles ?? [],
+          requiresTwoFactor: true,
+          pendingTwoFactorToken: data.pendingTwoFactorToken,
         };
       }
       storeSessionFromLogin(data);
@@ -181,6 +227,8 @@ export const authService = {
         username: data.username,
         fullName: data.fullName,
         roles: [...data.roles],
+        requiresTwoFactor: false,
+        pendingTwoFactorToken: null,
       };
     } catch (e: unknown) {
       const ax = e as { response?: { data?: unknown }; message?: string };
@@ -196,10 +244,52 @@ export const authService = {
         username: "",
         fullName: "",
         roles: [],
+        requiresTwoFactor: false,
+        pendingTwoFactorToken: null,
       };
     }
   },
 
+  async verifyTwoFactorLogin(
+    pendingTwoFactorToken: string,
+    code: string,
+  ): Promise<LoginResponse> {
+    try {
+      const res = await api.post("auth/verify-2fa", {
+        pendingTwoFactorToken,
+        code,
+      });
+      const data = unwrapApiData<LoginEnvelope>(res.data);
+      storeSessionFromLogin(data);
+      return {
+        success: true,
+        message: "Signed in successfully.",
+        token: data.accessToken,
+        refreshToken: data.refreshToken,
+        username: data.username,
+        fullName: data.fullName,
+        roles: [...data.roles],
+        requiresTwoFactor: false,
+        pendingTwoFactorToken: null,
+      };
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: unknown }; message?: string };
+      return {
+        success: false,
+        message:
+          firstApiErrorMessage(ax.response?.data) ||
+          ax.message ||
+          "Two-factor verification failed.",
+        token: "",
+        refreshToken: "",
+        username: "",
+        fullName: "",
+        roles: [],
+        requiresTwoFactor: true,
+        pendingTwoFactorToken,
+      };
+    }
+  },
   async getUsers(): Promise<User[]> {
     const res = await api.get("users");
     const rows = unwrapApiData<UserListItemEnvelope[]>(res.data);
@@ -237,8 +327,13 @@ export const authService = {
 
   async getRoles(): Promise<RoleDetails[]> {
     const res = await api.get("roles");
-    const items = unwrapApiData<Array<{ id: string; name: string }>>(res.data);
-    return items.map((r) => ({ id: r.id, name: r.name, userCount: 0 }));
+    const items = unwrapApiData<Array<{ id: string; name: string; userCount?: number; permissions?: string[] }>>(res.data);
+    return items.map((r) => ({
+      id: r.id,
+      name: r.name,
+      userCount: r.userCount ?? 0,
+      permissions: [...(r.permissions ?? [])],
+    }));
   },
 
   async createRole(roleName: string): Promise<{ success: boolean; message: string }> {
@@ -306,8 +401,9 @@ export const authService = {
   },
 
   async getRolePermissions(roleName: string): Promise<PermissionDto> {
-    void roleName;
-    return { roleName, permissions: [] };
+    const roles = await authService.getRoles();
+    const role = roles.find((r) => r.name === roleName);
+    return { roleName, permissions: role?.permissions ?? [] };
   },
 
   async updateRolePermissions(data: UpdatePermissionDto): Promise<{ success: boolean; message: string }> {
@@ -377,6 +473,21 @@ export const authService = {
     }
   },
 
+  async getUserCompanies(userId: string): Promise<UserCompanyAccess[]> {
+    const res = await api.get(`users/${userId}/companies`);
+    return unwrapApiData<UserCompanyAccess[]>(res.data);
+  },
+
+  async getMyCompanies(): Promise<UserCompanyAccess[]> {
+    const res = await api.get("auth/me/companies");
+    return unwrapApiData<UserCompanyAccess[]>(res.data);
+  },
+
+  async getUserLoginHistory(userId: string): Promise<UserLoginHistory[]> {
+    const res = await api.get(`users/${userId}/login-history`);
+    return unwrapApiData<UserLoginHistory[]>(res.data);
+  },
+
   async updateProfile(_data: UserProfileUpdateDto): Promise<{ success: boolean; message: string }> {
     return {
       success: false,
@@ -388,6 +499,32 @@ export const authService = {
     const res = await api.get("auth/me");
     const p = unwrapApiData<UserProfileEnvelope>(res.data);
     return mapProfileToUser(p);
+  },
+
+  async enableTwoFactor(): Promise<TwoFactorSetupResponse> {
+    const res = await api.post("auth/enable-2fa");
+    return unwrapApiData<TwoFactorSetupResponse>(res.data);
+  },
+
+  async verifyTwoFactorSetup(code: string): Promise<TwoFactorVerifyResponse> {
+    const res = await api.post("auth/verify-2fa", { code });
+    return unwrapApiData<TwoFactorVerifyResponse>(res.data);
+  },
+
+  async disableTwoFactor(password: string, code: string): Promise<{ success: boolean; message: string }> {
+    try {
+      await api.post("auth/disable-2fa", { password, code });
+      return { success: true, message: "Two-factor authentication disabled." };
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: unknown }; message?: string };
+      return {
+        success: false,
+        message:
+          firstApiErrorMessage(ax.response?.data) ||
+          ax.message ||
+          "Disable two-factor authentication failed.",
+      };
+    }
   },
 
   async changePassword(_data: ChangePasswordDto): Promise<{ success: boolean; message: string }> {

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AuthService.Application.Abstractions.Users;
+using AuthService.Contracts.CompanyAccess;
 using AuthService.Contracts.Common;
 using AuthService.Contracts.Users;
 using AuthService.Infrastructure.Entities;
@@ -19,21 +20,59 @@ public sealed class UserAdminService(AuthDbContext db, UserManager<AppUser> user
 	public async Task<(IReadOnlyList<UserListItemDto>? Items, IReadOnlyList<string> Errors)> ListUsersAsync(CancellationToken cancellationToken = default)
 	{
 		DateTimeOffset now = DateTimeOffset.UtcNow;
-		List<UserListItemDto> list = await (from u in db.Users.AsNoTracking()
+		var users = await (from u in db.Users.AsNoTracking()
 			where !u.IsDeleted
 			orderby u.UserName
-			select new UserListItemDto
+			select new
 			{
-				Id = u.Id,
-				FullName = u.FullName,
-				UserName = (u.UserName ?? string.Empty),
-				Email = (u.Email ?? string.Empty),
-				PhoneNumber = u.PhoneNumber,
-				Status = u.Status,
-				IsActive = u.IsActive,
-				IsLocked = u.LockoutEnd.HasValue && u.LockoutEnd > now,
-				LastLoginAt = u.LastLoginAt
+				u.Id,
+				u.FullName,
+				u.UserName,
+				u.Email,
+				u.PhoneNumber,
+				u.Status,
+				u.IsActive,
+				u.LockoutEnd,
+				u.LastLoginAt
 			}).ToListAsync(cancellationToken);
+		List<Guid> userIds = users.Select(u => u.Id).ToList();
+		var roleRows = await (from ur in db.UserRoles.AsNoTracking()
+			join r in db.Roles.AsNoTracking() on ur.RoleId equals r.Id
+			where userIds.Contains(ur.UserId) && !r.IsDeleted && r.Name != null
+			select new { ur.UserId, RoleName = r.Name! }).ToListAsync(cancellationToken);
+		Dictionary<Guid, List<string>> rolesByUser = roleRows
+			.GroupBy(r => r.UserId)
+			.ToDictionary(g => g.Key, g => g.Select(x => x.RoleName).OrderBy(x => x).ToList());
+		var companyRows = await (from c in db.UserCompanyAccesses.AsNoTracking()
+			where userIds.Contains(c.UserId) && c.IsActive && !c.IsDeleted
+			orderby c.IsDefaultCompany descending, c.CompanyId
+			select new
+			{
+				c.UserId,
+				Dto = new UserCompanyAccessDto
+				{
+					Id = c.Id,
+					CompanyId = c.CompanyId,
+					IsDefaultCompany = c.IsDefaultCompany
+				}
+			}).ToListAsync(cancellationToken);
+		Dictionary<Guid, List<UserCompanyAccessDto>> companiesByUser = companyRows
+			.GroupBy(c => c.UserId)
+			.ToDictionary(g => g.Key, g => g.Select(x => x.Dto).ToList());
+		List<UserListItemDto> list = users.Select(u => new UserListItemDto
+		{
+			Id = u.Id,
+			FullName = u.FullName,
+			UserName = (u.UserName ?? string.Empty),
+			Email = (u.Email ?? string.Empty),
+			PhoneNumber = u.PhoneNumber,
+			Status = u.Status,
+			IsActive = u.IsActive,
+			IsLocked = u.LockoutEnd.HasValue && u.LockoutEnd > now,
+			LastLoginAt = u.LastLoginAt,
+			Roles = rolesByUser.TryGetValue(u.Id, out List<string>? roles) ? roles : Array.Empty<string>(),
+			CompanyAccess = companiesByUser.TryGetValue(u.Id, out List<UserCompanyAccessDto>? companies) ? companies : Array.Empty<UserCompanyAccessDto>()
+		}).ToList();
 		return (list, Array.Empty<string>());
 	}
 

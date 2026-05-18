@@ -9,20 +9,19 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/enterprise-erp/punchdata/internal/models"
+	"github.com/enterprise-erp/punchdata/internal/timeutil"
 	"github.com/google/uuid"
 )
 
 // RawPunch is the format produced by parsers before normalisation.
 type RawPunch struct {
-	EmployeeCode string  `json:"employeeCode"`
-	DeviceID     string  `json:"deviceId,omitempty"`
-	PunchTime    string  `json:"punchTime"`
-	Direction    string  `json:"direction,omitempty"`
-	Source       string  `json:"source,omitempty"`
-	CompanyID    *int    `json:"companyId,omitempty"`
+	PunchNumber string `json:"punchNumber"`
+	DeviceID    string `json:"deviceId,omitempty"`
+	PunchTime   string `json:"punchTime"`
+	Source      string `json:"source,omitempty"`
+	CompanyID   *int   `json:"companyId,omitempty"`
 }
 
 // BatchPayload is the JSON shape accepted by POST /logs/batch and the JSON
@@ -67,7 +66,7 @@ func parseJSON(payload []byte) (BatchPayload, error) {
 
 	// First try as a BatchPayload.
 	var batch BatchPayload
-	if err := json.Unmarshal(payload, &batch); err == nil && len(batch.Records) > 0 {
+	if err := json.Unmarshal(payload, &batch); err == nil && batch.Records != nil {
 		return batch, nil
 	}
 
@@ -98,10 +97,12 @@ func parseCSV(payload []byte) (BatchPayload, error) {
 		col[h] = i
 	}
 
-	needed := []string{"employeecode", "punchtime"}
-	for _, n := range needed {
-		if _, ok := col[n]; !ok {
-			return BatchPayload{}, fmt.Errorf("CSV header missing required column: %s", n)
+	if _, ok := col["punchtime"]; !ok {
+		return BatchPayload{}, fmt.Errorf("CSV header missing required column: punchTime")
+	}
+	if _, ok := col["punchnumber"]; !ok {
+		if _, ok := col["employeecode"]; !ok {
+			return BatchPayload{}, fmt.Errorf("CSV header missing required column: punchNumber (or legacy employeeCode)")
 		}
 	}
 
@@ -125,12 +126,15 @@ func parseCSV(payload []byte) (BatchPayload, error) {
 			return strings.TrimSpace(row[i])
 		}
 
+		punchNum := get("punchnumber")
+		if punchNum == "" {
+			punchNum = get("employeecode")
+		}
 		rp := RawPunch{
-			EmployeeCode: get("employeecode"),
-			DeviceID:     get("deviceid"),
-			PunchTime:    get("punchtime"),
-			Direction:    get("direction"),
-			Source:       get("source"),
+			PunchNumber: punchNum,
+			DeviceID:    get("deviceid"),
+			PunchTime:   get("punchtime"),
+			Source:      get("source"),
 		}
 		if v := get("companyid"); v != "" {
 			if n, err := strconv.Atoi(v); err == nil {
@@ -178,16 +182,16 @@ func Normalize(ctx context.Context, logID uuid.UUID, batch BatchPayload, def Def
 
 	out := make([]models.PunchRecord, 0, len(batch.Records))
 	errs := []string{}
-	now := time.Now().UTC()
+	now := timeutil.Now()
 
 	for i, r := range batch.Records {
-		emp := strings.TrimSpace(r.EmployeeCode)
-		if emp == "" {
-			errs = append(errs, fmt.Sprintf("row %d: missing employeeCode", i+1))
+		punchNumber, err := models.ParsePunchNumber(r.PunchNumber)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("row %d: %v", i+1, err))
 			continue
 		}
 
-		pt, err := parsePunchTime(r.PunchTime)
+		pt, err := timeutil.ParsePunchTime(r.PunchTime)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("row %d: invalid punchTime %q (%v)", i+1, r.PunchTime, err))
 			continue
@@ -203,72 +207,22 @@ func Normalize(ctx context.Context, logID uuid.UUID, batch BatchPayload, def Def
 			device = deviceDefault
 		}
 
-		dir := normaliseDirection(r.Direction)
-
 		source := strings.TrimSpace(r.Source)
 		if source == "" {
 			source = sourceDefault
 		}
 
 		out = append(out, models.PunchRecord{
-			ID:           uuid.New(),
-			LogFileID:    logID,
-			CompanyID:    company,
-			EmployeeCode: emp,
-			DeviceID:     device,
-			PunchTime:    pt,
-			Direction:    dir,
-			Source:       source,
-			CreatedAt:    now,
+			ID:          uuid.New(),
+			LogFileID:   logID,
+			CompanyID:   company,
+			PunchNumber: punchNumber,
+			DeviceID:    device,
+			PunchTime:   pt,
+			Source:      source,
+			CreatedAt:   now,
 		})
 	}
 
 	return out, errs
-}
-
-var punchTimeLayouts = []string{
-	time.RFC3339Nano,
-	time.RFC3339,
-	"2006-01-02T15:04:05",
-	"2006-01-02 15:04:05",
-	"2006-01-02 15:04",
-	"02/01/2006 15:04:05",
-	"02/01/2006 15:04",
-	"01/02/2006 15:04:05",
-	"01/02/2006 15:04",
-	"2006/01/02 15:04:05",
-}
-
-func parsePunchTime(raw string) (time.Time, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return time.Time{}, fmt.Errorf("empty")
-	}
-	for _, layout := range punchTimeLayouts {
-		if t, err := time.Parse(layout, raw); err == nil {
-			return t.UTC(), nil
-		}
-	}
-	if n, err := strconv.ParseInt(raw, 10, 64); err == nil {
-		// Heuristic: ms-since-epoch if 13 digits, otherwise seconds.
-		if len(raw) >= 13 {
-			return time.UnixMilli(n).UTC(), nil
-		}
-		return time.Unix(n, 0).UTC(), nil
-	}
-	return time.Time{}, fmt.Errorf("unrecognised timestamp format")
-}
-
-func normaliseDirection(raw string) string {
-	v := strings.ToLower(strings.TrimSpace(raw))
-	switch v {
-	case "in", "i", "checkin", "check-in", "0":
-		return models.DirectionIn
-	case "out", "o", "checkout", "check-out", "1":
-		return models.DirectionOut
-	case "":
-		return models.DirectionUnknown
-	default:
-		return models.DirectionUnknown
-	}
 }
