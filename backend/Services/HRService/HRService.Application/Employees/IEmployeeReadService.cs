@@ -8,6 +8,17 @@ public interface IEmployeeReadService
     Task<EmployeeDetailsDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<PagedResult<ManpowerListItemDto>> ManpowerListAsync(ManpowerListQuery query, CancellationToken cancellationToken = default);
     Task<ManpowerSummaryDto> ManpowerSummaryAsync(ManpowerSummaryQuery query, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<EmployeeStatusHistoryDto>> GetStatusHistoryAsync(Guid employeeId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<EmployeeTransferDto>> GetEmployeeTransfersAsync(Guid employeeId, CancellationToken cancellationToken = default);
+    Task<PagedResult<EmployeeTransferDto>> ListTransfersAsync(EmployeeTransferListQuery query, CancellationToken cancellationToken = default);
+}
+
+public class EmployeeTransferListQuery : PagedRequest
+{
+    public Guid? CompanyId { get; set; }
+    public Guid? EmployeeId { get; set; }
+    public DateTime? FromDate { get; set; }
+    public DateTime? ToDate { get; set; }
 }
 
 public class EmployeeListQuery : PagedRequest
@@ -98,7 +109,41 @@ public sealed class EmployeeDetailsDto
 
     public EmployeeJobInfoDto? CurrentJobInfo { get; init; }
     public EmployeeSalaryInfoDto? CurrentSalaryInfo { get; init; }
+    public IReadOnlyList<EmployeeAddressItemDto> Addresses { get; init; } = [];
+    public IReadOnlyList<EmployeeBankAccountItemDto> BankAccounts { get; init; } = [];
+    public IReadOnlyList<EmergencyContactItemDto> EmergencyContacts { get; init; } = [];
+    public IReadOnlyList<EmployeeDocumentItemDto> Documents { get; init; } = [];
 }
+
+public sealed record EmployeeAddressItemDto(
+    Guid Id, string AddressType, string Country, string? Division, string? District,
+    string? Upazila, string? PostOffice, string? PostalCode, string? AddressLine);
+
+public sealed record EmployeeBankAccountItemDto(
+    Guid Id, string? BankName, string? BranchName, string? AccountNo, string? RoutingNo,
+    string? MobileBankingType, string? MobileBankingNo, bool IsPrimary);
+
+public sealed record EmergencyContactItemDto(
+    Guid Id, string ContactName, string? Relation, string Phone, string? Address);
+
+public sealed record EmployeeDocumentItemDto(
+    Guid Id, string DocumentType, string FileUrl, DateTime UploadedAt);
+
+public sealed record EmployeeStatusHistoryDto(
+    Guid Id, string Status, DateTime EffectiveFrom, string? Remarks, DateTimeOffset CreatedAt);
+
+public sealed record EmployeeTransferDto(
+    Guid Id,
+    Guid EmployeeId,
+    string EmployeeID,
+    string FullName,
+    Guid? FromDepartmentId,
+    string? FromDepartmentName,
+    Guid? ToDepartmentId,
+    string? ToDepartmentName,
+    DateTime EffectiveDate,
+    string? Reason,
+    DateTimeOffset CreatedAt);
 
 public record EmployeeJobInfoDto(
     Guid? DepartmentId, string? DepartmentName,

@@ -1,5 +1,14 @@
 import api from "../api";
 import { unwrapApiData } from "@/lib/api-response";
+import type {
+  HrEmployeeDetails,
+  HrEmployeeListItem,
+  HrManpowerListItem,
+  HrManpowerSummary,
+  HrPagedResult,
+  HrStatusHistoryItem,
+  HrTransferItem,
+} from "@/lib/services/hr-types";
 import { companyService } from "@/lib/services/company";
 import {
   organogramService,
@@ -9,25 +18,17 @@ import {
   resolveShiftGuid,
 } from "@/lib/services/organogram";
 
-/** HR service `EmployeeListItemDto` (camelCase JSON). */
-interface HrEmployeeListItem {
-  id: string;
-  punchNumber: number;
-  employeeID: string;
-  fullName: string;
-  email?: string | null;
-  companyId: string;
-  status: string;
-  designationName?: string | null;
-  departmentName?: string | null;
-}
+export type {
+  HrEmployeeDetails,
+  HrEmployeeAddress,
+  HrEmployeeBankAccount,
+  HrEmergencyContact,
+  HrEmployeeDocument,
+  HrStatusHistoryItem,
+  HrTransferItem,
+} from "@/lib/services/hr-types";
 
-interface PagedResult<T> {
-  items: T[];
-  page: number;
-  pageSize: number;
-  totalCount: number;
-}
+type PagedResult<T> = HrPagedResult<T>;
 
 function stableIntFromGuid(guid: string): number {
   const hex = guid.replace(/-/g, "").slice(0, 8);
@@ -122,63 +123,23 @@ function mapHrListItemToMini(row: HrEmployeeListItem): EmployeeMini {
   };
 }
 
-/** HR `ManpowerListItemDto` from GET /hr/Employees/manpower */
-interface HrManpowerListItem {
-  id: string;
-  punchNumber: number;
-  employeeID: string;
-  fullName: string;
-  designationName?: string | null;
-  departmentName?: string | null;
-  sectionName?: string | null;
-  joinDate: string;
-  status: string;
-  phone?: string | null;
-  grossSalary: number;
-}
-
-interface HrEmployeeDetails {
-  id: string;
-  companyId: string;
-  punchNumber: number;
-  employeeID: string;
-  fullName: string;
-  banglaName?: string | null;
-  gender?: string | null;
-  dateOfBirth?: string | null;
-  nationalId?: string | null;
-  birthCertificateNo?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  joinDate: string;
-  employmentType: string;
-  status: string;
-  currentJobInfo?: {
-    departmentId?: string | null;
-    departmentName?: string | null;
-    sectionId?: string | null;
-    sectionName?: string | null;
-    designationId?: string | null;
-    designationName?: string | null;
-    gradeId?: string | null;
-    gradeName?: string | null;
-    supervisorId?: string | null;
-    supervisorName?: string | null;
-    workLocation?: string | null;
-    effectiveFrom: string;
-  } | null;
-  currentSalaryInfo?: {
-    basicSalary: number;
-    houseRent: number;
-    medicalAllowance: number;
-    conveyanceAllowance: number;
-    foodAllowance: number;
-    grossSalary: number;
-    effectiveFrom: string;
-  } | null;
-}
-
 type EmployeeAddressEntityId = string | number;
+
+async function fetchHrEmployeeDetails(
+  entityId: string,
+): Promise<HrEmployeeDetails> {
+  const response = await api.get<unknown>(
+    `hr/Employees/${encodeURIComponent(entityId)}`,
+  );
+  const data = unwrapApiData<HrEmployeeDetails>(response.data);
+  return {
+    ...data,
+    addresses: data.addresses ?? [],
+    bankAccounts: data.bankAccounts ?? [],
+    emergencyContacts: data.emergencyContacts ?? [],
+    documents: data.documents ?? [],
+  };
+}
 
 function mapHrManpowerToEmployee(row: HrManpowerListItem): Employee {
   return {
@@ -240,23 +201,73 @@ function mapHrDetailsToEmployee(row: HrEmployeeDetails): Employee {
     createdAt: "",
     companyId: stableIntFromGuid(row.companyId),
     companyEntityId: row.companyId,
+    presentAddress:
+      row.addresses?.find((a) => a.addressType === "Present")?.addressLine ??
+      undefined,
+    permanentAddress:
+      row.addresses?.find((a) => a.addressType === "Permanent")?.addressLine ??
+      undefined,
+    bankName: row.bankAccounts?.find((b) => b.isPrimary)?.bankName ?? undefined,
+    bankBranchName:
+      row.bankAccounts?.find((b) => b.isPrimary)?.branchName ?? undefined,
+    bankAccountNo:
+      row.bankAccounts?.find((b) => b.isPrimary)?.accountNo ?? undefined,
+    bankRoutingNo:
+      row.bankAccounts?.find((b) => b.isPrimary)?.routingNo ?? undefined,
+    emergencyContactName: row.emergencyContacts?.[0]?.contactName,
+    emergencyContactRelation: row.emergencyContacts?.[0]?.relation ?? undefined,
+    emergencyContactPhone: row.emergencyContacts?.[0]?.phone,
+    emergencyContactAddress: row.emergencyContacts?.[0]?.address ?? undefined,
   };
+}
+
+async function upsertAddress(
+  employeeId: string,
+  existing: HrEmployeeDetails["addresses"],
+  addressType: "Present" | "Permanent",
+  payload: {
+    country: string;
+    division?: string;
+    district?: string;
+    upazila?: string;
+    postOffice?: string;
+    postalCode?: string;
+    addressLine?: string;
+  },
+  companyId?: number,
+) {
+  const hasData =
+    payload.addressLine ||
+    payload.division ||
+    payload.district ||
+    payload.upazila ||
+    payload.postOffice ||
+    payload.postalCode;
+  if (!hasData) return;
+
+  const row = existing.find(
+    (a) => a.addressType.toLowerCase() === addressType.toLowerCase(),
+  );
+  const body = { addressType, ...payload };
+  if (row) {
+    await employeeService.updateAddress(row.id, body);
+  } else {
+    await employeeService.addAddress(employeeId, { ...body, companyId });
+  }
 }
 
 async function syncEmployeeSubResources(
   employeeId: string,
   data: CreateEmployeeDto,
+  existing?: HrEmployeeDetails,
 ) {
-  if (
-    data.presentAddress ||
-    data.presentDivisionId ||
-    data.presentDistrictId ||
-    data.presentThanaId ||
-    data.presentPostOfficeId ||
-    data.presentPostalCode
-  ) {
-    await employeeService.addAddress(employeeId, {
-      addressType: "Present",
+  const details = existing ?? (await fetchHrEmployeeDetails(employeeId));
+
+  await upsertAddress(
+    employeeId,
+    details.addresses,
+    "Present",
+    {
       country: "Bangladesh",
       division: data.presentDivisionId
         ? String(data.presentDivisionId)
@@ -270,19 +281,15 @@ async function syncEmployeeSubResources(
         : undefined,
       postalCode: data.presentPostalCode,
       addressLine: data.presentAddress,
-    });
-  }
+    },
+    data.companyId,
+  );
 
-  if (
-    data.permanentAddress ||
-    data.permanentDivisionId ||
-    data.permanentDistrictId ||
-    data.permanentThanaId ||
-    data.permanentPostOfficeId ||
-    data.permanentPostalCode
-  ) {
-    await employeeService.addAddress(employeeId, {
-      addressType: "Permanent",
+  await upsertAddress(
+    employeeId,
+    details.addresses,
+    "Permanent",
+    {
       country: "Bangladesh",
       division: data.permanentDivisionId
         ? String(data.permanentDivisionId)
@@ -298,8 +305,9 @@ async function syncEmployeeSubResources(
         : undefined,
       postalCode: data.permanentPostalCode,
       addressLine: data.permanentAddress,
-    });
-  }
+    },
+    data.companyId,
+  );
 
   if (
     data.bankName ||
@@ -307,24 +315,43 @@ async function syncEmployeeSubResources(
     data.bankBranchName ||
     data.bankRoutingNo
   ) {
-    await employeeService.addBankAccount(employeeId, {
+    const primary =
+      details.bankAccounts.find((b) => b.isPrimary) ?? details.bankAccounts[0];
+    const bankBody = {
       bankName: data.bankName,
       branchName: data.bankBranchName,
       accountNo: data.bankAccountNo,
       routingNo: data.bankRoutingNo,
       mobileBankingType: data.bankAccountType,
-      mobileBankingNo: undefined,
+      mobileBankingNo: undefined as string | undefined,
       isPrimary: true,
-    });
+    };
+    if (primary) {
+      await employeeService.updateBankAccount(primary.id, bankBody);
+    } else {
+      await employeeService.addBankAccount(employeeId, {
+        ...bankBody,
+        companyId: data.companyId,
+      });
+    }
   }
 
   if (data.emergencyContactName || data.emergencyContactPhone) {
-    await employeeService.addEmergencyContact(employeeId, {
+    const contact = details.emergencyContacts[0];
+    const contactBody = {
       contactName: data.emergencyContactName || "Emergency Contact",
       relation: data.emergencyContactRelation,
       phone: data.emergencyContactPhone || "",
       address: data.emergencyContactAddress,
-    });
+    };
+    if (contact) {
+      await employeeService.updateEmergencyContact(contact.id, contactBody);
+    } else {
+      await employeeService.addEmergencyContact(employeeId, {
+        ...contactBody,
+        companyId: data.companyId,
+      });
+    }
   }
 
   if (data.shiftId && data.companyId) {
@@ -596,25 +623,7 @@ export type ManpowerFilterParams = {
   religion?: string;
 };
 
-interface HrSummaryBucket {
-  id?: string | null;
-  name: string;
-  count: number;
-  percentage: number;
-}
-
-interface HrManpowerSummary {
-  totalEmployees: number;
-  activeEmployees: number;
-  onLeaveEmployees: number;
-  inactiveEmployees: number;
-  departmentSummary: HrSummaryBucket[];
-  designationSummary: HrSummaryBucket[];
-  genderSummary: HrSummaryBucket[];
-  statusSummary: HrSummaryBucket[];
-}
-
-function mapSummaryBucket(row: HrSummaryBucket): SummaryItem {
+function mapSummaryBucket(row: HrManpowerSummary["departmentSummary"][number]): SummaryItem {
   return {
     id: row.id ?? row.name,
     name: row.name,
@@ -811,16 +820,16 @@ export const employeeService = {
     return page.items.map(mapHrListItemToMini);
   },
 
-  getEmployee: async (employeeId: string, companyId: number) => {
+  getEmployeeDetails: async (employeeId: string, companyId?: number) => {
     const id = isGuid(employeeId)
       ? employeeId
       : await resolveEmployeeGuid(employeeId, companyId);
-    const response = await api.get<unknown>(
-      `hr/Employees/${encodeURIComponent(id)}`,
-    );
-    return mapHrDetailsToEmployee(
-      unwrapApiData<HrEmployeeDetails>(response.data),
-    );
+    return fetchHrEmployeeDetails(id);
+  },
+
+  getEmployee: async (employeeId: string, companyId: number) => {
+    const details = await employeeService.getEmployeeDetails(employeeId, companyId);
+    return mapHrDetailsToEmployee(details);
   },
 
   getEmployeeById: async (id: number) => {
@@ -829,12 +838,7 @@ export const employeeService = {
       (employee) => stableIntFromGuid(employee.id) === id,
     );
     if (!row) throw new Error("Employee not found.");
-    const response = await api.get<unknown>(
-      `hr/Employees/${encodeURIComponent(row.id)}`,
-    );
-    return mapHrDetailsToEmployee(
-      unwrapApiData<HrEmployeeDetails>(response.data),
-    );
+    return mapHrDetailsToEmployee(await fetchHrEmployeeDetails(row.id));
   },
 
   createEmployee: async (data: CreateEmployeeDto) => {
@@ -921,7 +925,8 @@ export const employeeService = {
       });
     }
 
-    await syncEmployeeSubResources(id, data);
+    const existing = await fetchHrEmployeeDetails(id);
+    await syncEmployeeSubResources(id, data, existing);
 
     return { success: true };
   },
@@ -1248,6 +1253,7 @@ export const employeeService = {
       gradeId?: string;
       supervisorId?: string;
       workLocation?: string;
+      reason?: string;
       effectiveFrom: string;
       companyId?: number;
     },
@@ -1266,9 +1272,51 @@ export const employeeService = {
       gradeId: data.gradeId || null,
       supervisorId: data.supervisorId || null,
       workLocation: data.workLocation || null,
+      reason: data.reason || null,
       effectiveFrom: data.effectiveFrom,
     });
     return { success: true };
+  },
+
+  getStatusHistory: async (employeeId: string, companyId?: number) => {
+    const id = await resolveEmployeeGuid(employeeId, companyId);
+    const response = await api.get<unknown>(
+      `hr/Employees/${encodeURIComponent(id)}/status-history`,
+    );
+    return unwrapApiData<HrStatusHistoryItem[]>(response.data) ?? [];
+  },
+
+  getEmployeeTransfers: async (employeeId: string, companyId?: number) => {
+    const id = await resolveEmployeeGuid(employeeId, companyId);
+    const response = await api.get<unknown>(
+      `hr/Employees/${encodeURIComponent(id)}/transfers`,
+    );
+    return unwrapApiData<HrTransferItem[]>(response.data) ?? [];
+  },
+
+  listTransfers: async (params?: {
+    companyId?: number;
+    employeeId?: string;
+    fromDate?: string;
+    toDate?: string;
+    page?: number;
+    pageSize?: number;
+  }) => {
+    const companyGuid = params?.companyId
+      ? (await companyService.getAll()).find((c) => c.id === params.companyId)
+          ?.entityId
+      : undefined;
+    const response = await api.get<unknown>("hr/Employees/transfers", {
+      params: {
+        page: params?.page ?? 1,
+        pageSize: params?.pageSize ?? 200,
+        companyId: companyGuid,
+        employeeId: params?.employeeId,
+        fromDate: params?.fromDate,
+        toDate: params?.toDate,
+      },
+    });
+    return unwrapApiData<PagedResult<HrTransferItem>>(response.data);
   },
 
   changeStatus: async (
@@ -1491,7 +1539,7 @@ export const employeeService = {
     const response = await api.get<unknown>("hr/Employees/manpower/summary", {
       params: query,
     });
-    const data = unwrapApiData<HrManpowerSummary>(response.data);
+    const data = unwrapApiData<HrManpowerSummary>(response.data) as HrManpowerSummary;
     return {
       totalEmployees: data.totalEmployees,
       activeEmployees: data.activeEmployees,

@@ -31,7 +31,7 @@ import {
 import { DatePicker } from "@/components/ui/date-picker"
 import { transferService, type Transfer } from "@/lib/services/transfer"
 import { organogramService } from "@/lib/services/organogram"
-import { employeeService, type Employee } from "@/lib/services/employee"
+import { employeeService, type EmployeeSimple } from "@/lib/services/employee"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
@@ -42,7 +42,7 @@ export default function MigrationTransferPage() {
     const [isSheetOpen, setIsSheetOpen] = React.useState(false)
 
     // Form Data
-    const [employees, setEmployees] = React.useState<Employee[]>([])
+    const [employees, setEmployees] = React.useState<EmployeeSimple[]>([])
     const [departments, setDepartments] = React.useState<any[]>([])
     const [designations, setDesignations] = React.useState<any[]>([])
     const [formData, setFormData] = React.useState({
@@ -68,7 +68,7 @@ export default function MigrationTransferPage() {
     React.useEffect(() => {
         fetchTransfers()
         organogramService.getDepartments().then(setDepartments)
-        employeeService.getEmployees({ status: 'Active' }).then(setEmployees)
+        employeeService.getEmployeesSimple({ status: 'Active' }).then(setEmployees)
     }, [fetchTransfers])
 
     // Fetch designations when department changes
@@ -82,20 +82,22 @@ export default function MigrationTransferPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!formData.employeeId || !formData.departmentId || !formData.designationId || !formData.transferDate) {
+        const emp = employees.find((e) => String(e.id) === formData.employeeId || e.entityId === formData.employeeId)
+        if (!emp?.entityId || !formData.departmentId || !formData.designationId || !formData.transferDate) {
             toast.error("Please fill all required fields")
             return
         }
 
         try {
             await transferService.createTransfer({
-                employeeId: parseInt(formData.employeeId),
+                employeeEntityId: emp.entityId,
                 toDepartmentId: parseInt(formData.departmentId),
                 toDesignationId: parseInt(formData.designationId),
                 transferDate: formData.transferDate,
-                reason: formData.reason
+                reason: formData.reason,
+                companyId: emp.companyId,
             })
-            toast.success("Transfer request submitted")
+            toast.success("Transfer recorded")
             setIsSheetOpen(false)
             fetchTransfers()
             setFormData({
@@ -107,28 +109,6 @@ export default function MigrationTransferPage() {
             })
         } catch (error) {
             toast.error("Failed to create request")
-        }
-    }
-
-    const handleStatusUpdate = async (id: number, status: string) => {
-        if (!confirm(`Are you sure you want to ${status} this transfer?`)) return
-        try {
-            await transferService.updateStatus(id, status)
-            toast.success(`Transfer ${status}`)
-            fetchTransfers()
-        } catch (error) {
-            toast.error("Update failed")
-        }
-    }
-
-    const handleDelete = async (id: number) => {
-        if (!confirm("Delete this request?")) return
-        try {
-            await transferService.deleteTransfer(id)
-            toast.success("Deleted successfully")
-            fetchTransfers()
-        } catch (error) {
-            toast.error("Delete failed")
         }
     }
 
@@ -167,37 +147,11 @@ export default function MigrationTransferPage() {
             cell: ({ row }) => <span>{format(new Date(row.original.transferDate), "dd MMM yyyy")}</span>
         },
         {
-            accessorKey: "status",
-            header: "Status",
-            cell: ({ row }) => {
-                const status = row.original.status
-                return (
-                    <Badge variant={status === "Approved" ? "default" : status === "Rejected" ? "destructive" : "secondary"}>
-                        {status}
-                    </Badge>
-                )
-            }
-        },
-        {
-            id: "actions",
-            header: "Actions",
+            accessorKey: "reason",
+            header: "Reason",
             cell: ({ row }) => (
-                <div className="flex items-center gap-1">
-                    {row.original.status === "Pending" && (
-                        <>
-                            <Button variant="ghost" size="icon" className="size-8 text-green-600 hover:text-green-700 hover:bg-green-50" onClick={() => handleStatusUpdate(row.original.id, "Approved")}>
-                                <IconCheck className="size-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleStatusUpdate(row.original.id, "Rejected")}>
-                                <IconX className="size-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="size-8 text-muted-foreground" onClick={() => handleDelete(row.original.id)}>
-                                <IconTrash className="size-4" />
-                            </Button>
-                        </>
-                    )}
-                </div>
-            )
+                <span className="text-sm text-muted-foreground line-clamp-2">{row.original.reason || "—"}</span>
+            ),
         }
     ]
 
@@ -222,15 +176,21 @@ export default function MigrationTransferPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="border-none shadow-sm bg-background/60 backdrop-blur-sm">
                     <CardHeader className="pb-2">
-                        <CardDescription>Pending Requests</CardDescription>
-                        <CardTitle className="text-2xl">{transfers.filter(t => t.status === "Pending").length}</CardTitle>
+                        <CardDescription>This month</CardDescription>
+                        <CardTitle className="text-2xl">
+                            {transfers.filter(t => {
+                                const d = new Date(t.transferDate)
+                                const n = new Date()
+                                return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear()
+                            }).length}
+                        </CardTitle>
                     </CardHeader>
                 </Card>
                 <Card className="border-none shadow-sm bg-background/60 backdrop-blur-sm">
                     <CardHeader className="pb-2">
-                        <CardDescription>Approved This Month</CardDescription>
+                        <CardDescription>With reason noted</CardDescription>
                         <CardTitle className="text-2xl text-green-600">
-                            {transfers.filter(t => t.status === "Approved").length}
+                            {transfers.filter(t => t.reason?.trim()).length}
                         </CardTitle>
                     </CardHeader>
                 </Card>
@@ -282,7 +242,7 @@ export default function MigrationTransferPage() {
                                 >
                                     <option value="" disabled>Select Employee</option>
                                     {employees.map(e => (
-                                        <option key={e.id} value={e.id}>
+                                        <option key={e.entityId ?? e.id} value={e.entityId ?? String(e.id)}>
                                             {e.fullNameEn} ({e.employeeId}) - {e.designationName}
                                         </option>
                                     ))}

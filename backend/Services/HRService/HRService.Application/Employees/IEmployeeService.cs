@@ -44,7 +44,7 @@ public sealed record UpdateEmployeeDto(
 
 public sealed record TransferEmployeeDto(
     Guid? DepartmentId, Guid? SectionId, Guid? DesignationId, Guid? GradeId,
-    Guid? SupervisorId, string? WorkLocation, DateTime EffectiveFrom);
+    Guid? SupervisorId, string? WorkLocation, string? Reason, DateTime EffectiveFrom);
 
 public sealed record ChangeStatusDto(string Status, DateTime EffectiveFrom, string? Remarks);
 

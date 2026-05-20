@@ -40,6 +40,15 @@ public sealed class EmployeesController(
         return Ok(ApiResponse<ManpowerSummaryDto>.Ok(data, HttpContext.TraceIdentifier));
     }
 
+    [HttpGet("transfers")]
+    public async Task<ActionResult<ApiResponse<PagedResult<EmployeeTransferDto>>>> ListTransfers(
+        [FromQuery] EmployeeTransferListQuery query,
+        CancellationToken cancellationToken)
+    {
+        var data = await employees.ListTransfersAsync(query, cancellationToken);
+        return Ok(ApiResponse<PagedResult<EmployeeTransferDto>>.Ok(data, HttpContext.TraceIdentifier));
+    }
+
     [HttpGet("{id}")]
     public async Task<ActionResult<ApiResponse<EmployeeDetailsDto>>> Get(
         Guid id,
@@ -53,6 +62,24 @@ public sealed class EmployeesController(
                 [new ApiError("NotFound", "Employee not found")]));
         }
         return Ok(ApiResponse<EmployeeDetailsDto>.Ok(data, HttpContext.TraceIdentifier));
+    }
+
+    [HttpGet("{id}/status-history")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<EmployeeStatusHistoryDto>>>> StatusHistory(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var data = await employees.GetStatusHistoryAsync(id, cancellationToken);
+        return Ok(ApiResponse<IReadOnlyList<EmployeeStatusHistoryDto>>.Ok(data, HttpContext.TraceIdentifier));
+    }
+
+    [HttpGet("{id}/transfers")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<EmployeeTransferDto>>>> EmployeeTransfers(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var data = await employees.GetEmployeeTransfersAsync(id, cancellationToken);
+        return Ok(ApiResponse<IReadOnlyList<EmployeeTransferDto>>.Ok(data, HttpContext.TraceIdentifier));
     }
 
     [HttpPost]

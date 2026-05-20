@@ -10,7 +10,9 @@ import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { payrollService } from "@/lib/services/payroll"
 import { organogramService } from "@/lib/services/organogram"
-import { companyService } from "@/lib/services/company"
+import { companyService, type Company } from "@/lib/services/company"
+import { companyGuidFromSelection } from "@/lib/payroll-utils"
+import { useAuth } from "@/components/providers/auth-provider"
 
 const MONTHS = [
     { label: "January", value: 1 },
@@ -28,10 +30,11 @@ const MONTHS = [
 ]
 
 export default function SalaryProcessPage() {
+    const { user } = useAuth()
     const [year, setYear] = React.useState(new Date().getFullYear())
     const [month, setMonth] = React.useState(new Date().getMonth() + 1)
     const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>("all")
-    const [companies, setCompanies] = React.useState<any[]>([])
+    const [companies, setCompanies] = React.useState<Company[]>([])
     const [departmentId, setDepartmentId] = React.useState("all")
     const [departments, setDepartments] = React.useState<any[]>([])
 
@@ -69,11 +72,17 @@ export default function SalaryProcessPage() {
                 })
             }, 100)
 
+            const companyGuid = selectedCompanyId === "all" ? undefined : companyGuidFromSelection(companies, selectedCompanyId)
+            if (!companyGuid) {
+                toast.error("Select a company to process payroll")
+                setStatus("idle")
+                return
+            }
             const res = await payrollService.processSalary({
                 year,
                 month,
-                companyId: selectedCompanyId === "all" ? undefined : parseInt(selectedCompanyId),
-                departmentId: departmentId === "all" ? undefined : parseInt(departmentId)
+                companyGuid,
+                processedBy: user?.id,
             })
 
             clearInterval(interval)

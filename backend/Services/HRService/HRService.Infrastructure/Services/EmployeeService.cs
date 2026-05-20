@@ -205,11 +205,23 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
         // Business Rule: Current job info only one record
         // Mark all existing job infos as not current
         var existingJobs = employee.JobInfos.Where(j => j.IsCurrent).ToList();
+        var fromDepartmentId = existingJobs.Select(j => j.DepartmentId).FirstOrDefault();
         foreach (var job in existingJobs)
         {
             job.IsCurrent = false;
             job.EffectiveTo = dto.EffectiveFrom.AddDays(-1);
         }
+
+        db.EmployeeTransfers.Add(new EmployeeTransfer
+        {
+            Id = Guid.NewGuid(),
+            EmployeeId = id,
+            FromDepartmentId = fromDepartmentId,
+            ToDepartmentId = dto.DepartmentId,
+            EffectiveDate = dto.EffectiveFrom,
+            Reason = dto.Reason,
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
 
         employee.JobInfos.Add(new EmployeeJobInfo
         {

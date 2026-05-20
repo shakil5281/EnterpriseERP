@@ -55,6 +55,8 @@ using SecurityService.API.Controllers;
 using SecurityService.Application;
 using SecurityService.Infrastructure;
 using AccountsService.API.Controllers;
+using AccountsService.Application;
+using AccountsService.Domain;
 using AccountsService.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -86,6 +88,7 @@ builder.Services.AddFinishingInfrastructure(builder.Configuration);
 QualityService.Infrastructure.DependencyInjection.AddInfrastructure(builder.Services, builder.Configuration);
 builder.Services.AddSecurityApplication();
 builder.Services.AddSecurityInfrastructure(builder.Configuration);
+builder.Services.AddAccountsApplication();
 builder.Services.AddAccountsInfrastructure(builder.Configuration);
 
 // Add ASP.NET Core API Versioning support for route segments like api/v{version:apiVersion}
@@ -202,6 +205,24 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(PayrollPermissions.BankSheetExport, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.AccountsOfficer));
     options.AddPolicy(PayrollPermissions.FinalSettlementProcess, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.HRManager));
     options.AddPolicy(PayrollPermissions.FinalSettlementApprove, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin));
+    options.AddPolicy(AccountsPermissions.CoaManage, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.GroupAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
+    options.AddPolicy(AccountsPermissions.VoucherCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer));
+    options.AddPolicy(AccountsPermissions.VoucherApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
+    options.AddPolicy(AccountsPermissions.VoucherPost, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer));
+    options.AddPolicy(AccountsPermissions.CashReceiveCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer, AccountsRoles.Cashier));
+    options.AddPolicy(AccountsPermissions.CashReceiveApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
+    options.AddPolicy(AccountsPermissions.DailyExpenseCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer, AccountsRoles.Cashier));
+    options.AddPolicy(AccountsPermissions.DailyExpenseApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
+    options.AddPolicy(AccountsPermissions.MoneyRequestCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer));
+    options.AddPolicy(AccountsPermissions.MoneyRequestApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
+    options.AddPolicy(AccountsPermissions.AdvancePayCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer));
+    options.AddPolicy(AccountsPermissions.AdvancePayApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
+    options.AddPolicy(AccountsPermissions.AdvanceSalaryPayCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer));
+    options.AddPolicy(AccountsPermissions.AdvanceSalaryPayApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
+    options.AddPolicy(AccountsPermissions.CompanyTransferCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
+    options.AddPolicy(AccountsPermissions.CompanyTransferApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
+    options.AddPolicy(AccountsPermissions.LedgerView, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer, AccountsRoles.Auditor, AccountsRoles.Viewer));
+    options.AddPolicy(AccountsPermissions.ReportView, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.Auditor, AccountsRoles.Viewer));
 });
 
 var configuredCorsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();

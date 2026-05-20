@@ -19,14 +19,39 @@ public sealed class PayrollController(IMediator mediator) : ControllerBase
     public async Task<IActionResult> Reprocess(ProcessPayrollRequest request) => Ok(await mediator.Send(new ReprocessPayrollCommand(request)));
 
     [HttpGet("api/v1/payroll/{periodId:guid}")]
-    public async Task<IActionResult> Get(Guid periodId) => Ok(await mediator.Send(new GetEmployeePayrollQuery(periodId, null)));
+    public async Task<IActionResult> Get(
+        Guid periodId,
+        [FromQuery] int? departmentId,
+        [FromQuery] int? sectionId,
+        [FromQuery] int? designationId,
+        [FromQuery] int? lineId,
+        [FromQuery] string? status,
+        [FromQuery] string? searchTerm) =>
+        Ok(await mediator.Send(new GetEmployeePayrollQuery(periodId, null, departmentId, sectionId, designationId, lineId, status, searchTerm)));
 
     [HttpGet("api/v1/payroll/{periodId:guid}/employees/{employeeId:guid}")]
-    public async Task<IActionResult> GetEmployee(Guid periodId, Guid employeeId) => Ok(await mediator.Send(new GetEmployeePayrollQuery(periodId, employeeId)));
+    public async Task<IActionResult> GetEmployee(Guid periodId, Guid employeeId) =>
+        Ok(await mediator.Send(new GetEmployeePayrollQuery(periodId, employeeId)));
+
+    [HttpGet("api/v1/payroll/{periodId:guid}/summary")]
+    public async Task<IActionResult> Summary(Guid periodId) =>
+        Ok(await mediator.Send(new GetPayrollSummaryQuery(periodId)));
+
+    [HttpGet("api/v1/payroll/{periodId:guid}/summary/breakdown")]
+    public async Task<IActionResult> SummaryBreakdown(Guid periodId) =>
+        Ok(await mediator.Send(new GetPayrollSummaryBreakdownQuery(periodId)));
 
     [HttpGet("api/v1/payroll/{periodId:guid}/salary-sheet")]
     [Authorize(Policy = PayrollPermissions.SalarySheetView)]
-    public async Task<IActionResult> SalarySheet(Guid periodId) => Ok(await mediator.Send(new GetSalarySheetQuery(periodId)));
+    public async Task<IActionResult> SalarySheet(
+        Guid periodId,
+        [FromQuery] int? departmentId,
+        [FromQuery] int? sectionId,
+        [FromQuery] int? designationId,
+        [FromQuery] int? lineId,
+        [FromQuery] string? status,
+        [FromQuery] string? searchTerm) =>
+        Ok(await mediator.Send(new GetSalarySheetQuery(periodId, departmentId, sectionId, designationId, lineId, status, searchTerm)));
 
     [HttpGet("api/v1/payroll/{periodId:guid}/bank-sheet")]
     [Authorize(Policy = PayrollPermissions.BankSheetExport)]

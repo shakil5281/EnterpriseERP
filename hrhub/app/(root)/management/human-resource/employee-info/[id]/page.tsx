@@ -23,6 +23,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { employeeService, type Employee } from "@/lib/services/employee"
+import { EmployeeHistoryPanel } from "@/components/hr/employee-history-panel"
+import { StatusChangeSheet } from "@/components/hr/status-change-sheet"
+import { TransferSheet } from "@/components/hr/transfer-sheet"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { getImageUrl } from "@/lib/utils"
@@ -37,6 +40,11 @@ export default function EmployeeDetailsPage() {
 
     const [employee, setEmployee] = React.useState<Employee | null>(null)
     const [isLoading, setIsLoading] = React.useState(true)
+    const [statusOpen, setStatusOpen] = React.useState(false)
+    const [transferOpen, setTransferOpen] = React.useState(false)
+    const [employeeOptions, setEmployeeOptions] = React.useState<
+        import("@/lib/services/employee").EmployeeSimple[]
+    >([])
 
     React.useEffect(() => {
         if (!id || !companyIdInt) return
@@ -44,6 +52,19 @@ export default function EmployeeDetailsPage() {
             try {
                 const data = await employeeService.getEmployee(id, companyIdInt)
                 setEmployee(data)
+                if (data.entityId) {
+                    setEmployeeOptions([
+                        {
+                            id: data.id,
+                            entityId: data.entityId,
+                            employeeId: data.employeeId,
+                            punchNumber: data.punchNumber,
+                            fullNameEn: data.fullNameEn,
+                            companyId: data.companyId,
+                            companyEntityId: data.companyEntityId,
+                        },
+                    ])
+                }
             } catch (error) {
                 toast.error("Failed to load employee details")
                 router.push("/management/human-resource/employee-info")
@@ -72,10 +93,18 @@ export default function EmployeeDetailsPage() {
                     <IconArrowLeft className="h-4 w-4" />
                     Back to List
                 </Button>
-                <Button className="gap-2" onClick={() => router.push(`/management/human-resource/employee-info/edit/${id}?companyId=${companyIdInt}`)}>
-                    <IconEdit className="h-4 w-4" />
-                    Edit Profile
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setStatusOpen(true)}>
+                        Change status
+                    </Button>
+                    <Button variant="outline" onClick={() => setTransferOpen(true)}>
+                        Transfer
+                    </Button>
+                    <Button className="gap-2" onClick={() => router.push(`/management/human-resource/employee-info/edit/${id}?companyId=${companyIdInt}`)}>
+                        <IconEdit className="h-4 w-4" />
+                        Edit Profile
+                    </Button>
+                </div>
             </div>
 
             {/* Profile Header Card */}
@@ -127,6 +156,7 @@ export default function EmployeeDetailsPage() {
                     <TabsTrigger value="employment" className="px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">Employment</TabsTrigger>
                     <TabsTrigger value="salary" className="px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">Salary & Bank</TabsTrigger>
                     <TabsTrigger value="family" className="px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">Family & Emergency</TabsTrigger>
+                    <TabsTrigger value="history" className="px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">History</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="personal" className="space-y-6">
@@ -250,7 +280,45 @@ export default function EmployeeDetailsPage() {
                         </Card>
                     </div>
                 </TabsContent>
+
+                <TabsContent value="history">
+                    {employee.entityId ? (
+                        <EmployeeHistoryPanel
+                            employeeId={employee.entityId}
+                            companyId={companyIdInt || undefined}
+                        />
+                    ) : null}
+                </TabsContent>
             </Tabs>
+
+            {employee.entityId ? (
+                <>
+                    <StatusChangeSheet
+                        open={statusOpen}
+                        onOpenChange={setStatusOpen}
+                        employeeId={employee.entityId}
+                        employeeName={employee.fullNameEn}
+                        companyId={companyIdInt || undefined}
+                        onSuccess={() => {
+                            employeeService
+                                .getEmployee(id, companyIdInt)
+                                .then(setEmployee)
+                        }}
+                    />
+                    <TransferSheet
+                        open={transferOpen}
+                        onOpenChange={setTransferOpen}
+                        employees={employeeOptions}
+                        companyId={companyIdInt || undefined}
+                        defaultEmployeeEntityId={employee.entityId}
+                        onSuccess={() => {
+                            employeeService
+                                .getEmployee(id, companyIdInt)
+                                .then(setEmployee)
+                        }}
+                    />
+                </>
+            ) : null}
         </div>
     )
 }

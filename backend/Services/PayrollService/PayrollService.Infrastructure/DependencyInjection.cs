@@ -29,7 +29,7 @@ public static class DependencyInjection
         services.AddScoped<ISalaryAdvanceService, SalaryAdvanceService>();
         services.AddScoped<ISalaryIncrementService, SalaryIncrementService>();
 
-        services.AddHttpClient<IEmployeeServiceClient, EmployeeServiceClient>("Payroll.IEmployeeServiceClient", c => c.BaseAddress = new Uri(configuration["Services:EmployeeService"] ?? "http://localhost:5101"));
+        services.AddHttpClient<IEmployeeServiceClient, EmployeeServiceClient>("Payroll.IEmployeeServiceClient", c => c.BaseAddress = new Uri(configuration["Services:EmployeeService"] ?? configuration["Services:HR"] ?? "http://localhost:5000"));
         services.AddHttpClient<IAttendanceServiceClient, AttendanceServiceClient>("Payroll.IAttendanceServiceClient", c => c.BaseAddress = new Uri(configuration["Services:AttendanceService"] ?? "http://localhost:5102"));
         services.AddHttpClient<ILeaveServiceClient, LeaveServiceClient>("Payroll.ILeaveServiceClient", c => c.BaseAddress = new Uri(configuration["Services:LeaveService"] ?? "http://localhost:5103"));
         services.AddHttpClient<ICompanyServiceClient, CompanyServiceClient>("Payroll.ICompanyServiceClient", c => c.BaseAddress = new Uri(configuration["Services:CompanyService"] ?? "http://localhost:5104"));

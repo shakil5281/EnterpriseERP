@@ -39,8 +39,26 @@ public sealed record ApproveFinalSettlementCommand(Guid Id, Guid ApprovedBy) : I
 
 public sealed record GetPayrollPolicyQuery(Guid? Id, Guid? CompanyId) : IRequest<ApiResponse<IReadOnlyList<PayrollPolicyDto>>>;
 public sealed record GetPayrollPeriodQuery(Guid? Id, Guid? CompanyId) : IRequest<ApiResponse<IReadOnlyList<PayrollPeriodDto>>>;
-public sealed record GetEmployeePayrollQuery(Guid PayrollPeriodId, Guid? EmployeeId) : IRequest<ApiResponse<IReadOnlyList<EmployeePayrollDto>>>;
-public sealed record GetSalarySheetQuery(Guid PayrollPeriodId) : IRequest<ApiResponse<IReadOnlyList<SalarySheetRowDto>>>;
+public sealed record GetEmployeePayrollQuery(
+    Guid PayrollPeriodId,
+    Guid? EmployeeId,
+    int? DepartmentId = null,
+    int? SectionId = null,
+    int? DesignationId = null,
+    int? LineId = null,
+    string? Status = null,
+    string? SearchTerm = null) : IRequest<ApiResponse<IReadOnlyList<EmployeePayrollDto>>>;
+
+public sealed record GetSalarySheetQuery(
+    Guid PayrollPeriodId,
+    int? DepartmentId = null,
+    int? SectionId = null,
+    int? DesignationId = null,
+    int? LineId = null,
+    string? Status = null,
+    string? SearchTerm = null) : IRequest<ApiResponse<IReadOnlyList<SalarySheetRowDto>>>;
+
+public sealed record GetPayrollSummaryBreakdownQuery(Guid PayrollPeriodId) : IRequest<ApiResponse<PayrollSummaryBreakdownDto>>;
 public sealed record GetPayslipQuery(Guid PayrollPeriodId, Guid EmployeeId) : IRequest<ApiResponse<PayslipDto>>;
 public sealed record GetBankSheetQuery(Guid PayrollPeriodId) : IRequest<ApiResponse<IReadOnlyList<BankSheetRowDto>>>;
 public sealed record GetPayrollSummaryQuery(Guid PayrollPeriodId) : IRequest<ApiResponse<PayrollSummaryDto>>;
@@ -54,3 +72,17 @@ public sealed record GetSalaryStructureComponentsQuery(Guid SalaryStructureId) :
 public sealed record GetCurrentEmployeeSalaryQuery(Guid CompanyId, Guid EmployeeId) : IRequest<ApiResponse<EmployeeSalaryDto>>;
 public sealed record GetEmployeeSalaryHistoryQuery(Guid CompanyId, Guid EmployeeId) : IRequest<ApiResponse<IReadOnlyList<EmployeeSalaryDto>>>;
 public sealed record CheckPayrollLockQuery(Guid CompanyId, int YearNo, int MonthNo) : IRequest<ApiResponse<PayrollLockCheckDto>>;
+
+public sealed record ListSalaryAdvancesQuery(Guid CompanyId, string? Status, int? Year, int? Month) : IRequest<ApiResponse<IReadOnlyList<SalaryAdvanceDto>>>;
+public sealed record GetSalaryAdvanceSummaryQuery(Guid CompanyId, int? Year, int? Month) : IRequest<ApiResponse<SalaryAdvanceSummaryDto>>;
+public sealed record BatchCreateSalaryAdvanceCommand(BatchSalaryAdvanceRequest Request) : IRequest<ApiResponse<IReadOnlyList<SalaryAdvanceDto>>>;
+public sealed record BatchDeleteSalaryAdvanceCommand(BatchDeleteSalaryAdvanceRequest Request) : IRequest<ApiResponse<int>>;
+
+public sealed record GetDailySalarySheetQuery(Guid CompanyId, DateOnly Date, int? DepartmentId, string? SearchTerm) : IRequest<ApiResponse<IReadOnlyList<DailySalarySheetRowDto>>>;
+public sealed record ProcessDailyPayrollCommand(ProcessDailyPayrollRequest Request) : IRequest<ApiResponse<ProcessDailyPayrollResultDto>>;
+
+public sealed record GetPayrollBonusesQuery(Guid CompanyId, int YearNo, int? MonthNo, string? BonusType) : IRequest<ApiResponse<IReadOnlyList<PayrollBonusRowDto>>>;
+public sealed record CreatePayrollBonusCommand(CreatePayrollBonusRequest Request) : IRequest<ApiResponse<PayrollBonusRowDto>>;
+public sealed record ProcessFestivalBonusCommand(ProcessFestivalBonusRequest Request) : IRequest<ApiResponse<FestivalBonusProcessResultDto>>;
+public sealed record DeletePayrollBonusCommand(Guid EmployeePayrollId) : IRequest<ApiResponse<bool>>;
+public sealed record GetFestivalBonusBankSheetQuery(Guid PayrollPeriodId) : IRequest<ApiResponse<IReadOnlyList<FestivalBonusBankSheetRowDto>>>;

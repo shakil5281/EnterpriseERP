@@ -88,7 +88,7 @@ public static class AuthDataSeeder
 			LockoutEnabled = true,
 			CreatedAt = DateTimeOffset.UtcNow
 		};
-		IdentityResult create = await users.CreateAsync(admin, "ChangeMe!23456");
+		IdentityResult create = await users.CreateAsync(admin, "shakil52814542A@");
 		if (!create.Succeeded)
 		{
 			logger.LogError("Failed to seed admin user: {Errors}", string.Join(", ", create.Errors.Select((IdentityError e) => e.Description)));

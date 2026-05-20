@@ -175,9 +175,40 @@ public sealed record PayrollEarningDto(string EarningCode, string EarningName, d
 
 public sealed record PayrollDeductionDto(string DeductionCode, string DeductionName, decimal Amount, bool IsManual, string? Remarks);
 
-public sealed record SalarySheetRowDto(Guid EmployeeId, decimal GrossSalary, decimal BasicSalary, decimal TotalEarnings, decimal TotalDeduction, decimal NetSalary, string Status);
+public sealed record SalarySheetRowDto(
+    Guid EmployeeId,
+    string? EmployeeCode,
+    string? EmployeeName,
+    string? DepartmentName,
+    string? DesignationName,
+    decimal GrossSalary,
+    decimal BasicSalary,
+    decimal TotalDays,
+    decimal PresentDays,
+    decimal AbsentDays,
+    decimal OvertimeHours,
+    decimal OvertimeAmount,
+    decimal TotalEarnings,
+    decimal TotalDeduction,
+    decimal NetSalary,
+    string Status);
 
 public sealed record PayrollSummaryDto(Guid PayrollPeriodId, int TotalEmployees, decimal GrossSalary, decimal TotalEarnings, decimal TotalDeduction, decimal NetSalary, string Status);
+
+public sealed record SummaryGroupDto(
+    string Name,
+    decimal TotalGrossSalary,
+    decimal TotalOTAmount,
+    decimal TotalDeductions,
+    decimal TotalNetPayable,
+    int EmployeeCount);
+
+public sealed record PayrollSummaryBreakdownDto(
+    PayrollSummaryDto Summary,
+    IReadOnlyList<SummaryGroupDto> DepartmentSummaries,
+    IReadOnlyList<SummaryGroupDto> SectionSummaries,
+    IReadOnlyList<SummaryGroupDto> LineSummaries,
+    IReadOnlyList<SummaryGroupDto> GroupSummaries);
 
 public sealed record BankSheetRowDto(Guid EmployeeId, string BankAccountNo, string BankName, decimal NetSalary);
 
@@ -227,3 +258,78 @@ public sealed record ApprovalRequest(Guid UserId, string? Remarks);
 public sealed record LockPayrollRequest(Guid LockedBy, string? Remarks);
 
 public sealed record UnlockPayrollRequest(Guid UnlockedBy, string UnlockReason);
+
+public sealed record BatchSalaryAdvanceRequest(
+    Guid CompanyId,
+    IReadOnlyList<Guid> EmployeeIds,
+    decimal AdvanceAmount,
+    DateOnly AdvanceDate,
+    int DeductionStartMonth,
+    int DeductionStartYear,
+    decimal InstallmentAmount,
+    Guid? RequestedBy,
+    string? AdvanceNoPrefix = null);
+
+public sealed record BatchDeleteSalaryAdvanceRequest(IReadOnlyList<Guid> Ids);
+
+public sealed record SalaryAdvanceSummaryDto(
+    int TotalCount,
+    decimal TotalAmount,
+    decimal TotalBalance,
+    int ApprovedCount,
+    int PendingCount);
+
+public sealed record DailySalarySheetRowDto(
+    Guid EmployeeId,
+    string? EmployeeCode,
+    string? EmployeeName,
+    string? DepartmentName,
+    string? DesignationName,
+    DateOnly Date,
+    decimal GrossSalary,
+    decimal PerDaySalary,
+    string AttendanceStatus,
+    decimal OtHours,
+    decimal OtAmount,
+    decimal TotalEarning,
+    decimal Deduction,
+    decimal NetPayable);
+
+public sealed record ProcessDailyPayrollRequest(Guid CompanyId, DateOnly Date, Guid? ProcessedBy, int? DepartmentId = null);
+
+public sealed record ProcessDailyPayrollResultDto(int ProcessedCount, int SkippedCount, string Message);
+
+public sealed record ProcessFestivalBonusRequest(
+    Guid CompanyId,
+    int YearNo,
+    int MonthNo,
+    string BonusType,
+    decimal Percentage,
+    string BaseOn);
+
+public sealed record FestivalBonusProcessResultDto(int ProcessedCount, int SkippedCount, decimal TotalAmount, string Message);
+
+public sealed record PayrollBonusRowDto(
+    Guid Id,
+    Guid EmployeeId,
+    string? EmployeeName,
+    string BonusType,
+    decimal Amount,
+    int YearNo,
+    int MonthNo,
+    string Status);
+
+public sealed record CreatePayrollBonusRequest(
+    Guid CompanyId,
+    Guid EmployeeId,
+    int YearNo,
+    int MonthNo,
+    string BonusType,
+    decimal Amount);
+
+public sealed record FestivalBonusBankSheetRowDto(
+    Guid EmployeeId,
+    string? EmployeeName,
+    string? BankAccountNo,
+    string? BankName,
+    decimal NetPayable);

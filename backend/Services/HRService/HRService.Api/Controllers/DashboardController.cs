@@ -23,7 +23,13 @@ public sealed class DashboardController(HrDbContext db) : ControllerBase
     public async Task<ActionResult<ApiResponse<DashboardSummaryDto>>> GetSummary(CancellationToken cancellationToken)
     {
         var total = await db.Employees.CountAsync(e => !e.IsDeleted, cancellationToken);
-        var summary = new DashboardSummaryDto(total, 0, 0, 0, 0, 0);
+        var onLeave = await db.Employees.CountAsync(
+            e => !e.IsDeleted && (e.Status == "On Leave" || e.Status.Contains("Leave")),
+            cancellationToken);
+        var openPositions = await db.ManpowerRequirements.AsNoTracking()
+            .Where(r => !r.IsDeleted && (r.Status == "Pending" || r.Status == "Approved"))
+            .SumAsync(r => (int?)r.RequiredNumber, cancellationToken) ?? 0;
+        var summary = new DashboardSummaryDto(total, 0, onLeave, openPositions, 0, 0);
         return Ok(ApiResponse<DashboardSummaryDto>.Ok(summary, HttpContext.TraceIdentifier));
     }
 

@@ -1,138 +1,159 @@
-"use client"
+"use client";
 
-import React, { useEffect, useState } from "react"
-import {
-    IconCash,
-    IconBuildingBank,
-    IconReceipt,
-    IconArrowsDownUp,
-    IconBusinessplan,
-    IconClock
-} from "@tabler/icons-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { accountService, AccountSummary } from "@/lib/services/accounts"
-import { formatCurrency } from "@/lib/utils"
-import Link from "next/link"
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { AccountsListShell } from "@/components/accounts/accounts-list-shell";
+import { useAccountsCompany } from "@/components/accounts/accounts-company-context";
+import { defaultMonthRange } from "@/components/accounts/date-range-filter";
+import { accountsService } from "@/lib/services/accounts";
+import { formatCurrency } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
-export default function AccountsDashboard() {
-    const [summary, setSummary] = useState<AccountSummary | null>(null)
-    const [loading, setLoading] = useState(true)
+const PENDING = new Set(["Pending", "Submitted"]);
 
-    useEffect(() => {
-        accountService.getSummary()
-            .then(res => setSummary(res.data))
-            .catch(err => console.error("Failed to load summary", err))
-            .finally(() => setLoading(false))
-    }, [])
+function countPending<T extends { status: string }>(items: T[]): number {
+  return items.filter((i) => PENDING.has(i.status)).length;
+}
 
-    const stats = [
-        {
-            title: "Cash Balance",
-            value: summary?.totalCashBalance || 0,
-            icon: IconCash,
-            color: "text-emerald-600",
-            border: "border-l-emerald-500"
-        },
-        {
-            title: "Bank Balance",
-            value: summary?.totalBankBalance || 0,
-            icon: IconBuildingBank,
-            color: "text-blue-600",
-            border: "border-l-blue-500"
-        },
-        {
-            title: "Hand Cash",
-            value: summary?.totalHandCash || 0,
-            icon: IconBusinessplan,
-            color: "text-amber-600",
-            border: "border-l-amber-500"
-        },
-        {
-            title: "Today's Receive",
-            value: summary?.todaysReceive || 0,
-            icon: IconArrowsDownUp,
-            color: "text-indigo-600",
-            border: "border-l-indigo-500"
-        },
-        {
-            title: "Today's Payment",
-            value: summary?.todaysPayment || 0,
-            icon: IconReceipt,
-            color: "text-rose-600",
-            border: "border-l-rose-500"
-        },
-        {
-            title: "Active Advances",
-            value: summary?.activeAdvances || 0,
-            icon: IconClock,
-            color: "text-slate-600",
-            border: "border-l-slate-500"
-        }
-    ]
+const QUICK_LINKS = [
+  { href: "/accounts/vouchers/new", label: "New voucher" },
+  { href: "/accounts/receipts/cash/new", label: "Cash receipt" },
+  { href: "/accounts/expenses/daily/new", label: "Daily expense" },
+  { href: "/accounts/requests/money/new", label: "Money request" },
+  { href: "/accounts/reports/ledger", label: "Ledger report" },
+  { href: "/accounts/setup/chart-of-accounts", label: "Chart of accounts" },
+];
 
-    const quickLinks = [
-        { name: "Receive Entry", url: "/accounts/transactions/receive" },
-        { name: "Payment Entry", url: "/accounts/transactions/payment" },
-        { name: "Cash Book", url: "/accounts/cash-bank/cash-book" },
-        { name: "Bank Book", url: "/accounts/cash-bank/bank-book" },
-    ]
+export default function AccountsDashboardPage() {
+  const { companyId } = useAccountsCompany();
+  const [loading, setLoading] = useState(false);
+  const [cashBalance, setCashBalance] = useState(0);
+  const [bankBalance, setBankBalance] = useState(0);
+  const [pendingVouchers, setPendingVouchers] = useState(0);
+  const [pendingCashReceipts, setPendingCashReceipts] = useState(0);
+  const [pendingExpenses, setPendingExpenses] = useState(0);
+  const [pendingRequests, setPendingRequests] = useState(0);
 
-    return (
-        <div className="flex-1 space-y-6 p-8 pt-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Financial Overview</h2>
-                    <p className="text-muted-foreground">Real-time fiscal intelligence and asset monitoring</p>
-                </div>
-            </div>
+  const load = useCallback(async () => {
+    if (!companyId) return;
+    setLoading(true);
+    const range = defaultMonthRange();
+    try {
+      const [cashBook, bankBook, vouchers, cashReceipts, expenses, requests] = await Promise.all([
+        accountsService.getCashBook({ companyId, ...range }),
+        accountsService.getBankBook({ companyId, ...range }),
+        accountsService.getVouchers({ companyId }),
+        accountsService.getCashReceipts({ companyId }),
+        accountsService.getDailyExpenses({ companyId }),
+        accountsService.getMoneyRequests({ companyId }),
+      ]);
+      setCashBalance(cashBook.length ? cashBook[cashBook.length - 1].balanceAmount : 0);
+      setBankBalance(bankBook.length ? bankBook[bankBook.length - 1].balanceAmount : 0);
+      setPendingVouchers(countPending(vouchers));
+      setPendingCashReceipts(countPending(cashReceipts));
+      setPendingExpenses(countPending(expenses));
+      setPendingRequests(countPending(requests));
+    } catch {
+      setCashBalance(0);
+      setBankBalance(0);
+      setPendingVouchers(0);
+      setPendingCashReceipts(0);
+      setPendingExpenses(0);
+      setPendingRequests(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {stats.map((stat, i) => (
-                    <Card key={i} className={stat.border}>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{stat.title}</CardTitle>
-                            <stat.icon className={`h-4 w-4 ${stat.color} opacity-70`} />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">
-                                {loading ? "..." : formatCurrency(stat.value)}
-                            </div>
-                            <p className="text-[10px] text-muted-foreground font-medium mt-1">
-                                Current organizational status
-                            </p>
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
+  useEffect(() => {
+    load();
+  }, [load]);
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-                <Card className="col-span-4 shadow-none border bg-muted/10">
-                    <CardHeader>
-                        <CardTitle className="text-lg font-semibold">Recent Activity</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-                            <IconReceipt className="h-12 w-12 mb-3 opacity-10" />
-                            <p className="text-sm font-medium">No recent transactions found in current scope.</p>
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card className="col-span-3">
-                    <CardHeader>
-                        <CardTitle className="text-lg font-semibold">Quick Actions</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid gap-3">
-                        {quickLinks.map((link) => (
-                            <Link key={link.name} href={link.url}>
-                                <div className="w-full flex items-center justify-between px-4 py-3 rounded-lg hover:bg-muted transition-colors text-sm font-semibold border border-transparent hover:border-border cursor-pointer">
-                                    {link.name}
-                                    <span className="text-muted-foreground opacity-50">→</span>
-                                </div>
-                            </Link>
-                        ))}
-                    </CardContent>
-                </Card>
-            </div>
+  return (
+    <AccountsListShell title="Accounts dashboard" description="Cash position and pending workflow items.">
+      {loading ? (
+        <p className="text-muted-foreground text-sm">Loading dashboard…</p>
+      ) : (
+        <div className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Cash book balance</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{formatCurrency(cashBalance)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Bank book balance</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{formatCurrency(bankBalance)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Pending vouchers</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{pendingVouchers}</p>
+                <Button variant="link" className="h-auto p-0 text-xs" asChild>
+                  <Link href="/accounts/vouchers">View all</Link>
+                </Button>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Pending cash receipts</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{pendingCashReceipts}</p>
+                <Button variant="link" className="h-auto p-0 text-xs" asChild>
+                  <Link href="/accounts/receipts/cash">View all</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Pending daily expenses</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{pendingExpenses}</p>
+                <Button variant="link" className="h-auto p-0 text-xs" asChild>
+                  <Link href="/accounts/expenses/daily">View all</Link>
+                </Button>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Pending money requests</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{pendingRequests}</p>
+                <Button variant="link" className="h-auto p-0 text-xs" asChild>
+                  <Link href="/accounts/requests/money">View all</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Quick actions</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              {QUICK_LINKS.map((l) => (
+                <Button key={l.href} variant="outline" size="sm" asChild>
+                  <Link href={l.href}>{l.label}</Link>
+                </Button>
+              ))}
+            </CardContent>
+          </Card>
         </div>
-    )
+      )}
+    </AccountsListShell>
+  );
 }

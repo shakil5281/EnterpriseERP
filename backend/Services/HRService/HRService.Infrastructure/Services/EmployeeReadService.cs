@@ -138,7 +138,11 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
 
     public async Task<EmployeeDetailsDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await db.Employees.AsNoTracking()
+        var employee = await db.Employees.AsNoTracking()
+            .Include(e => e.Addresses)
+            .Include(e => e.BankAccounts)
+            .Include(e => e.EmergencyContacts)
+            .Include(e => e.Documents)
             .Include(e => e.JobInfos.Where(j => j.IsCurrent))
                 .ThenInclude(j => j.Department)
             .Include(e => e.JobInfos.Where(j => j.IsCurrent))
@@ -146,37 +150,78 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
             .Include(e => e.JobInfos.Where(j => j.IsCurrent))
                 .ThenInclude(j => j.Grade)
             .Include(e => e.SalaryInfos.Where(s => s.IsCurrent))
-            .Where(e => e.Id == id && !e.IsDeleted)
-            .Select(e => new EmployeeDetailsDto
-            {
-                Id = e.Id,
-                CompanyId = e.CompanyId,
-                PunchNumber = e.PunchNumber,
-                EmployeeID = e.EmployeeID,
-                FullName = e.FullName,
-                BanglaName = e.BanglaName,
-                Gender = e.Gender,
-                DateOfBirth = e.DateOfBirth,
-                NationalId = e.NationalId,
-                BirthCertificateNo = e.BirthCertificateNo,
-                Phone = e.Phone,
-                Email = e.Email,
-                JoinDate = e.JoinDate,
-                EmploymentType = e.EmploymentType,
-                Status = e.Status,
-                CurrentJobInfo = e.JobInfos.Where(j => j.IsCurrent).Select(j => new EmployeeJobInfoDto(
-                    j.DepartmentId, j.Department != null ? j.Department.Name : null,
-                    j.SectionId, null, // SectionName not available in this simplified query yet
-                    j.DesignationId, j.Designation != null ? j.Designation.Name : null,
-                    j.GradeId, j.Grade != null ? j.Grade.Name : null,
-                    j.SupervisorId, null,
-                    j.WorkLocation, j.EffectiveFrom
-                )).FirstOrDefault(),
-                CurrentSalaryInfo = e.SalaryInfos.Where(s => s.IsCurrent).Select(s => new EmployeeSalaryInfoDto(
-                    s.BasicSalary, s.HouseRent, s.MedicalAllowance, s.ConveyanceAllowance, s.FoodAllowance, s.GrossSalary, s.EffectiveFrom
-                )).FirstOrDefault()
-            })
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(e => e.Id == id && !e.IsDeleted, cancellationToken);
+
+        if (employee == null)
+            return null;
+
+        var currentJob = employee.JobInfos.FirstOrDefault(j => j.IsCurrent);
+        var sectionNames = await SectionNameResolver.ResolveAsync(
+            db,
+            currentJob?.SectionId != null ? [currentJob.SectionId] : [],
+            cancellationToken);
+        var sectionName = currentJob?.SectionId != null
+            ? sectionNames.GetValueOrDefault(currentJob.SectionId.Value)
+            : null;
+
+        var currentSalary = employee.SalaryInfos.FirstOrDefault(s => s.IsCurrent);
+
+        return new EmployeeDetailsDto
+        {
+            Id = employee.Id,
+            CompanyId = employee.CompanyId,
+            PunchNumber = employee.PunchNumber,
+            EmployeeID = employee.EmployeeID,
+            FullName = employee.FullName,
+            BanglaName = employee.BanglaName,
+            Gender = employee.Gender,
+            DateOfBirth = employee.DateOfBirth,
+            NationalId = employee.NationalId,
+            BirthCertificateNo = employee.BirthCertificateNo,
+            Phone = employee.Phone,
+            Email = employee.Email,
+            JoinDate = employee.JoinDate,
+            EmploymentType = employee.EmploymentType,
+            Status = employee.Status,
+            CurrentJobInfo = currentJob == null ? null : new EmployeeJobInfoDto(
+                currentJob.DepartmentId,
+                currentJob.Department?.Name,
+                currentJob.SectionId,
+                sectionName,
+                currentJob.DesignationId,
+                currentJob.Designation?.Name,
+                currentJob.GradeId,
+                currentJob.Grade?.Name,
+                currentJob.SupervisorId,
+                null,
+                currentJob.WorkLocation,
+                currentJob.EffectiveFrom),
+            CurrentSalaryInfo = currentSalary == null ? null : new EmployeeSalaryInfoDto(
+                currentSalary.BasicSalary,
+                currentSalary.HouseRent,
+                currentSalary.MedicalAllowance,
+                currentSalary.ConveyanceAllowance,
+                currentSalary.FoodAllowance,
+                currentSalary.GrossSalary,
+                currentSalary.EffectiveFrom),
+            Addresses = employee.Addresses
+                .Select(a => new EmployeeAddressItemDto(
+                    a.Id, a.AddressType, a.Country, a.Division, a.District,
+                    a.Upazila, a.PostOffice, a.PostalCode, a.AddressLine))
+                .ToList(),
+            BankAccounts = employee.BankAccounts
+                .Select(b => new EmployeeBankAccountItemDto(
+                    b.Id, b.BankName, b.BranchName, b.AccountNo, b.RoutingNo,
+                    b.MobileBankingType, b.MobileBankingNo, b.IsPrimary))
+                .ToList(),
+            EmergencyContacts = employee.EmergencyContacts
+                .Select(c => new EmergencyContactItemDto(
+                    c.Id, c.ContactName, c.Relation, c.Phone, c.Address))
+                .ToList(),
+            Documents = employee.Documents
+                .Select(d => new EmployeeDocumentItemDto(d.Id, d.DocumentType, d.FileUrl, d.UploadedAt))
+                .ToList(),
+        };
     }
 
     public async Task<PagedResult<ManpowerListItemDto>> ManpowerListAsync(ManpowerListQuery query, CancellationToken cancellationToken = default)
@@ -184,25 +229,45 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
         var q = ApplyManpowerFilters(db.Employees.AsNoTracking().Where(e => !e.IsDeleted), query);
 
         var total = await q.CountAsync(cancellationToken);
-        var items = await q
+        var rows = await q
             .OrderBy(e => e.EmployeeID)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
-            .Select(e => new ManpowerListItemDto
+            .Select(e => new
             {
-                Id = e.Id,
-                PunchNumber = e.PunchNumber,
-                EmployeeID = e.EmployeeID,
-                FullName = e.FullName,
+                e.Id,
+                e.PunchNumber,
+                e.EmployeeID,
+                e.FullName,
                 DesignationName = e.JobInfos.Where(j => j.IsCurrent).Select(j => j.Designation != null ? j.Designation.Name : null).FirstOrDefault(),
                 DepartmentName = e.JobInfos.Where(j => j.IsCurrent).Select(j => j.Department != null ? j.Department.Name : null).FirstOrDefault(),
-                SectionName = null,
-                JoinDate = e.JoinDate,
-                Status = e.Status,
-                Phone = e.Phone,
+                SectionId = e.JobInfos.Where(j => j.IsCurrent).Select(j => j.SectionId).FirstOrDefault(),
+                e.JoinDate,
+                e.Status,
+                e.Phone,
                 GrossSalary = e.SalaryInfos.Where(s => s.IsCurrent).Select(s => s.GrossSalary).FirstOrDefault()
             })
             .ToListAsync(cancellationToken);
+
+        var sectionNames = await SectionNameResolver.ResolveAsync(
+            db,
+            rows.Select(r => r.SectionId),
+            cancellationToken);
+
+        var items = rows.Select(r => new ManpowerListItemDto
+        {
+            Id = r.Id,
+            PunchNumber = r.PunchNumber,
+            EmployeeID = r.EmployeeID,
+            FullName = r.FullName,
+            DesignationName = r.DesignationName,
+            DepartmentName = r.DepartmentName,
+            SectionName = r.SectionId.HasValue ? sectionNames.GetValueOrDefault(r.SectionId.Value) : null,
+            JoinDate = r.JoinDate,
+            Status = r.Status,
+            Phone = r.Phone,
+            GrossSalary = r.GrossSalary
+        }).ToList();
 
         return new PagedResult<ManpowerListItemDto>
         {
@@ -273,5 +338,115 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
             GenderSummary = genderSummary,
             StatusSummary = statusSummary,
         };
+    }
+
+    public async Task<IReadOnlyList<EmployeeStatusHistoryDto>> GetStatusHistoryAsync(
+        Guid employeeId,
+        CancellationToken cancellationToken = default) =>
+        await db.EmployeeStatusHistories.AsNoTracking()
+            .Where(h => h.EmployeeId == employeeId && !h.IsDeleted)
+            .OrderByDescending(h => h.EffectiveFrom)
+            .Select(h => new EmployeeStatusHistoryDto(
+                h.Id, h.Status, h.EffectiveFrom, h.Remarks, h.CreatedAt))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<EmployeeTransferDto>> GetEmployeeTransfersAsync(
+        Guid employeeId,
+        CancellationToken cancellationToken = default)
+    {
+        var rows = await db.EmployeeTransfers.AsNoTracking()
+            .Where(t => t.EmployeeId == employeeId && !t.IsDeleted)
+            .OrderByDescending(t => t.EffectiveDate)
+            .ToListAsync(cancellationToken);
+
+        return await MapTransfersAsync(rows, cancellationToken);
+    }
+
+    public async Task<PagedResult<EmployeeTransferDto>> ListTransfersAsync(
+        EmployeeTransferListQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        var q = db.EmployeeTransfers.AsNoTracking()
+            .Where(t => !t.IsDeleted)
+            .Join(
+                db.Employees.AsNoTracking().Where(e => !e.IsDeleted),
+                t => t.EmployeeId,
+                e => e.Id,
+                (t, e) => new { Transfer = t, Employee = e });
+
+        if (query.CompanyId.HasValue)
+            q = q.Where(x => x.Employee.CompanyId == query.CompanyId);
+
+        if (query.EmployeeId.HasValue)
+            q = q.Where(x => x.Transfer.EmployeeId == query.EmployeeId);
+
+        if (query.FromDate.HasValue)
+            q = q.Where(x => x.Transfer.EffectiveDate >= query.FromDate.Value.Date);
+
+        if (query.ToDate.HasValue)
+        {
+            var end = query.ToDate.Value.Date.AddDays(1);
+            q = q.Where(x => x.Transfer.EffectiveDate < end);
+        }
+
+        var total = await q.CountAsync(cancellationToken);
+        var rows = await q
+            .OrderByDescending(x => x.Transfer.EffectiveDate)
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .Select(x => x.Transfer)
+            .ToListAsync(cancellationToken);
+
+        var items = await MapTransfersAsync(rows, cancellationToken);
+
+        return new PagedResult<EmployeeTransferDto>
+        {
+            Items = items,
+            TotalCount = total,
+            Page = query.Page,
+            PageSize = query.PageSize
+        };
+    }
+
+    private async Task<IReadOnlyList<EmployeeTransferDto>> MapTransfersAsync(
+        List<EmployeeTransfer> rows,
+        CancellationToken cancellationToken)
+    {
+        if (rows.Count == 0)
+            return [];
+
+        var employeeIds = rows.Select(r => r.EmployeeId).Distinct().ToList();
+        var employees = await db.Employees.AsNoTracking()
+            .Where(e => employeeIds.Contains(e.Id))
+            .Select(e => new { e.Id, e.EmployeeID, e.FullName })
+            .ToDictionaryAsync(e => e.Id, cancellationToken);
+
+        var deptIds = rows
+            .SelectMany(r => new[] { r.FromDepartmentId, r.ToDepartmentId })
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+
+        var deptNames = await db.Departments.AsNoTracking()
+            .Where(d => deptIds.Contains(d.Id))
+            .ToDictionaryAsync(d => d.Id, d => d.Name, cancellationToken);
+
+        return rows.Select(t =>
+        {
+            employees.TryGetValue(t.EmployeeId, out var emp);
+            return new EmployeeTransferDto(
+                t.Id,
+                t.EmployeeId,
+                emp?.EmployeeID ?? string.Empty,
+                emp?.FullName ?? string.Empty,
+                t.FromDepartmentId,
+                t.FromDepartmentId.HasValue ? deptNames.GetValueOrDefault(t.FromDepartmentId.Value) : null,
+                t.ToDepartmentId,
+                t.ToDepartmentId.HasValue ? deptNames.GetValueOrDefault(t.ToDepartmentId.Value) : null,
+                t.EffectiveDate,
+                t.Reason,
+                t.CreatedAt);
+        }).ToList();
     }
 }

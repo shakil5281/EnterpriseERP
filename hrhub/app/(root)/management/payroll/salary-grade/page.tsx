@@ -19,6 +19,11 @@ import {
 } from "@tabler/icons-react"
 import { type ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
+import { payrollService } from "@/lib/services/payroll"
+import type { SalaryStructureDto } from "@/lib/services/payroll-types"
+import { companyService, type Company } from "@/lib/services/company"
+import { companyGuidFromSelection } from "@/lib/payroll-utils"
+import { NativeSelect } from "@/components/ui/native-select"
 
 interface SalaryGrade {
     id: string
@@ -32,43 +37,46 @@ interface SalaryGrade {
     description: string
 }
 
-const mockGrades: SalaryGrade[] = [
-    {
-        id: "1",
-        gradeName: "Grade 01",
-        basicSalary: 45000,
-        houseRent: 22500,
-        medicalAllowance: 5000,
-        transportAllowance: 3000,
-        foodAllowance: 2000,
-        totalSalary: 77500,
-        description: "Senior Management and Technical leads"
-    },
-    {
-        id: "2",
-        gradeName: "Grade 02",
-        basicSalary: 35000,
-        houseRent: 17500,
-        medicalAllowance: 4000,
-        transportAllowance: 2500,
-        foodAllowance: 2000,
-        totalSalary: 61000,
-        description: "Mid-level Management and Engineers"
-    },
-    {
-        id: "3",
-        gradeName: "Grade 03",
-        basicSalary: 25000,
-        houseRent: 12500,
-        medicalAllowance: 3000,
-        transportAllowance: 2000,
-        foodAllowance: 2000,
-        totalSalary: 44500,
-        description: "Junior Staff and Associates"
+function mapStructure(s: SalaryStructureDto): SalaryGrade {
+    const basic = s.components.find((c) => c.componentCode === "BASIC")?.amount ?? 0
+    const house = s.components.find((c) => c.componentCode === "HOUSE")?.amount ?? 0
+    const medical = s.components.find((c) => c.componentCode === "MEDICAL")?.amount ?? 0
+    const transport = s.components.find((c) => c.componentCode === "CONVEYANCE")?.amount ?? 0
+    const food = s.components.find((c) => c.componentCode === "FOOD")?.amount ?? 0
+    const total = s.components.reduce((sum, c) => sum + c.amount, 0)
+    return {
+        id: s.id,
+        gradeName: s.structureName,
+        basicSalary: basic,
+        houseRent: house,
+        medicalAllowance: medical,
+        transportAllowance: transport,
+        foodAllowance: food,
+        totalSalary: total || basic + house + medical + transport + food,
+        description: s.structureCode,
     }
-]
+}
 
 export default function SalaryGradePage() {
+    const [companies, setCompanies] = React.useState<Company[]>([])
+    const [companyId, setCompanyId] = React.useState("")
+    const [grades, setGrades] = React.useState<SalaryGrade[]>([])
+
+    React.useEffect(() => {
+        companyService.getAll().then((c) => {
+            setCompanies(c)
+            if (c[0]) setCompanyId(String(c[0].id))
+        })
+    }, [])
+
+    React.useEffect(() => {
+        const guid = companyGuidFromSelection(companies, companyId)
+        if (!guid) return
+        payrollService
+            .getSalaryStructures(guid)
+            .then((rows) => setGrades(rows.map(mapStructure)))
+            .catch(() => toast.error("Failed to load salary structures"))
+    }, [companyId, companies])
     const columns: ColumnDef<SalaryGrade>[] = [
         {
             id: "sl",
@@ -131,6 +139,17 @@ export default function SalaryGradePage() {
                 </Button>
             </div>
 
+            <div className="px-2 flex gap-4 items-end">
+                <div className="space-y-1">
+                    <Label>Company</Label>
+                    <NativeSelect value={companyId} onChange={(e) => setCompanyId(e.target.value)} className="min-w-[220px]">
+                        {companies.map((c) => (
+                            <option key={c.id} value={c.id}>{c.companyNameEn}</option>
+                        ))}
+                    </NativeSelect>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card className="border-none shadow-sm bg-gradient-to-br from-primary/5 to-transparent">
                     <CardHeader className="pb-2">
@@ -138,7 +157,7 @@ export default function SalaryGradePage() {
                     </CardHeader>
                     <CardContent>
                         <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-bold">08</span>
+                            <span className="text-3xl font-bold">{grades.length}</span>
                             <span className="text-xs text-green-600 font-medium">+1 this month</span>
                         </div>
                     </CardContent>
@@ -182,7 +201,7 @@ export default function SalaryGradePage() {
                 </CardHeader>
                 <CardContent className="p-0">
                     <DataTable
-                        data={mockGrades}
+                        data={grades}
                         columns={columns}
                         showTabs={false}
                         showActions={true}

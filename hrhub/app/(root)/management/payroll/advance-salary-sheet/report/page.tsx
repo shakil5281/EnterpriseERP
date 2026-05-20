@@ -46,7 +46,7 @@ export default function AdvanceSalaryReportPage() {
     const [isLoading, setIsLoading] = React.useState(false)
     const [companies, setCompanies] = React.useState<any[]>([])
     const [records, setRecords] = React.useState<AdvanceSalary[]>([])
-    const [selectedIds, setSelectedIds] = React.useState<Set<number>>(new Set())
+    const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
     const [isDeleting, setIsDeleting] = React.useState(false)
     const [confirmDialog, setConfirmDialog] = React.useState<{
         isOpen: boolean;
@@ -125,7 +125,7 @@ export default function AdvanceSalaryReportPage() {
         }
     }
 
-    const toggleRecord = (id: number) => {
+    const toggleRecord = (id: string) => {
         const newSelected = new Set(selectedIds)
         if (newSelected.has(id)) {
             newSelected.delete(id)

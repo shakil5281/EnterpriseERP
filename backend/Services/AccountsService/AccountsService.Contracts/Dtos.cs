@@ -3,6 +3,7 @@ namespace AccountsService.Contracts;
 public sealed record ChartOfAccountDto(Guid Id, Guid CompanyId, string AccountCode, string AccountName, Guid? ParentAccountId, string AccountType, string NormalBalance, bool IsControlAccount, bool IsCashAccount, bool IsBankAccount, bool IsActive);
 public sealed record FiscalYearDto(Guid Id, Guid CompanyId, string YearName, DateOnly StartDate, DateOnly EndDate, bool IsClosed);
 public sealed record AccountingPeriodDto(Guid Id, Guid CompanyId, Guid FiscalYearId, string PeriodName, DateOnly StartDate, DateOnly EndDate, bool IsClosed);
+public sealed record ExpenseCategoryDto(Guid Id, Guid CompanyId, string CategoryCode, string CategoryName, Guid ExpenseAccountId);
 public sealed record VoucherLineDto(Guid Id, Guid CompanyId, Guid VoucherId, Guid AccountId, Guid? CostCenterId, decimal DebitAmount, decimal CreditAmount, string? Description);
 public sealed record VoucherDto(Guid Id, Guid CompanyId, string VoucherNo, DateOnly VoucherDate, string VoucherType, string? ReferenceNo, string? Narration, decimal TotalDebit, decimal TotalCredit, string Status, IReadOnlyList<VoucherLineDto> Lines);
 public sealed record GeneralLedgerEntryDto(Guid Id, Guid CompanyId, Guid VoucherId, Guid VoucherLineId, Guid AccountId, Guid? CostCenterId, DateOnly TransactionDate, decimal DebitAmount, decimal CreditAmount, decimal BalanceAmount, string? ReferenceNo);

@@ -254,7 +254,7 @@ export default function SalarySheetPage() {
             header: "Actions",
             cell: ({ row }) => (
                 <div className="flex items-center gap-2 whitespace-normal">
-                    <Link href={`/management/payroll/payslip/${row.original.id}`}>
+                    <Link href={`/management/payroll/payslip/${row.original.periodId}/${row.original.employeeGuid}`}>
                         <Button size="icon" variant="ghost" className="h-7 w-7">
                             <IconEye className="size-3.5" />
                         </Button>

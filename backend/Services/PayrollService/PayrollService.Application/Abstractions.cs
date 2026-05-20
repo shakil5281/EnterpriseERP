@@ -71,7 +71,23 @@ public interface INotificationServiceClient
     Task SendPayslipNotificationAsync(Guid companyId, Guid employeeId, Guid payrollPeriodId, CancellationToken cancellationToken = default);
 }
 
-public sealed record EmployeeSnapshot(Guid EmployeeId, Guid CompanyId, DateOnly JoinDate, bool IsActive, string? BankAccountNo = null, string? BankName = null);
+public sealed record EmployeeSnapshot(
+    Guid EmployeeId,
+    Guid CompanyId,
+    DateOnly JoinDate,
+    bool IsActive,
+    string? BankAccountNo = null,
+    string? BankName = null,
+    string? EmployeeCode = null,
+    string? EmployeeName = null,
+    int? DepartmentId = null,
+    string? DepartmentName = null,
+    int? SectionId = null,
+    string? SectionName = null,
+    int? DesignationId = null,
+    string? DesignationName = null,
+    int? LineId = null,
+    string? LineName = null);
 
 public sealed record AttendanceSummary(
     Guid CompanyId,
