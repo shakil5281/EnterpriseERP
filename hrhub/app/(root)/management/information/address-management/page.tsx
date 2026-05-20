@@ -33,6 +33,7 @@ import {
   Thana,
   PostOffice,
 } from "@/lib/services/address";
+import { importExportService } from "@/lib/services/import-export";
 import { toast } from "sonner";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Label } from "@/components/ui/label";
@@ -347,7 +348,7 @@ export default function AddressManagementPage() {
 
   const handleExportTemplate = async () => {
     try {
-      await addressService.exportTemplate();
+      await importExportService.downloadAddressDemo();
       toast.success("Template downloaded");
     } catch (error) {
       toast.error("Failed to download template");

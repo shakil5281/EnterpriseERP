@@ -10,34 +10,19 @@ public sealed class PunchDataReadDbContext(DbContextOptions<PunchDataReadDbConte
 
 {
 
-    public DbSet<PunchRecordEntity> PunchRecords => Set<PunchRecordEntity>();
-
-
+    public DbSet<PunchRecordReadRow> PunchRecordRows => Set<PunchRecordReadRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
-
     {
-
-        modelBuilder.Entity<PunchRecordEntity>(entity =>
-
+        modelBuilder.Entity<PunchRecordReadRow>(entity =>
         {
-
-            entity.ToTable("PunchRecords");
-
-            entity.HasKey(x => x.Id);
-
-            entity.Property(x => x.Id).HasColumnName("Id").HasMaxLength(36);
-
+            entity.HasNoKey();
+            entity.Property(x => x.Id).HasColumnName("Id");
             entity.Property(x => x.CompanyId).HasColumnName("CompanyId");
-
             entity.Property(x => x.PunchNumber).HasColumnName("PunchNumber");
-
-            entity.Property(x => x.DeviceId).HasColumnName("DeviceId").HasMaxLength(64);
-
+            entity.Property(x => x.DeviceId).HasColumnName("DeviceId");
             entity.Property(x => x.PunchTime).HasColumnName("PunchTime");
-
         });
-
     }
 
 }

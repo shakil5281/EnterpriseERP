@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { format } from "date-fns"
+import { formatAttendanceDate, formatPunchTime } from "@/lib/format-attendance-time"
 import {
     IconSearch,
     IconRefresh,
@@ -16,8 +17,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { toast } from "sonner"
 import { ColumnDef } from "@tanstack/react-table"
-import { AdvancedFilter } from "@/components/attendance/advanced-filter"
-import { attendanceService, AttendanceRecord, CommonFilterParams } from "@/lib/services/attendance"
+import { AttendanceCompanyFilter } from "@/components/attendance/attendance-company-filter"
+import { attendanceApi, type AttendanceQuery, type AttendanceRecord } from "@/lib/services/attendance-api"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 
@@ -25,14 +26,12 @@ export default function DailyInputPage() {
     const [data, setData] = React.useState<AttendanceRecord[]>([])
     const [isLoading, setIsLoading] = React.useState(false)
     const [hasSearched, setHasSearched] = React.useState(false)
-    const [filters, setFilters] = React.useState<CommonFilterParams>({
-        date: format(new Date(), "yyyy-MM-dd"),
-    })
+    const [activeQuery, setActiveQuery] = React.useState<AttendanceQuery | null>(null)
 
-    const fetchReport = async (params: CommonFilterParams) => {
+    const fetchReport = async (q: AttendanceQuery) => {
         setIsLoading(true)
         try {
-            const result = await attendanceService.getDailyReport(params)
+            const result = await attendanceApi.getDailyReport(q)
             setData(result)
             setHasSearched(true)
         } catch (error) {
@@ -43,17 +42,17 @@ export default function DailyInputPage() {
         }
     }
 
-    const handleFilterChange = (newFilters: CommonFilterParams) => {
-        setFilters(newFilters)
-        fetchReport(newFilters)
+    const handleFilterChange = ({ query }: { query: AttendanceQuery }) => {
+        setActiveQuery(query)
+        fetchReport(query)
     }
 
     const handleExportExcel = () => {
-        attendanceService.exportDailyReportExcel(filters)
+        if (activeQuery) attendanceApi.exportDailyReportCsv(activeQuery)
     }
 
     const handleExportPdf = () => {
-        attendanceService.exportDailyReportPdf(filters)
+        if (activeQuery) attendanceApi.exportDailyReportCsv(activeQuery, `daily-report-${activeQuery.date ?? activeQuery.fromDate}.csv`)
     }
 
     const columns = React.useMemo<ColumnDef<AttendanceRecord>[]>(() => [
@@ -83,10 +82,12 @@ export default function DailyInputPage() {
             cell: ({ row }) => (
                 <div className="flex flex-col">
                     <span className={cn("font-medium", !row.original.inTime && "text-red-500 font-bold")}>
-                        {row.original.inTime ? format(new Date(row.original.inTime), "hh:mm aa") : "MISSING"}
+                        {row.original.inTime ? formatPunchTime(row.original.inTime, row.original.date) : "MISSING"}
                     </span>
                     {row.original.inTime && (
-                        <span className="text-[10px] text-muted-foreground">{format(new Date(row.original.inTime), "dd MMM")}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                            {formatAttendanceDate(row.original.date).split(" ").slice(0, 2).join(" ")}
+                        </span>
                     )}
                 </div>
             )
@@ -97,10 +98,12 @@ export default function DailyInputPage() {
             cell: ({ row }) => (
                 <div className="flex flex-col">
                     <span className={cn("font-medium", !row.original.outTime && "text-red-500 font-bold")}>
-                        {row.original.outTime ? format(new Date(row.original.outTime), "hh:mm aa") : "--:--"}
+                        {row.original.outTime ? formatPunchTime(row.original.outTime, row.original.date) : "--:--"}
                     </span>
                     {row.original.outTime && (
-                        <span className="text-[10px] text-muted-foreground">{format(new Date(row.original.outTime), "dd MMM")}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                            {formatAttendanceDate(row.original.date).split(" ").slice(0, 2).join(" ")}
+                        </span>
                     )}
                 </div>
             )
@@ -158,7 +161,7 @@ export default function DailyInputPage() {
                         variant="outline"
                         size="sm"
                         className="rounded-xl font-bold shadow-sm"
-                        onClick={() => fetchReport(filters)}
+                        onClick={() => activeQuery && fetchReport(activeQuery)}
                         disabled={isLoading}
                     >
                         <IconRefresh size={18} className={cn("mr-2", isLoading && "animate-spin")} />
@@ -190,9 +193,9 @@ export default function DailyInputPage() {
             {/* Filter Section */}
             <Card className="border-none shadow-xl bg-background/50 backdrop-blur-sm ring-1 ring-black/5">
                 <CardContent className="p-6">
-                    <AdvancedFilter
+                    <AttendanceCompanyFilter
                         onFilterChange={handleFilterChange}
-                        initialFilters={filters}
+                        initialDate={format(new Date(), "yyyy-MM-dd")}
                         isLoading={isLoading}
                         showDate={true}
                         showDateRange={false}
@@ -223,7 +226,7 @@ export default function DailyInputPage() {
                             <div>
                                 <CardTitle className="text-lg font-black tracking-tight">Daily Attendance Records</CardTitle>
                                 <CardDescription className="font-medium">
-                                    Records for {filters.date ? format(new Date(filters.date), "dd MMMM yyyy") : "Selected Date"}
+                                    Records for {activeQuery?.date ? format(new Date(activeQuery.date), "dd MMMM yyyy") : "Selected Date"}
                                 </CardDescription>
                             </div>
                             <Badge variant="secondary" className="font-bold px-3 py-1 rounded-full">

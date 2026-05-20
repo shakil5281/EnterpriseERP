@@ -23,11 +23,12 @@ import { DateRange } from "react-day-picker"
 import { Badge } from "@/components/ui/badge"
 import { absenteeismService, type AbsenteeismRecord, type AbsenteeismSummary } from "@/lib/services/absenteeism"
 import { type CommonFilterParams } from "@/lib/services/attendance"
+import { type AttendanceQuery } from "@/lib/services/attendance-api"
 import { organogramService } from "@/lib/services/organogram"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { AdvancedFilter } from "@/components/attendance/advanced-filter"
+import { AttendanceCompanyFilter } from "@/components/attendance/attendance-company-filter"
 import { Label } from "@/components/ui/label"
 
 export default function AbsentStatusPage() {
@@ -48,6 +49,7 @@ export default function AbsentStatusPage() {
     const [filteredData, setFilteredData] = React.useState<AbsenteeismRecord[]>([])
     const [summary, setSummary] = React.useState<AbsenteeismSummary | null>(null)
     const [hasSearched, setHasSearched] = React.useState(false)
+    const [activeQuery, setActiveQuery] = React.useState<AttendanceQuery | null>(null)
 
     const [departments, setDepartments] = React.useState<any[]>([])
     const [designations, setDesignations] = React.useState<any[]>([])
@@ -128,7 +130,11 @@ export default function AbsentStatusPage() {
     const handleSearch = async () => {
         setIsLoading(true)
         try {
-            const data = await absenteeismService.getAbsenteeismRecords(fullFilters)
+            if (!activeQuery) {
+                toast.error("Select company in filters first")
+                return
+            }
+            const data = await absenteeismService.getAbsenteeismRecords(activeQuery)
             setFilteredData(data.records)
             setSummary(data.summary)
             setHasSearched(true)
@@ -193,13 +199,18 @@ export default function AbsentStatusPage() {
 
                 {/* Filters */}
                 <div className="px-6">
-                    <AdvancedFilter
+                    <AttendanceCompanyFilter
                         showDate={false}
-                        showDateRange={true}
-                        onFilterChange={(newFilters: CommonFilterParams) => {
-                            setFullFilters(newFilters)
+                        showDateRange
+                        onFilterChange={({ query }) => {
+                            setActiveQuery(query)
+                            setFullFilters({
+                                startDate: query.fromDate,
+                                endDate: query.toDate,
+                            })
                         }}
-                        initialFilters={fullFilters}
+                        initialStartDate={fullFilters.startDate}
+                        initialEndDate={fullFilters.endDate}
                     />
                 </div>
 

@@ -105,22 +105,6 @@ export default function EditCompanyPage() {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="branch">Branch Type</Label>
-                                <NativeSelect
-                                    id="branch"
-                                    name="branch"
-                                    className="w-full"
-                                    defaultValue={company.branch}
-                                    required
-                                >
-                                    <option value="1">Primary</option>
-                                    <option value="2">Secondary</option>
-                                </NativeSelect>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-2">
                                 <Label htmlFor="companyNameBn">Company Name (Bangla)</Label>
                                 <Input
                                     id="companyNameBn"

@@ -10,10 +10,13 @@ echo "==> Stopping existing processes..."
 if command -v lsof >/dev/null 2>&1; then
     lsof -ti:5000 | xargs -r kill -9 || true # Platform.Host
     lsof -ti:5050 | xargs -r kill -9 || true # PunchDataService
+    lsof -ti:8060 | xargs -r kill -9 || true # ImportExportService
     lsof -ti:3000 | xargs -r kill -9 || true # Frontend (Next.js)
 else
     pkill -f "Platform.Host" || true
     pkill -f "PunchDataService" || true
+    pkill -f "ImportExportService" || true
+    pkill -f "importexport" || true
     pkill -f "next" || true
 fi
 
@@ -22,11 +25,17 @@ cd "$ROOT_DIR/backend"
 dotnet build EnterpriseERP.slnx
 
 echo "==> Starting Backend Services in background..."
-# Start Go Service
+# Start Go services
 punch_dir="$ROOT_DIR/backend/Services/PunchDataService"
 if [ -f "$punch_dir/go.mod" ]; then
     echo "Starting PunchDataService (Go) on port 5050..."
     (cd "$punch_dir" && go run ./cmd/server &)
+fi
+
+import_dir="$ROOT_DIR/backend/Services/ImportExportService"
+if [ -f "$import_dir/go.mod" ]; then
+    echo "Starting ImportExportService (Go) on port 8060..."
+    (cd "$import_dir" && go run ./cmd/api &)
 fi
 
 # Start C# Platform Host

@@ -45,14 +45,14 @@ public sealed class UserAdminService(AuthDbContext db, UserManager<AppUser> user
 			.ToDictionary(g => g.Key, g => g.Select(x => x.RoleName).OrderBy(x => x).ToList());
 		var companyRows = await (from c in db.UserCompanyAccesses.AsNoTracking()
 			where userIds.Contains(c.UserId) && c.IsActive && !c.IsDeleted
-			orderby c.IsDefaultCompany descending, c.CompanyId
+			orderby c.IsDefaultCompany descending, c.CompanyGuid
 			select new
 			{
 				c.UserId,
 				Dto = new UserCompanyAccessDto
 				{
 					Id = c.Id,
-					CompanyId = c.CompanyId,
+					CompanyId = c.CompanyGuid,
 					IsDefaultCompany = c.IsDefaultCompany
 				}
 			}).ToListAsync(cancellationToken);

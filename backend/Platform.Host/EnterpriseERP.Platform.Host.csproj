@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BuildingBlocks\Erp.BuildingBlocks.Hosting\Erp.BuildingBlocks.Hosting.csproj" />
+    <ProjectReference Include="..\BuildingBlocks\CommonSecurity\Erp.BuildingBlocks.CommonSecurity.csproj" />
   </ItemGroup>
 
   <ItemGroup>

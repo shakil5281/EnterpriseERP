@@ -20,7 +20,8 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { DateRange } from "react-day-picker"
 import { format } from "date-fns"
-import { attendanceService } from "@/lib/services/attendance"
+import { attendanceApi } from "@/lib/services/attendance-api"
+import { companyService, type Company } from "@/lib/services/company"
 import { employeeService, EmployeeMini } from "@/lib/services/employee"
 import { organogramService, Department, Section, Designation, Line, Shift, Group } from "@/lib/services/organogram"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
@@ -61,6 +62,15 @@ export default function DailyProcessSinglePage() {
     const [loading, setLoading] = React.useState(false)
     const [processing, setProcessing] = React.useState(false)
     const [result, setResult] = React.useState<string | null>(null)
+    const [companies, setCompanies] = React.useState<Company[]>([])
+    const [companyId, setCompanyId] = React.useState("")
+
+    React.useEffect(() => {
+        companyService.getAll().then((rows) => {
+            setCompanies(rows)
+            if (rows.length === 1) setCompanyId(rows[0].entityId)
+        })
+    }, [])
 
     // Load initial dropdown data
     React.useEffect(() => {
@@ -127,32 +137,30 @@ export default function DailyProcessSinglePage() {
 
     const handleProcess = async (type: 'selected' | 'all') => {
         if (!range?.from) return toast.error("Please select a date range")
+        if (!companyId) return toast.error("Please select a company")
 
-        let payload: any = {
-            startDate: format(range.from, "yyyy-MM-dd"),
-            endDate: range.to ? format(range.to, "yyyy-MM-dd") : format(range.from, "yyyy-MM-dd"),
-        }
-
-        if (type === 'selected') {
-            if (selectedEmployees.length === 0) return toast.error("No employees selected")
-            payload.employeeCodes = selectedEmployees.map(e => e.employeeId)
-        } else {
-            if (employees.length === 0) return toast.error("No filtered employees to process")
-            // Pass all filters to the backend process
-            payload.departmentId = filters.departmentId ? parseInt(filters.departmentId) : undefined
-            payload.sectionId = filters.sectionId ? parseInt(filters.sectionId) : undefined
-            payload.designationId = filters.designationId ? parseInt(filters.designationId) : undefined
-            payload.lineId = filters.lineId ? parseInt(filters.lineId) : undefined
-            payload.shiftId = filters.shiftId ? parseInt(filters.shiftId) : undefined
-            payload.groupId = filters.groupId ? parseInt(filters.groupId) : undefined
+        const employeeIDs =
+            type === "selected"
+                ? selectedEmployees.map((e) => e.employeeId)
+                : undefined
+        if (type === "selected" && (!employeeIDs || employeeIDs.length === 0)) {
+            return toast.error("No employees selected")
         }
 
         setProcessing(true)
         setResult(null)
 
         try {
-            const response = await attendanceService.processDailyData(payload)
-            setResult(response.message)
+            const response = await attendanceApi.processRange({
+                companyId,
+                startDate: format(range.from, "yyyy-MM-dd"),
+                endDate: range.to ? format(range.to, "yyyy-MM-dd") : format(range.from, "yyyy-MM-dd"),
+                employeeIDs,
+            })
+            setResult(
+                `Processed ${response.recordsProcessed} records across ${response.daysProcessed} day(s).` +
+                    (response.errors.length ? ` ${response.errors.length} day(s) had errors.` : ""),
+            )
             toast.success("Process completed successfully")
         } catch (error: any) {
             console.error(error)
@@ -222,6 +230,17 @@ export default function DailyProcessSinglePage() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
+                            
+                            
+                            <div className="space-y-1.5">
+                                <Label className="text-[11px] font-bold uppercase text-muted-foreground">Company</Label>
+                                <NativeSelect value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
+                                    <option value="">Select company</option>
+                                    {companies.map((c) => (
+                                        <option key={c.entityId} value={c.entityId}>{c.companyNameEn}</option>
+                                    ))}
+                                </NativeSelect>
+                            </div>
                             <div className="space-y-1.5">
                                 <Label className="text-[11px] font-bold uppercase text-muted-foreground">Department</Label>
                                 <NativeSelect

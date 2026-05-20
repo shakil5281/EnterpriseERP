@@ -27,10 +27,12 @@ import { organogramService } from "@/lib/services/organogram"
 import { employeeService } from "@/lib/services/employee"
 import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
-import { AdvancedFilter } from "@/components/attendance/advanced-filter"
+import { AttendanceCompanyFilter } from "@/components/attendance/attendance-company-filter"
 import { type CommonFilterParams } from "@/lib/services/attendance"
+import { type AttendanceQuery } from "@/lib/services/attendance-api"
 
 export default function JobCardPage() {
+    const [activeQuery, setActiveQuery] = React.useState<AttendanceQuery | null>(null)
     const [empId, setEmpId] = React.useState("")
     const [fullFilters, setFullFilters] = React.useState<CommonFilterParams>(() => {
         const now = new Date();
@@ -156,10 +158,15 @@ export default function JobCardPage() {
     const fetchJobCard = async (employeeId: number, filters: CommonFilterParams) => {
         try {
             setIsLoading(true)
+            if (!activeQuery) {
+                toast.error("Select a company in filters first")
+                return
+            }
             const data = await jobCardService.getJobCard({
+                companyEntityId: activeQuery.companyId,
                 employeeCard: employeeId,
                 startDate: filters.startDate!,
-                endDate: filters.endDate!
+                endDate: filters.endDate!,
             })
 
             setJobCardData(data)
@@ -176,9 +183,12 @@ export default function JobCardPage() {
         if (!fullFilters.startDate || !fullFilters.endDate) return;
         try {
             // Use current state for single or group export
+            if (!activeQuery) return
             const exportParams = {
-                ...fullFilters,
-                employeeCard: employees[currentIndex]?.id
+                companyEntityId: activeQuery.companyId,
+                startDate: fullFilters.startDate!,
+                endDate: fullFilters.endDate!,
+                employeeCard: employees[currentIndex]?.id,
             };
             await jobCardService.exportJobCardExcel(exportParams);
             toast.success("Excel exported successfully");
@@ -191,9 +201,12 @@ export default function JobCardPage() {
         if (!fullFilters.startDate || !fullFilters.endDate) return;
         try {
             // Use current state for single or group export
+            if (!activeQuery) return
             const exportParams = {
-                ...fullFilters,
-                employeeCard: employees[currentIndex]?.id
+                companyEntityId: activeQuery.companyId,
+                startDate: fullFilters.startDate!,
+                endDate: fullFilters.endDate!,
+                employeeCard: employees[currentIndex]?.id,
             };
             await jobCardService.exportJobCardPdf(exportParams);
             toast.success("PDF exported successfully");
@@ -206,7 +219,12 @@ export default function JobCardPage() {
         if (!fullFilters.startDate || !fullFilters.endDate) return;
         try {
             // Remove specific employeeCard and searchTerm to trigger bulk export for the entire group
-            const { employeeCard, searchTerm, ...bulkParams } = fullFilters;
+            if (!activeQuery) return
+            const bulkParams = {
+                companyEntityId: activeQuery.companyId,
+                startDate: fullFilters.startDate!,
+                endDate: fullFilters.endDate!,
+            };
             if (format === "excel") {
                 await jobCardService.exportJobCardExcel(bulkParams);
             } else {
@@ -272,14 +290,24 @@ export default function JobCardPage() {
             <main className="px-6 space-y-6">
                 {/* Generation Filter */}
                 <div className="px-0">
-                    <AdvancedFilter
+                    <AttendanceCompanyFilter
                         showDate={false}
-                        showDateRange={true}
-                        onFilterChange={(newFilters) => {
-                            setFullFilters(newFilters)
-                            handleGenerate(newFilters)
+                        showDateRange
+                        initialStartDate={fullFilters.startDate}
+                        initialEndDate={fullFilters.endDate}
+                        onFilterChange={({ query, legacy }) => {
+                            setActiveQuery(query)
+                            const next = {
+                                ...fullFilters,
+                                startDate: query.fromDate,
+                                endDate: query.toDate,
+                                departmentId: legacy?.departmentId,
+                                sectionId: legacy?.sectionId,
+                                designationId: legacy?.designationId,
+                            }
+                            setFullFilters(next)
+                            handleGenerate(next)
                         }}
-                        initialFilters={fullFilters}
                         isLoading={isLoading}
                     />
                 </div>

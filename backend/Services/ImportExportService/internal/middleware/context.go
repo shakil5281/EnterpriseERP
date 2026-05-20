@@ -19,3 +19,9 @@ func CompanyID(c *gin.Context) (uuid.UUID, bool) {
 	id, ok := v.(uuid.UUID)
 	return id, ok
 }
+
+func BearerToken(c *gin.Context) string {
+	v, _ := c.Get(CtxBearerToken)
+	s, _ := v.(string)
+	return s
+}

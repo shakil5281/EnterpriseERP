@@ -231,6 +231,7 @@ public class AttendanceCommandHandlers(
             attendance.IsManualOut = true;
         }
         attendance.Remarks = request.Remarks;
+        attendance.IsManualAdjusted = true;
         attendance.UpdatedAt = DateTimeOffset.UtcNow;
         attendance.UpdatedBy = request.AdminId;
 

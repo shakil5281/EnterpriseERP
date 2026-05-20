@@ -1,3 +1,4 @@
+import { attendanceApi, type AttendanceQuery } from "./attendance-api";
 import api from '../api';
 
 export interface JobCardRecord {
@@ -47,15 +48,14 @@ export interface JobCardResponse {
 }
 
 export interface JobCardParams {
+    companyEntityId: string;
     employeeCard?: number;
+    employeeId?: string;
     startDate?: string;
     endDate?: string;
-    companyId?: number;
-    departmentId?: number;
-    sectionId?: number;
-    lineId?: number;
-    groupId?: number;
-    shiftId?: number;
+    departmentId?: string;
+    sectionId?: string;
+    designationId?: string;
     searchTerm?: string;
 }
 
@@ -79,8 +79,19 @@ const downloadBlobFile = (data: BlobPart, fileName: string, mimeType: string) =>
 
 export const jobCardService = {
     getJobCard: async (params: JobCardParams) => {
-        const response = await api.get<JobCardResponse>('/attendance/job-card', { params });
-        return response.data;
+        const q: AttendanceQuery = {
+            companyId: params.companyEntityId,
+            fromDate: params.startDate ?? new Date().toISOString().slice(0, 10),
+            toDate: params.endDate ?? params.startDate ?? new Date().toISOString().slice(0, 10),
+            departmentId: params.departmentId,
+            sectionId: params.sectionId,
+            designationId: params.designationId,
+            searchTerm: params.searchTerm,
+        };
+        return attendanceApi.getJobCard(q, {
+            employeeCard: params.employeeCard,
+            employeeId: params.employeeId,
+        });
     },
 
     exportJobCardExcel: async (params: JobCardParams) => {

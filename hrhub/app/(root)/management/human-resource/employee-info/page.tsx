@@ -229,13 +229,8 @@ export default function EmployeeInfoPage() {
             if (deptFilter !== "All") params.departmentId = deptFilter
             if (sectionFilter !== "All") params.sectionId = sectionFilter
             if (designationFilter !== "All") params.designationId = designationFilter
-            if (lineFilter !== "All") params.lineId = lineFilter
-            if (groupFilter !== "All") params.groupId = groupFilter
-            if (shiftFilter !== "All") params.shiftId = shiftFilter
-            if (floorFilter !== "All") params.floorId = floorFilter
             if (selectedCompanyId !== "All") params.companyId = selectedCompanyId
             if (genderFilter !== "All") params.gender = genderFilter
-            if (religionFilter !== "All") params.religion = religionFilter
             if (dateRange.from) params.joinDateFrom = dateRange.from.toISOString()
             if (dateRange.to) params.joinDateTo = dateRange.to.toISOString()
             if (empIdSearch.trim()) params.employeeId = empIdSearch.trim()
@@ -304,7 +299,7 @@ export default function EmployeeInfoPage() {
         if (empIdSearch.trim()) params.employeeId = empIdSearch.trim()
 
         toast.promise(employeeService.exportEmployees(params), {
-            loading: 'Generating Excel report...',
+            loading: 'Generating CSV...',
             success: 'Export downloaded successfully',
             error: 'Failed to export employees'
         })
@@ -324,7 +319,7 @@ export default function EmployeeInfoPage() {
                         onClick={handleExport}
                     >
                         <IconDownload className="size-4" />
-                        Export Excel
+                        Export CSV
                     </Button>
                     <Button
                         variant="outline"

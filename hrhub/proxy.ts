@@ -1,22 +1,31 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { canAccessRoute, findMatchingRouteRule } from '@/lib/auth/access-config'
 
-// Define which routes are public (don't require login)
 const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/unauthorized']
 
-// Define route protection rules (RBAC)
-const roleRules = [
-    { path: '/management/administrator', roles: ['SuperAdmin', 'Admin'] },
-    { path: '/management/human-resource', roles: ['SuperAdmin', 'Admin', 'HR', 'Management', 'HR Officer'] },
-    { path: '/management/attendance', roles: ['SuperAdmin', 'Admin', 'HR', 'Management', 'HR Officer'] },
-    { path: '/management/leave', roles: ['SuperAdmin', 'Admin', 'HR', 'Management', 'HR Officer'] },
-    { path: '/management', roles: ['SuperAdmin', 'Admin', 'HR', 'Management', 'HR Officer', 'IT Officer'] },
-    { path: '/production', roles: ['SuperAdmin', 'Admin', 'Production', 'ProductionManager'] },
-    { path: '/accounts', roles: ['SuperAdmin', 'Admin', 'Accounts', 'Accountant', 'Account Officer'] },
-    { path: '/store', roles: ['SuperAdmin', 'Admin', 'Store', 'StoreKeeper'] },
-    { path: '/merchandising', roles: ['SuperAdmin', 'Admin', 'Merchandising', 'Merchandiser'] },
-    { path: '/cutting', roles: ['SuperAdmin', 'Admin', 'Cutting'] },
-]
+function parseJwtPayload(token: string): Record<string, unknown> | null {
+    try {
+        const base64Url = token.split('.')[1]
+        if (!base64Url) return null
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+        return JSON.parse(atob(base64)) as Record<string, unknown>
+    } catch {
+        return null
+    }
+}
+
+function extractRoles(payload: Record<string, unknown>): string[] {
+    const roleKey = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role'
+    const userRoles = payload[roleKey] ?? payload['role'] ?? []
+    return Array.isArray(userRoles) ? userRoles.map(String) : [String(userRoles)]
+}
+
+function extractPermissions(payload: Record<string, unknown>): string[] {
+    const raw = payload['permission']
+    if (!raw) return []
+    return Array.isArray(raw) ? raw.map(String) : [String(raw)]
+}
 
 export function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl
@@ -27,19 +36,13 @@ export function proxy(request: NextRequest) {
     )
 
     if (token && isPublicPath) {
-        try {
-            const base64Url = token.split('.')[1]
-            if (!base64Url) throw new Error("Invalid token")
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-            const jsonPayload = atob(base64)
-            JSON.parse(jsonPayload)
+        const payload = parseJwtPayload(token)
+        if (payload) {
             return NextResponse.redirect(new URL('/', request.url))
-        } catch (e) {
-            // Invalid token, clear it and allow access to public path
-            const response = NextResponse.next()
-            response.cookies.delete('token')
-            return response
         }
+        const response = NextResponse.next()
+        response.cookies.delete('token')
+        return response
     }
 
     if (!token && !isPublicPath) {
@@ -52,36 +55,21 @@ export function proxy(request: NextRequest) {
         }
     }
 
-    if (token && !isPublicPath) {
-        const sortedRules = [...roleRules].sort((a, b) => b.path.length - a.path.length)
-        const matchedRule = sortedRules.find(rule => pathname.startsWith(rule.path))
+    if (token && !isPublicPath && findMatchingRouteRule(pathname)) {
+        const payload = parseJwtPayload(token)
+        if (!payload) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/login'
+            return NextResponse.redirect(url)
+        }
 
-        if (matchedRule) {
-            try {
-                const base64Url = token.split('.')[1]
-                if (!base64Url) throw new Error("Invalid token")
+        const roles = extractRoles(payload)
+        const permissions = extractPermissions(payload)
 
-                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-                const jsonPayload = atob(base64)
-                const payload = JSON.parse(jsonPayload)
-
-                const roleKey = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
-                const userRoles = payload[roleKey] || payload["role"] || []
-                const roles: string[] = Array.isArray(userRoles) ? userRoles : [userRoles]
-
-                const hasRole = roles.some((r: string) => matchedRule.roles.includes(r) || r === 'SuperAdmin' || r === 'Admin')
-
-                if (!hasRole) {
-                    const url = request.nextUrl.clone()
-                    url.pathname = '/unauthorized'
-                    return NextResponse.rewrite(url)
-                }
-            } catch (e) {
-                console.error("Proxy token parse error:", e)
-                const url = request.nextUrl.clone()
-                url.pathname = '/login'
-                return NextResponse.redirect(url)
-            }
+        if (!canAccessRoute(pathname, roles, permissions)) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/unauthorized'
+            return NextResponse.rewrite(url)
         }
     }
 

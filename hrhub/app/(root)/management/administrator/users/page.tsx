@@ -89,7 +89,7 @@ export default function UsersPage() {
 
     // Company Assignment State
     const [allCompanies, setAllCompanies] = React.useState<Company[]>([])
-    const [selectedCompanyIds, setSelectedCompanyIds] = React.useState<number[]>([])
+    const [selectedCompanyIds, setSelectedCompanyIds] = React.useState<string[]>([])
     const [isCompanyDialogOpen, setIsCompanyDialogOpen] = React.useState(false)
     const [isAssigningCompanies, setIsAssigningCompanies] = React.useState(false)
 
@@ -213,13 +213,26 @@ export default function UsersPage() {
             return
         }
 
+        if (createForm.role && createForm.role !== "SuperAdmin" && selectedCompanyIds.length === 0) {
+            toast.error("Assign at least one company for non-SuperAdmin users.")
+            return
+        }
+
         setIsCreating(true)
         try {
-            const result = await authService.createUser(createForm)
+            const result = await authService.createUser({
+                ...createForm,
+                companyIds:
+                    createForm.role && createForm.role !== "SuperAdmin"
+                        ? selectedCompanyIds
+                        : undefined,
+                companies: allCompanies,
+            })
             if (result.success) {
                 toast.success("User Created")
                 setIsCreateDialogOpen(false)
                 setCreateForm({ username: "", email: "", password: "", fullName: "", role: "" })
+                setSelectedCompanyIds([])
                 fetchUsers(true)
             } else {
                 toast.error(result.message)
@@ -234,12 +247,26 @@ export default function UsersPage() {
     const handleAssignCompanies = async () => {
         if (!selectedUser) return
 
+        const requiresCompany = !selectedUser.roles?.includes("SuperAdmin")
+        if (requiresCompany && selectedCompanyIds.length === 0) {
+            toast.error("At least one company must be assigned for this user to sign in.")
+            return
+        }
+
         setIsAssigningCompanies(true)
         try {
-            await authService.setUserCompanies(selectedUser.id, selectedCompanyIds)
-            toast.success("Branch Access Updated")
-            setIsCompanyDialogOpen(false)
-            fetchUsers(true)
+            const result = await authService.setUserCompanies(
+                selectedUser.id,
+                selectedCompanyIds,
+                allCompanies,
+            )
+            if (result.success) {
+                toast.success("Branch access updated. The user must sign in again to apply changes.")
+                setIsCompanyDialogOpen(false)
+                fetchUsers(true)
+            } else {
+                toast.error(result.message)
+            }
         } catch (error: any) {
             console.error(error)
             toast.error("Failed to update branch access")
@@ -250,12 +277,20 @@ export default function UsersPage() {
 
     const openCompanyAssignment = async (user: User) => {
         setSelectedUser(user)
-        setSelectedCompanyIds(user.assignedCompanyIds ?? [])
+        setSelectedCompanyIds(
+            (user.assignedCompanyIds ?? []).filter(
+                (id) => id && id !== "00000000-0000-0000-0000-000000000000",
+            ),
+        )
         setIsCompanyDialogOpen(true)
 
         try {
             const userCompanies = await companyService.getUserCompanies(user.id)
-            setSelectedCompanyIds(userCompanies.map(c => c.id))
+            setSelectedCompanyIds(
+                userCompanies
+                    .map((c) => String(c.companyId))
+                    .filter((id) => id && id !== "00000000-0000-0000-0000-000000000000"),
+            )
         } catch (error) {
             console.error(error)
             toast.error("Failed to fetch assigned branches")
@@ -502,6 +537,33 @@ export default function UsersPage() {
                                 ))}
                             </NativeSelect>
                         </div>
+                        {createForm.role && createForm.role !== "SuperAdmin" && (
+                            <div className="grid gap-2">
+                                <Label>Companies (required)</Label>
+                                <div className="max-h-40 overflow-y-auto space-y-2 border rounded-md p-2">
+                                    {allCompanies.map((company) => (
+                                        <div key={company.entityId} className="flex items-center space-x-2">
+                                            <Checkbox
+                                                id={`create-comp-${company.entityId}`}
+                                                checked={selectedCompanyIds.includes(company.entityId)}
+                                                onCheckedChange={(checked) => {
+                                                    if (checked) {
+                                                        setSelectedCompanyIds([...selectedCompanyIds, company.entityId])
+                                                    } else {
+                                                        setSelectedCompanyIds(
+                                                            selectedCompanyIds.filter((id) => id !== company.entityId),
+                                                        )
+                                                    }
+                                                }}
+                                            />
+                                            <Label htmlFor={`create-comp-${company.entityId}`} className="text-sm font-normal cursor-pointer">
+                                                {company.companyNameEn}
+                                            </Label>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
@@ -618,19 +680,19 @@ export default function UsersPage() {
                     <div className="py-4 space-y-4">
                         <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2">
                             {allCompanies.map(company => (
-                                <div key={company.id} className="flex items-center space-x-3 p-3 rounded-md border bg-muted/30 hover:bg-muted/50 transition-colors">
+                                <div key={company.entityId} className="flex items-center space-x-3 p-3 rounded-md border bg-muted/30 hover:bg-muted/50 transition-colors">
                                     <Checkbox
-                                        id={`comp-${company.id}`}
-                                        checked={selectedCompanyIds.includes(company.id)}
+                                        id={`comp-${company.entityId}`}
+                                        checked={selectedCompanyIds.includes(company.entityId)}
                                         onCheckedChange={(checked) => {
                                             if (checked) {
-                                                setSelectedCompanyIds([...selectedCompanyIds, company.id])
+                                                setSelectedCompanyIds([...selectedCompanyIds, company.entityId])
                                             } else {
-                                                setSelectedCompanyIds(selectedCompanyIds.filter(id => id !== company.id))
+                                                setSelectedCompanyIds(selectedCompanyIds.filter(id => id !== company.entityId))
                                             }
                                         }}
                                     />
-                                    <Label htmlFor={`comp-${company.id}`} className="flex-1 cursor-pointer font-medium">
+                                    <Label htmlFor={`comp-${company.entityId}`} className="flex-1 cursor-pointer font-medium">
                                         {company.companyNameEn}
                                         <span className="block text-[10px] text-muted-foreground font-normal">
                                             {company.industry} • {company.registrationNo}

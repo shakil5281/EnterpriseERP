@@ -1,4 +1,3 @@
-using System;
 using AuthService.Infrastructure.Identity;
 
 namespace AuthService.Infrastructure.Entities;
@@ -11,7 +10,7 @@ public sealed class UserCompanyAccess
 
 	public AppUser User { get; set; } = null!;
 
-	public int CompanyId { get; set; }
+	public Guid CompanyGuid { get; set; }
 
 	public bool IsDefaultCompany { get; set; }
 

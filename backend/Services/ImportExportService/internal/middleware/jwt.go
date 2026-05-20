@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -22,6 +23,7 @@ const (
 	CtxRoles        = "auth.roles"
 	CtxPermissions  = "auth.permissions"
 	CtxCompanyID    = "auth.companyId"
+	CtxBearerToken  = "auth.bearerToken"
 )
 
 func JWTAuth(cfg JwtConfig) gin.HandlerFunc {
@@ -61,24 +63,79 @@ func JWTAuth(cfg JwtConfig) gin.HandlerFunc {
 			return
 		}
 		c.Set(CtxUserID, uid)
+		c.Set(CtxBearerToken, raw)
 		c.Set(CtxRoles, extractRoles(claims))
 		c.Set(CtxPermissions, extractPermissions(claims))
-		if cid := extractCompanyID(claims); cid != nil {
+		if cid := extractCompanyID(claims, c.GetHeader("X-Company-Id")); cid != nil {
 			c.Set(CtxCompanyID, *cid)
 		}
+		c.Set("auth.isSuperAdmin", extractIsSuperAdmin(claims))
+		c.Set("auth.companyIds", extractCompanyIDs(claims))
 		c.Next()
 	}
 }
 
-func extractCompanyID(claims jwt.MapClaims) *uuid.UUID {
-	for _, k := range []string{"companyId", "company_id", "CompanyId"} {
-		if v, ok := claims[k].(string); ok {
-			if id, err := uuid.Parse(v); err == nil {
+func extractCompanyID(claims jwt.MapClaims, headerCompany string) *uuid.UUID {
+	if headerCompany != "" {
+		if id, err := uuid.Parse(strings.TrimSpace(headerCompany)); err == nil {
+			if extractIsSuperAdmin(claims) || companyAllowed(claims, id) {
 				return &id
 			}
 		}
 	}
+
+	for _, k := range []string{"default_company_id", "companyId", "company_id", "CompanyId"} {
+		if v, ok := claims[k].(string); ok {
+			if id, err := uuid.Parse(v); err == nil {
+				if extractIsSuperAdmin(claims) || companyAllowed(claims, id) {
+					return &id
+				}
+			}
+		}
+	}
+
+	ids := extractCompanyIDs(claims)
+	if len(ids) > 0 {
+		return &ids[0]
+	}
 	return nil
+}
+
+func extractIsSuperAdmin(claims jwt.MapClaims) bool {
+	if v, ok := claims["is_super_admin"].(string); ok && strings.EqualFold(v, "true") {
+		return true
+	}
+	roles := extractRoles(claims)
+	for _, r := range roles {
+		if strings.EqualFold(r, "SuperAdmin") {
+			return true
+		}
+	}
+	return false
+}
+
+func extractCompanyIDs(claims jwt.MapClaims) []uuid.UUID {
+	raw, ok := claims["company_ids"].(string)
+	if !ok || raw == "" {
+		return nil
+	}
+	var ids []uuid.UUID
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		return nil
+	}
+	return ids
+}
+
+func companyAllowed(claims jwt.MapClaims, id uuid.UUID) bool {
+	if extractIsSuperAdmin(claims) {
+		return true
+	}
+	for _, allowed := range extractCompanyIDs(claims) {
+		if allowed == id {
+			return true
+		}
+	}
+	return false
 }
 
 func extractUserID(claims jwt.MapClaims) uuid.UUID {

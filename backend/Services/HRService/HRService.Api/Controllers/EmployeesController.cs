@@ -1,4 +1,5 @@
 using Erp.BuildingBlocks.CommonResponses;
+using Erp.BuildingBlocks.CommonSecurity;
 using Erp.BuildingBlocks.Contracts.Pagination;
 using HRService.Application.Employees;
 using Microsoft.AspNetCore.Authorization;
@@ -11,31 +12,38 @@ namespace HRService.Api.Controllers;
 [Authorize]
 public sealed class EmployeesController(
     IEmployeeReadService employees,
-    IEmployeeService employeeService) : ControllerBase
+    IEmployeeService employeeService,
+    ITenantContext tenant) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Policy = "Permission:hr.employees.read")]
     public async Task<ActionResult<ApiResponse<PagedResult<EmployeeListItemDto>>>> List(
         [FromQuery] EmployeeListQuery query,
         CancellationToken cancellationToken)
     {
+        query.CompanyId = TenantCompanyResolver.ResolveCompanyId(tenant, query.CompanyId);
         var data = await employees.ListAsync(query, cancellationToken);
         return Ok(ApiResponse<PagedResult<EmployeeListItemDto>>.Ok(data, HttpContext.TraceIdentifier));
     }
 
     [HttpGet("manpower")]
+    [Authorize(Policy = "Permission:hr.employees.read")]
     public async Task<ActionResult<ApiResponse<PagedResult<ManpowerListItemDto>>>> ManpowerList(
         [FromQuery] ManpowerListQuery query,
         CancellationToken cancellationToken)
     {
+        query.CompanyId = TenantCompanyResolver.ResolveCompanyId(tenant, query.CompanyId);
         var data = await employees.ManpowerListAsync(query, cancellationToken);
         return Ok(ApiResponse<PagedResult<ManpowerListItemDto>>.Ok(data, HttpContext.TraceIdentifier));
     }
 
     [HttpGet("manpower/summary")]
+    [Authorize(Policy = "Permission:hr.employees.read")]
     public async Task<ActionResult<ApiResponse<ManpowerSummaryDto>>> ManpowerSummary(
         [FromQuery] ManpowerSummaryQuery query,
         CancellationToken cancellationToken)
     {
+        query.CompanyId = TenantCompanyResolver.ResolveCompanyId(tenant, query.CompanyId);
         var data = await employees.ManpowerSummaryAsync(query, cancellationToken);
         return Ok(ApiResponse<ManpowerSummaryDto>.Ok(data, HttpContext.TraceIdentifier));
     }
@@ -50,6 +58,7 @@ public sealed class EmployeesController(
     }
 
     [HttpGet("{id}")]
+    [Authorize(Policy = "Permission:hr.employees.read")]
     public async Task<ActionResult<ApiResponse<EmployeeDetailsDto>>> Get(
         Guid id,
         CancellationToken cancellationToken)
@@ -61,6 +70,12 @@ public sealed class EmployeesController(
                 HttpContext.TraceIdentifier,
                 [new ApiError("NotFound", "Employee not found")]));
         }
+
+        if (!tenant.HasAccessToCompany(data.CompanyId))
+        {
+            return Forbid();
+        }
+
         return Ok(ApiResponse<EmployeeDetailsDto>.Ok(data, HttpContext.TraceIdentifier));
     }
 

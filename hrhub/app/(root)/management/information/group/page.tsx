@@ -35,10 +35,10 @@ export default function GroupPage() {
     const fetchGroups = async () => {
         try {
             setLoading(true)
-            let companyIdParam: number | undefined = undefined;
+            let companyIdParam: string | undefined = undefined;
 
             if (selectedCompany !== "all") {
-                companyIdParam = Number(selectedCompany);
+                companyIdParam = selectedCompany;
             } else {
                 if (user && !hasRole("SuperAdmin") && !hasRole("Admin")) {
                     const assignedIds = user.assignedCompanyIds || [];
@@ -71,12 +71,12 @@ export default function GroupPage() {
                 setCompanies(comps)
             } else {
                 const assignedIds = user?.assignedCompanyIds || []
-                const userCompanies = comps.filter(c => assignedIds.includes(c.id))
+                const userCompanies = comps.filter(c => assignedIds.includes(c.entityId))
                 setCompanies(userCompanies)
 
                 if (userCompanies.length > 0) {
-                    if (selectedCompany === "all" || !userCompanies.find(c => c.id.toString() === selectedCompany)) {
-                        setSelectedCompany(userCompanies[0].id.toString())
+                    if (selectedCompany === "all" || !userCompanies.find(c => c.entityId === selectedCompany)) {
+                        setSelectedCompany(userCompanies[0].entityId)
                     }
                 }
             }
@@ -122,11 +122,12 @@ export default function GroupPage() {
 
     const handleAddClick = () => {
         setIsEditing(false)
+        const selected = selectedCompany !== "all" ? companies.find(c => c.entityId === selectedCompany) : undefined
         setCurrentGroup({
             nameEn: "",
             nameBn: "",
-            companyId: selectedCompany !== "all" ? Number(selectedCompany) : undefined,
-            companyName: selectedCompany !== "all" ? companies.find(c => c.id === Number(selectedCompany))?.companyNameEn : "",
+            companyId: selected?.id,
+            companyName: selected?.companyNameEn ?? "",
         })
         setIsSheetOpen(true)
     }
@@ -201,7 +202,7 @@ export default function GroupPage() {
                     >
                         {(hasRole("SuperAdmin") || hasRole("Admin")) && <option value="all">All Companies</option>}
                         {companies.map(c => (
-                            <option key={c.id} value={c.id.toString()}>{c.companyNameEn}</option>
+                            <option key={c.entityId} value={c.entityId}>{c.companyNameEn}</option>
                         ))}
                     </NativeSelect>
                 </div>

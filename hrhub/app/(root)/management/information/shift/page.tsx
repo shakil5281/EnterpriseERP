@@ -81,12 +81,12 @@ export default function ShiftPage() {
                 setCompanies(comps)
             } else {
                 const assignedIds = user?.assignedCompanyIds || []
-                const userCompanies = comps.filter(c => assignedIds.includes(c.id))
+                const userCompanies = comps.filter(c => assignedIds.includes(c.entityId))
                 setCompanies(userCompanies)
 
                 if (userCompanies.length > 0) {
-                    if (selectedCompany === "all" || !userCompanies.find(c => c.id.toString() === selectedCompany)) {
-                        setSelectedCompany(userCompanies[0].id.toString())
+                    if (selectedCompany === "all" || !userCompanies.find(c => c.entityId === selectedCompany)) {
+                        setSelectedCompany(userCompanies[0].entityId)
                     }
                 }
             }

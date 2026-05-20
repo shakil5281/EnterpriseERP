@@ -19,6 +19,10 @@ public sealed class Company
     public string? TIN { get; set; }
 
     public string? LogoUrl { get; set; }
+    public string? AuthorizeSignatureUrl { get; set; }
+
+    public string? Industry { get; set; }
+    public int? FoundedYear { get; set; }
 
     public string Status { get; set; } = "Active";
 

@@ -3,6 +3,7 @@ using CompanyService.Application.Addresses;
 using CompanyService.Application.Organogram;
 using CompanyService.Infrastructure.Persistence;
 using CompanyService.Infrastructure.Services;
+using CompanyService.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +25,7 @@ public static class DependencyInjection
 
         services.AddScoped<ICompanyReadService, CompanyReadService>();
         services.AddScoped<ICompanyService, Services.CompanyService>();
+        services.AddScoped<ICompanyFileStorage, CompanyFileStorage>();
         services.AddScoped<IAddressService, AddressService>();
         services.AddScoped<IOrganogramService, OrganogramService>();
         

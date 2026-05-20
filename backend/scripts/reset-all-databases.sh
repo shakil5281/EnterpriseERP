@@ -9,9 +9,9 @@ echo "==> Stopping running ERP API / host processes"
 pkill -f "AuthService|AttendanceService|HRService|CompanyService|Platform.Host|EnterpriseERP|PunchData|ImportExport|CuttingService|FinishingService|QualityService|SecurityService|AccountsService|MerchandisingService|LeaveService|ShiftService|PayrollService|NotificationService" || true
 sleep 2
 
-SQL_SERVER="localhost"
+SQL_SERVER="unity3\\SQLEXPRESS"
 SQL_USER="sa"
-SQL_PASSWORD="shakil52814542A"
+SQL_PASSWORD="123580"
 
 DATABASES=(
     "AuthServiceDB"
@@ -66,7 +66,8 @@ declare -A EF_SERVICES=(
 # Because associative array order is random in bash, we'll use a fixed array of keys to maintain order
 KEYS=("Auth" "Company" "HR" "Attendance" "Leave" "Shift" "Payroll" "Notification" "Quality" "Finishing" "Security" "Accounts" "Cutting" "Merchandising")
 
-BACKEND_DIR="/home/shakil-hossain/Desktop/SHAKIL/EnterpriseERP/backend"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 for name in "${KEYS[@]}"; do
     IFS=' ' read -r api proj context <<< "${EF_SERVICES[$name]}"

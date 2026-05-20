@@ -199,8 +199,21 @@ export default function AttendancePage() {
         }
         setIsProcessing(true)
         try {
-            await attendanceService.processDaily({ companyId, date: fromDate })
-            toast.success("Attendance processed")
+            const { attendanceApi } = await import("@/lib/services/attendance-api")
+            const result = await attendanceApi.processRange({
+                companyId,
+                startDate: fromDate,
+                endDate: toDate,
+            })
+            if (result.errors.length > 0) {
+                toast.warning(
+                    `Processed ${result.daysProcessed} day(s); ${result.errors.length} day(s) had errors.`,
+                )
+            } else {
+                toast.success(
+                    `Processed ${result.recordsProcessed} record(s) (${result.presentCount} present)`,
+                )
+            }
             await loadAttendance()
         } catch (error) {
             console.error("Failed to process attendance", error)

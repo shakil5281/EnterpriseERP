@@ -5,7 +5,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CompanyService.Infrastructure.Services;
 
-public sealed class CompanyService(CompanyDbContext db) : ICompanyService
+public sealed class CompanyService(
+    CompanyDbContext db,
+    ICompanyFileStorage fileStorage) : ICompanyService
 {
     public async Task<CompanyDetailsDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -26,13 +28,20 @@ public sealed class CompanyService(CompanyDbContext db) : ICompanyService
                 BIN = c.BIN,
                 TIN = c.TIN,
                 LogoUrl = c.LogoUrl,
+                AuthorizeSignatureUrl = c.AuthorizeSignatureUrl,
+                Industry = c.Industry,
+                FoundedYear = c.FoundedYear,
                 Status = c.Status,
                 CreatedAt = c.CreatedAt
             })
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    public async Task<Guid> CreateAsync(CreateCompanyDto dto, CancellationToken cancellationToken = default)
+    public async Task<Guid> CreateAsync(
+        CreateCompanyDto dto,
+        CompanyFilePayload? logo = null,
+        CompanyFilePayload? authorizeSignature = null,
+        CancellationToken cancellationToken = default)
     {
         var company = new Company
         {
@@ -47,18 +56,40 @@ public sealed class CompanyService(CompanyDbContext db) : ICompanyService
             TradeLicenseNo = dto.TradeLicenseNo,
             BIN = dto.BIN,
             TIN = dto.TIN,
-            LogoUrl = dto.LogoUrl,
-            Status = "Active",
+            Industry = dto.Industry,
+            FoundedYear = dto.FoundedYear,
+            Status = string.IsNullOrWhiteSpace(dto.Status) ? "Active" : dto.Status,
             CreatedAt = DateTime.UtcNow
         };
 
         db.Companies.Add(company);
         await db.SaveChangesAsync(cancellationToken);
 
+        if (logo != null)
+        {
+            company.LogoUrl = await fileStorage.SaveLogoAsync(company.Id, logo, cancellationToken);
+        }
+
+        if (authorizeSignature != null)
+        {
+            company.AuthorizeSignatureUrl = await fileStorage.SaveSignatureAsync(company.Id, authorizeSignature, cancellationToken);
+        }
+
+        if (logo != null || authorizeSignature != null)
+        {
+            company.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
         return company.Id;
     }
 
-    public async Task UpdateAsync(Guid id, UpdateCompanyDto dto, CancellationToken cancellationToken = default)
+    public async Task UpdateAsync(
+        Guid id,
+        UpdateCompanyDto dto,
+        CompanyFilePayload? logo = null,
+        CompanyFilePayload? authorizeSignature = null,
+        CancellationToken cancellationToken = default)
     {
         var company = await db.Companies
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
@@ -75,10 +106,21 @@ public sealed class CompanyService(CompanyDbContext db) : ICompanyService
         company.TradeLicenseNo = dto.TradeLicenseNo;
         company.BIN = dto.BIN;
         company.TIN = dto.TIN;
-        company.LogoUrl = dto.LogoUrl;
+        company.Industry = dto.Industry;
+        company.FoundedYear = dto.FoundedYear;
         company.Status = dto.Status;
-        company.UpdatedAt = DateTime.UtcNow;
 
+        if (logo != null)
+        {
+            company.LogoUrl = await fileStorage.SaveLogoAsync(company.Id, logo, cancellationToken);
+        }
+
+        if (authorizeSignature != null)
+        {
+            company.AuthorizeSignatureUrl = await fileStorage.SaveSignatureAsync(company.Id, authorizeSignature, cancellationToken);
+        }
+
+        company.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -91,5 +133,6 @@ public sealed class CompanyService(CompanyDbContext db) : ICompanyService
 
         db.Companies.Remove(company);
         await db.SaveChangesAsync(cancellationToken);
+        await fileStorage.DeleteCompanyFilesAsync(id, cancellationToken);
     }
 }

@@ -7,10 +7,9 @@ public sealed class SetUserCompanyAccessRequestValidator : AbstractValidator<Set
 {
 	public SetUserCompanyAccessRequestValidator()
 	{
-		RuleFor(x => x.Items).NotNull().NotEmpty();
 		RuleForEach(x => x.Items).ChildRules(item =>
 		{
-			item.RuleFor(i => i.CompanyId).GreaterThan(0);
+			item.RuleFor(i => i.CompanyId).NotEmpty();
 		});
 	}
 }

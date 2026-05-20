@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
@@ -18,7 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { organogramService, ImportResult } from "@/lib/services/organogram"
+import { importExportService, type ImportResult } from "@/lib/services/import-export"
 
 export default function ImportOrganogramPage() {
     const router = useRouter()
@@ -58,7 +58,7 @@ export default function ImportOrganogramPage() {
 
     const handleDownloadTemplate = async () => {
         try {
-            await organogramService.downloadTemplate()
+            await importExportService.downloadOrganogramDemo()
             toast.success("Template downloaded successfully!")
         } catch (error) {
             console.error(error)
@@ -74,7 +74,7 @@ export default function ImportOrganogramPage() {
 
         setIsUploading(true)
         try {
-            const importResult = await organogramService.importFromExcel(file)
+            const importResult = await importExportService.importOrganogram(file)
             setResult(importResult)
 
             if (importResult.errorCount === 0 && importResult.warningCount === 0) {
@@ -214,94 +214,6 @@ export default function ImportOrganogramPage() {
                     </CardContent>
                 </Card>
 
-                {/* Upload File */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <IconUpload className="size-5 text-primary" />
-                            Step 2: Upload Completed File
-                        </CardTitle>
-                        <CardDescription>
-                            Select or drag & drop your Excel file here
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div
-                            onDragOver={handleDragOver}
-                            onDragLeave={handleDragLeave}
-                            onDrop={handleDrop}
-                            className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${isDragging
-                                ? 'border-primary bg-primary/5'
-                                : file
-                                    ? 'border-green-500 bg-green-50/50'
-                                    : 'border-muted-foreground/25 hover:border-primary/50'
-                                }`}
-                        >
-                            <div className="flex flex-col items-center gap-4">
-                                <div className={`size-16 rounded-full flex items-center justify-center ${file ? 'bg-green-100' : 'bg-muted'
-                                    }`}>
-                                    {file ? (
-                                        <IconCircleCheck className="size-8 text-green-600" />
-                                    ) : (
-                                        <IconUpload className="size-8 text-muted-foreground" />
-                                    )}
-                                </div>
-
-                                {file ? (
-                                    <div className="space-y-2">
-                                        <p className="font-medium text-green-700">{file.name}</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            {(file.size / 1024).toFixed(2)} KB
-                                        </p>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setFile(null)}
-                                            className="mt-2"
-                                        >
-                                            Remove File
-                                        </Button>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        <p className="text-lg font-medium">Drag & drop your Excel file here</p>
-                                        <p className="text-sm text-muted-foreground">or click to browse</p>
-                                        <input
-                                            type="file"
-                                            accept=".xlsx,.xls"
-                                            onChange={handleFileChange}
-                                            className="hidden"
-                                            id="file-upload"
-                                        />
-                                        <label htmlFor="file-upload">
-                                            <Button variant="outline" className="cursor-pointer mt-2" asChild>
-                                                <span>Browse Files</span>
-                                            </Button>
-                                        </label>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <Button
-                            onClick={handleUpload}
-                            disabled={!file || isUploading}
-                            className="w-full h-12 text-base gap-2 bg-[#108545] hover:bg-[#0d6e39]"
-                        >
-                            {isUploading ? (
-                                <>
-                                    <IconLoader2 className="size-5 animate-spin" />
-                                    Processing...
-                                </>
-                            ) : (
-                                <>
-                                    <IconUpload className="size-5" />
-                                    Upload & Import Data
-                                </>
-                            )}
-                        </Button>
-                    </CardContent>
-                </Card>
 
                 {/* Results */}
                 {result && (

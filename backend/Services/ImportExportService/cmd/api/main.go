@@ -18,6 +18,7 @@ import (
 	"github.com/enterprise-erp/importexport/internal/handlers"
 	"github.com/enterprise-erp/importexport/internal/middleware"
 	"github.com/enterprise-erp/importexport/internal/router"
+	"github.com/enterprise-erp/importexport/internal/services/hrclient"
 	"github.com/enterprise-erp/importexport/internal/services/importsvc"
 	"github.com/enterprise-erp/importexport/internal/storage"
 	"github.com/gin-gonic/gin"
@@ -97,6 +98,7 @@ func main() {
 		ExportDir:      cfg.Storage.ExportDir,
 		LargeThreshold: cfg.Asynq.ImportLargeRowThreshold,
 		AsynqClient:    asynqClient,
+		HR:             hrclient.New(cfg.Services.HrBaseUrl),
 	}
 
 	if os.Getenv("GIN_MODE") == "" {

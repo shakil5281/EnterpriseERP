@@ -2,17 +2,17 @@ import api from "../api";
 import { getHttpErrorMessage } from "../api-response";
 import { PagedResult, downloadBlob, unwrapResponse } from "./api-helpers";
 
-async function postPunchData<T>(path: string): Promise<T> {
+async function postPunchData<T>(path: string, body?: unknown, params?: Record<string, string>): Promise<T> {
   try {
-    const response = await api.post<unknown>(path);
+    const response = await api.post<unknown>(path, body ?? null, { params });
     return unwrapResponse<T>(response);
   } catch (error) {
     throw new Error(getHttpErrorMessage(error, "Punch-data request failed"));
   }
 }
 
-export type PunchDirection = "In" | "Out" | "Unknown";
 export type PunchLogStatus = "Pending" | "Processing" | "Completed" | "Failed";
+export type ImportBatchStatus = "Pending" | "Processing" | "Completed" | "Failed";
 
 export interface PunchRecord {
   id: string;
@@ -21,7 +21,6 @@ export interface PunchRecord {
   punchNumber: number;
   deviceId: string;
   punchTime: string;
-  direction: PunchDirection;
   source: string;
   createdAt: string;
 }
@@ -46,7 +45,6 @@ export interface PunchRecordInput {
   punchTime: string;
   deviceId?: string;
   deviceSerial?: string;
-  direction?: PunchDirection;
   source?: string;
 }
 
@@ -59,10 +57,17 @@ export interface PunchBatchPayload {
 
 export interface PunchProcessResult {
   logFileId: string;
-  processedCount: number;
+  status?: string;
+  rowCount?: number;
+  inserted?: number;
+  skipped?: number;
+  duplicates?: number;
+  failedLogs?: number;
+  processedCount?: number;
   skippedCount?: number;
   errorCount?: number;
   message?: string;
+  errorMessage?: string;
 }
 
 export interface PunchLogQuery {
@@ -75,7 +80,6 @@ export interface PunchLogQuery {
 
 export interface PunchQuery extends PunchLogQuery {
   punchNumber?: number;
-  direction?: PunchDirection;
   logFileId?: string;
   from?: string;
   to?: string;
@@ -162,12 +166,104 @@ export interface MachineConnectionResult {
 export interface MachineSyncResult {
   history: DeviceSyncHistory;
   logFile?: PunchLogFile;
-  process?: {
-    processedCount?: number;
-    skippedCount?: number;
-    errorCount?: number;
-  };
+  process?: PunchProcessResult;
   connection?: MachineConnectionResult;
+}
+
+export interface PunchImportBatch {
+  id: string;
+  companyId: number;
+  fileName: string;
+  contentType: string;
+  status: ImportBatchStatus | string;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  insertedRows: number;
+  duplicateRows: number;
+  uploadedBy?: string;
+  errorMessage?: string;
+  uploadedAt: string;
+  processedAt?: string;
+}
+
+export interface PunchImportError {
+  id: string;
+  importBatchId: string;
+  companyId: number;
+  rowNumber: number;
+  rawRow: string;
+  errorMessage: string;
+  createdAt: string;
+}
+
+export interface ImportBatchQuery {
+  companyId?: number;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface RemoteCollectStatus {
+  configured: boolean;
+  connected: boolean;
+  message?: string;
+  readOnly: boolean;
+}
+
+export interface RemoteCollectPreview {
+  from: string;
+  to: string;
+  remoteRows: number;
+  unmappedRemote: number;
+  readOnly: boolean;
+}
+
+export interface RemoteCollectHistory {
+  id: string;
+  companyId: number;
+  status: string;
+  fromTime: string;
+  toTime: string;
+  remoteRows: number;
+  inserted: number;
+  duplicates: number;
+  skippedNoBadge: number;
+  unmappedRemote: number;
+  logFileId?: string;
+  errorMessage?: string;
+  startedAt: string;
+  completedAt?: string;
+}
+
+export interface RemoteCollectResult {
+  history: RemoteCollectHistory;
+  logFile?: PunchLogFile;
+  remoteRows: number;
+  inserted: number;
+  duplicates: number;
+  skippedNoBadge: number;
+  unmappedRemote: number;
+  pages: number;
+}
+
+export interface RemoteCollectHistoryQuery {
+  companyId?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ManualPunchPayload {
+  companyId: number;
+  punchNumber: number;
+  deviceId?: string;
+  punchTime?: string;
+  source?: string;
+}
+
+export interface ManualPunchResult {
+  record?: PunchRecord;
+  duplicate: boolean;
 }
 
 export const punchDataService = {
@@ -236,6 +332,11 @@ export const punchDataService = {
     return unwrapResponse<PagedResult<PunchRecord>>(response);
   },
 
+  createManualPunch: async (payload: ManualPunchPayload): Promise<ManualPunchResult> => {
+    const response = await api.post<unknown>("punch-data/punches/manual", payload);
+    return unwrapResponse<ManualPunchResult>(response);
+  },
+
   listMachines: async (params: PunchMachineQuery = {}): Promise<PagedResult<PunchMachine>> => {
     const response = await api.get<unknown>("punch-data/machines", { params });
     return unwrapResponse<PagedResult<PunchMachine>>(response);
@@ -246,13 +347,21 @@ export const punchDataService = {
     return unwrapResponse<PunchMachine>(response);
   },
 
+  saveMachinesBulk: async (machines: CreatePunchMachinePayload[]): Promise<PunchMachine[]> => {
+    const response = await api.post<unknown>("punch-data/machines/bulk", { machines });
+    return unwrapResponse<PunchMachine[]>(response);
+  },
+
   testConnection: async (machineId: string): Promise<MachineConnectionResult> => {
     return postPunchData<MachineConnectionResult>(
       `punch-data/machines/${encodeURIComponent(machineId)}/connect`,
     );
   },
 
-  syncMachine: async (machineId: string, options?: { useRemote?: boolean }): Promise<MachineSyncResult> => {
+  syncMachine: async (
+    machineId: string,
+    options?: { useRemote?: boolean },
+  ): Promise<MachineSyncResult> => {
     try {
       const params: Record<string, string> = {};
       if (options?.useRemote) {
@@ -269,24 +378,54 @@ export const punchDataService = {
     }
   },
 
+  listImportBatches: async (params: ImportBatchQuery = {}): Promise<PagedResult<PunchImportBatch>> => {
+    const response = await api.get<unknown>("punch-data/imports", { params });
+    return unwrapResponse<PagedResult<PunchImportBatch>>(response);
+  },
+
+  listImportErrors: async (
+    batchId: string,
+    params: { page?: number; pageSize?: number } = {},
+  ): Promise<PagedResult<PunchImportError>> => {
+    const response = await api.get<unknown>(
+      `punch-data/imports/${encodeURIComponent(batchId)}/errors`,
+      { params },
+    );
+    return unwrapResponse<PagedResult<PunchImportError>>(response);
+  },
+
+  getRemoteCollectStatus: async (): Promise<RemoteCollectStatus> => {
+    const response = await api.get<unknown>("punch-data/remote/collect/status");
+    return unwrapResponse<RemoteCollectStatus>(response);
+  },
+
+  previewRemoteCollect: async (params: { from?: string; to?: string } = {}): Promise<RemoteCollectPreview> => {
+    const response = await api.get<unknown>("punch-data/remote/collect/preview", { params });
+    return unwrapResponse<RemoteCollectPreview>(response);
+  },
+
   collectRemote: async (data: {
     companyId: number;
     from?: string;
     to?: string;
     batchSize?: number;
-  }) => {
+    useWatermark?: boolean;
+  }): Promise<RemoteCollectResult> => {
     const response = await api.post<unknown>("punch-data/remote/collect", {
       companyId: data.companyId,
       from: data.from,
       to: data.to,
       batchSize: data.batchSize,
+      useWatermark: data.useWatermark,
     });
-    return unwrapResponse<{
-      inserted: number;
-      duplicates: number;
-      remoteRows: number;
-      pages: number;
-    }>(response);
+    return unwrapResponse<RemoteCollectResult>(response);
+  },
+
+  listRemoteCollectHistories: async (
+    params: RemoteCollectHistoryQuery = {},
+  ): Promise<PagedResult<RemoteCollectHistory>> => {
+    const response = await api.get<unknown>("punch-data/remote/collect/histories", { params });
+    return unwrapResponse<PagedResult<RemoteCollectHistory>>(response);
   },
 
   listSyncHistories: async (

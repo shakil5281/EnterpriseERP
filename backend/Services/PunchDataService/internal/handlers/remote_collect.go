@@ -1,11 +1,15 @@
 package handlers
 
 import (
+	"database/sql"
+	"log/slog"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/enterprise-erp/punchdata/internal/collector"
+	"github.com/enterprise-erp/punchdata/internal/events"
 	"github.com/enterprise-erp/punchdata/internal/middleware"
 	"github.com/enterprise-erp/punchdata/internal/models"
 	"github.com/enterprise-erp/punchdata/internal/repository"
@@ -16,13 +20,29 @@ import (
 
 // RemoteCollectHandler exposes read-only public SQL Server punch import on port 5050.
 type RemoteCollectHandler struct {
+	repo          *repository.Repository
+	remoteConnStr string
+	publisher     events.Publisher
+	logger        *slog.Logger
+	remoteOpts    collector.RemoteOptions
+
+	mu        sync.Mutex
 	collector *collector.RemoteService
-	repo      *repository.Repository
-	enabled   bool
+	remoteSQL *sql.DB
 }
 
-func NewRemoteCollectHandler(col *collector.RemoteService, repo *repository.Repository, enabled bool) *RemoteCollectHandler {
-	return &RemoteCollectHandler{collector: col, repo: repo, enabled: enabled}
+// NewRemoteCollectHandler builds a handler that opens the remote DB on first collect/preview.
+// If col is non-nil (eager startup connection), it is used immediately.
+func NewRemoteCollectHandler(cfg RemoteCollectHandlerConfig, col *collector.RemoteService) *RemoteCollectHandler {
+	h := &RemoteCollectHandler{
+		repo:          cfg.Repo,
+		remoteConnStr: cfg.RemoteConnStr,
+		publisher:     cfg.Publisher,
+		logger:        cfg.Logger,
+		remoteOpts:    cfg.Options,
+		collector:     col,
+	}
+	return h
 }
 
 type remoteCollectBody struct {
@@ -33,12 +53,43 @@ type remoteCollectBody struct {
 	UseWatermark bool       `json:"useWatermark,omitempty"`
 }
 
-func (h *RemoteCollectHandler) requireEnabled(c *gin.Context) bool {
-	if h.enabled && h.collector != nil {
+func (h *RemoteCollectHandler) requireConfigured(c *gin.Context) bool {
+	if h.configured() {
 		return true
 	}
-	response.Fail(c, http.StatusServiceUnavailable, response.Err("REMOTE_COLLECT_DISABLED", "Remote ZKTeco collect is not configured (set ConnectionStrings.RemoteZktecoDb)."))
+	response.Fail(c, http.StatusServiceUnavailable, response.Err("REMOTE_COLLECT_DISABLED", "Remote ZKTeco collect is not configured (set ConnectionStrings.RemoteZktecoDb in backend/Configuration/connectionstrings.json or PUNCHDATA_REMOTE_CONNECTIONSTRING)."))
 	return false
+}
+
+type remoteCollectStatusResponse struct {
+	Configured bool   `json:"configured"`
+	Connected  bool   `json:"connected"`
+	Message    string `json:"message,omitempty"`
+	ReadOnly   bool   `json:"readOnly"`
+}
+
+// Status godoc
+// @Summary      Remote collect configuration status
+// @Description  Reports whether RemoteZktecoDb is configured and whether the remote SQL Server is reachable (read-only ping).
+// @Tags         remote-collect
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  response.ApiResponse[remoteCollectStatusResponse]
+// @Router       /api/v1/punch-data/remote/collect/status [get]
+func (h *RemoteCollectHandler) Status(c *gin.Context) {
+	out := remoteCollectStatusResponse{ReadOnly: true, Configured: h.configured()}
+	if !out.Configured {
+		out.Message = "Set ConnectionStrings.RemoteZktecoDb and restart PunchDataService."
+		response.OK(c, out)
+		return
+	}
+	if _, err := h.ensureCollector(c.Request.Context()); err != nil {
+		out.Message = err.Error()
+		response.OK(c, out)
+		return
+	}
+	out.Connected = true
+	response.OK(c, out)
 }
 
 // Collect godoc
@@ -56,7 +107,12 @@ func (h *RemoteCollectHandler) requireEnabled(c *gin.Context) bool {
 // @Failure      503   {object}  response.ApiResponse[any]
 // @Router       /api/v1/punch-data/remote/collect [post]
 func (h *RemoteCollectHandler) Collect(c *gin.Context) {
-	if !h.requireEnabled(c) {
+	if !h.requireConfigured(c) {
+		return
+	}
+	col, err := h.ensureCollector(c.Request.Context())
+	if err != nil {
+		response.Fail(c, http.StatusBadGateway, response.Err("REMOTE_COLLECT_FAILED", err.Error()))
 		return
 	}
 	var body remoteCollectBody
@@ -70,7 +126,7 @@ func (h *RemoteCollectHandler) Collect(c *gin.Context) {
 	}
 	body.CompanyID = companyID
 
-	result, err := h.collector.Collect(c.Request.Context(), collector.RemoteCollectRequest{
+	result, err := col.Collect(c.Request.Context(), collector.RemoteCollectRequest{
 		CompanyID:    body.CompanyID,
 		From:         body.From,
 		To:           body.To,
@@ -98,7 +154,12 @@ func (h *RemoteCollectHandler) Collect(c *gin.Context) {
 // @Failure      503   {object}  response.ApiResponse[any]
 // @Router       /api/v1/punch-data/remote/collect/preview [get]
 func (h *RemoteCollectHandler) Preview(c *gin.Context) {
-	if !h.requireEnabled(c) {
+	if !h.requireConfigured(c) {
+		return
+	}
+	col, err := h.ensureCollector(c.Request.Context())
+	if err != nil {
+		response.Fail(c, http.StatusBadGateway, response.Err("REMOTE_PREVIEW_FAILED", err.Error()))
 		return
 	}
 	to := timeutil.Now()
@@ -113,7 +174,7 @@ func (h *RemoteCollectHandler) Preview(c *gin.Context) {
 			from = timeutil.InDhaka(t)
 		}
 	}
-	mapped, unmapped, err := h.collector.PreviewDetail(c.Request.Context(), from, to)
+	mapped, unmapped, err := col.PreviewDetail(c.Request.Context(), from, to)
 	if err != nil {
 		response.Fail(c, http.StatusBadGateway, response.Err("REMOTE_PREVIEW_FAILED", err.Error()))
 		return

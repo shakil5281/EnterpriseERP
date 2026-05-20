@@ -148,6 +148,49 @@ namespace AuthService.Infrastructure.Erp.Auth.Infrastructure.Persistence.Migrati
                     b.ToTable("RolePermissions");
                 });
 
+            modelBuilder.Entity("AuthService.Infrastructure.Entities.RoutePermission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("HttpMethod")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsMenuRoute")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("PermissionCode")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("RoutePattern")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PermissionCode");
+
+                    b.HasIndex("RoutePattern");
+
+                    b.ToTable("RoutePermissions");
+                });
+
             modelBuilder.Entity("AuthService.Infrastructure.Entities.User2FA", b =>
                 {
                     b.Property<Guid>("Id")
@@ -191,8 +234,8 @@ namespace AuthService.Infrastructure.Erp.Auth.Infrastructure.Persistence.Migrati
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
+                    b.Property<Guid>("CompanyGuid")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
@@ -226,7 +269,7 @@ namespace AuthService.Infrastructure.Erp.Auth.Infrastructure.Persistence.Migrati
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId", "CompanyId")
+                    b.HasIndex("UserId", "CompanyGuid")
                         .IsUnique();
 
                     b.HasIndex("UserId", "IsDefaultCompany");

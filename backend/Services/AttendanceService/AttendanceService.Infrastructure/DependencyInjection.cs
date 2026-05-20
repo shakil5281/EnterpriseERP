@@ -31,6 +31,7 @@ public static class DependencyInjection
         {
             services.AddDbContext<HrReadDbContext>(options => options.UseSqlServer(hrCs));
             services.AddScoped<IEmployeeDirectory, HrEmployeeDirectory>();
+            services.AddScoped<IAttendanceEmployeeQuery, AttendanceEmployeeQuery>();
         }
 
         services.AddScoped<IAttendanceProcessingService, AttendanceProcessingService>();

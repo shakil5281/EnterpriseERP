@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "sonner"
-import { addressService } from "@/lib/services/address"
+import { importExportService, type ImportResult } from "@/lib/services/import-export"
 import { cn } from "@/lib/utils"
 import { Progress } from "@/components/ui/progress"
 import {
@@ -27,24 +27,6 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-
-interface ImportResult {
-    totalRows: number
-    successCount: number
-    errorCount: number
-    createdCount: number
-    updatedCount: number
-    errors: Array<{
-        rowNumber: number
-        field: string
-        message: string
-    }>
-    warnings: Array<{
-        rowNumber: number
-        field: string
-        message: string
-    }>
-}
 
 export default function AddressImportPage() {
     const router = useRouter()
@@ -106,7 +88,7 @@ export default function AddressImportPage() {
         }, 200)
 
         try {
-            const result = (await addressService.importExcel(selectedFile)) as ImportResult
+            const result = await importExportService.importAddress(selectedFile)
             clearInterval(progressInterval)
             setImportProgress(100)
             setImportResult(result)
@@ -128,7 +110,7 @@ export default function AddressImportPage() {
 
     const handleDownloadTemplate = async () => {
         try {
-            await addressService.exportTemplate()
+            await importExportService.downloadAddressDemo()
             toast.success("Template downloaded successfully")
         } catch (error) {
             toast.error("Failed to download template")
@@ -180,7 +162,7 @@ export default function AddressImportPage() {
                         size="sm"
                         onClick={async () => {
                             try {
-                                await addressService.exportDemo()
+                                await importExportService.downloadAddressDemo()
                                 toast.success("Demo file downloaded successfully")
                             } catch (error) {
                                 toast.error("Failed to download demo file")
@@ -393,7 +375,7 @@ export default function AddressImportPage() {
                                                                 {warning.rowNumber}
                                                             </Badge>
                                                         </TableCell>
-                                                        <TableCell className="font-mono text-xs">{warning.field}</TableCell>
+                                                        <TableCell className="font-mono text-xs">—</TableCell>
                                                         <TableCell className="text-sm">{warning.message}</TableCell>
                                                     </TableRow>
                                                 ))}

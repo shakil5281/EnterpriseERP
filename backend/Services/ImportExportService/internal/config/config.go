@@ -11,11 +11,16 @@ import (
 type AppConfig struct {
 	Server            ServerConfig            `json:"Server"`
 	ConnectionStrings ConnectionStringsConfig `json:"ConnectionStrings"`
+	Services          ServicesConfig          `json:"Services"`
 	Redis             RedisConfig             `json:"Redis"`
 	Asynq             AsynqConfig             `json:"Asynq"`
 	Storage           StorageConfig           `json:"Storage"`
 	Jwt               JwtConfig               `json:"Jwt"`
 	Cors              CorsConfig              `json:"Cors"`
+}
+
+type ServicesConfig struct {
+	HrBaseUrl string `json:"HrBaseUrl"`
 }
 
 type ServerConfig struct {
@@ -127,11 +132,17 @@ func applyEnv(cfg *AppConfig) {
 	if v := os.Getenv("IMPORTEXPORT_JWT_AUDIENCE"); v != "" {
 		cfg.Jwt.Audience = v
 	}
+	if v := os.Getenv("IMPORTEXPORT_HR_BASE_URL"); v != "" {
+		cfg.Services.HrBaseUrl = v
+	}
 }
 
 func applyDefaults(cfg *AppConfig) {
 	if cfg.Server.Address == "" {
-		cfg.Server.Address = ":5060"
+		cfg.Server.Address = ":8060"
+	}
+	if strings.TrimSpace(cfg.Services.HrBaseUrl) == "" {
+		cfg.Services.HrBaseUrl = "http://127.0.0.1:5000/api/v1"
 	}
 	if cfg.Redis.Address == "" {
 		cfg.Redis.Address = "127.0.0.1:6379"

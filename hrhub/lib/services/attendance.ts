@@ -208,11 +208,8 @@ function toDateOnlyParam(value: string | Date): string {
 
 export const attendanceService = {
     processDaily: async (data: { companyId: string; date: string | Date }) => {
-        const response = await api.post<unknown>(platformApiUrl('/api/v1/Attendance/process'), {
-            companyId: data.companyId,
-            date: toDateOnlyParam(data.date),
-        });
-        return unwrapResponse<ProcessDailyAttendanceResult>(response);
+        const { attendanceApi } = await import('./attendance-api');
+        return attendanceApi.processDaily(data);
     },
 
     getDailyAttendance: async (params: BackendAttendanceQuery) => {

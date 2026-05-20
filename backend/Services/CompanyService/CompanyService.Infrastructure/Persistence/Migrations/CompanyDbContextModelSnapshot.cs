@@ -65,6 +65,10 @@ namespace CompanyService.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("AuthorizeSignatureUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("BIN")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -86,6 +90,13 @@ namespace CompanyService.Infrastructure.Persistence.Migrations
                     b.Property<string>("Email")
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("FoundedYear")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Industry")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("LogoUrl")
                         .HasMaxLength(500)

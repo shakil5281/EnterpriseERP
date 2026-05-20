@@ -25,13 +25,13 @@ import { NativeSelect } from "@/components/ui/native-select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
-import { overtimeService, type DailyOTSheet } from "@/lib/services/overtime"
-import { type CommonFilterParams } from "@/lib/services/attendance"
+import { overtimeService, type DailyOtSheetRow } from "@/lib/services/overtime"
+import { type AttendanceQuery } from "@/lib/services/attendance-api"
 import { organogramService } from "@/lib/services/organogram"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { AdvancedFilter } from "@/components/attendance/advanced-filter"
+import { AttendanceCompanyFilter } from "@/components/attendance/attendance-company-filter"
 
 export default function DailyOTSheetPage() {
     const router = useRouter()
@@ -43,10 +43,8 @@ export default function DailyOTSheetPage() {
     const [isLoading, setIsLoading] = React.useState(false)
     const [isExportingExcel, setIsExportingExcel] = React.useState(false)
     const [isExportingPdf, setIsExportingPdf] = React.useState(false)
-    const [fullFilters, setFullFilters] = React.useState<CommonFilterParams>({
-        date: date ? format(date, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd")
-    })
-    const [filteredData, setFilteredData] = React.useState<DailyOTSheet[]>([])
+    const [activeQuery, setActiveQuery] = React.useState<AttendanceQuery | null>(null)
+    const [filteredData, setFilteredData] = React.useState<DailyOtSheetRow[]>([])
     const [totalOT, setTotalOT] = React.useState(0)
     const [hasSearched, setHasSearched] = React.useState(false)
 
@@ -69,25 +67,21 @@ export default function DailyOTSheetPage() {
         fetchFilters()
     }, [])
 
-    const handleSearch = React.useCallback(async (filters: CommonFilterParams) => {
+    const handleSearch = React.useCallback(async (q: AttendanceQuery) => {
         setIsLoading(true)
         try {
-            const data = await overtimeService.getDailyOTSheet(filters)
-            setFilteredData(data.records)
-            setTotalOT(data.totalOTHours)
+            const data = await overtimeService.getDailyOTSheet(q)
+            setFilteredData(data)
+            setTotalOT(data.reduce((sum, r) => sum + r.otHours, 0))
             setHasSearched(true)
-        } catch (error: any) {
+        } catch {
             toast.error("Generation failed")
         } finally {
             setIsLoading(false)
         }
     }, [])
 
-    React.useEffect(() => {
-        handleSearch(fullFilters)
-    }, [fullFilters, handleSearch])
-
-    const columns: ColumnDef<DailyOTSheet>[] = [
+    const columns: ColumnDef<DailyOtSheetRow>[] = [
         {
             id: "sl",
             header: "SL",
@@ -117,11 +111,6 @@ export default function DailyOTSheetPage() {
             accessorKey: "section",
             header: "Section",
             cell: ({ row }) => <span className="text-xs">{row.original.section}</span>
-        },
-        {
-            accessorKey: "line",
-            header: "Line",
-            cell: ({ row }) => <span className="text-xs">{row.original.line}</span>
         },
         {
             accessorKey: "inTime",
@@ -181,7 +170,7 @@ export default function DailyOTSheetPage() {
                         onClick={async () => {
                             setIsExportingExcel(true)
                             try {
-                                await overtimeService.exportDailyOTSheetExcel(fullFilters)
+                                if (activeQuery) await overtimeService.exportDailyOTSheetExcel(activeQuery)
                                 toast.success("Excel exported successfully")
                             } catch (error) {
                                 toast.error("Export failed")
@@ -204,12 +193,13 @@ export default function DailyOTSheetPage() {
             <div className="space-y-6">
                 {/* Filters */}
                 <div className="px-6">
-                    <AdvancedFilter
-                        onFilterChange={(newFilters: CommonFilterParams) => {
-                            if (newFilters.date) setDate(new Date(newFilters.date))
-                            setFullFilters(newFilters)
+                    <AttendanceCompanyFilter
+                        onFilterChange={({ query }) => {
+                            setActiveQuery(query)
+                            if (query.date) setDate(new Date(query.date + "T00:00:00"))
+                            handleSearch(query)
                         }}
-                        initialFilters={fullFilters}
+                        initialDate={date ? format(date, "yyyy-MM-dd") : undefined}
                     />
                 </div>
 

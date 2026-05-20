@@ -3,7 +3,7 @@
 
 param(
     [switch]$SkipBuild,
-    [switch]$WithPunchData
+    [switch]$WithoutPunchData
 )
 
 $ErrorActionPreference = "Stop"
@@ -43,11 +43,18 @@ if (-not $SkipBuild) {
 }
 
 
-if ($WithPunchData) {
+if (-not $WithoutPunchData) {
     $punchDir = Join-Path $BackendRoot "Services\PunchDataService"
+    $centralConn = Join-Path $BackendRoot "Configuration\connectionstrings.json"
     if (Test-Path (Join-Path $punchDir "go.mod")) {
         Write-Host "Starting PunchDataService (Go) -- http://127.0.0.1:5050 ..."
-        Start-Process -FilePath "powershell" -ArgumentList @("-NoExit", "-Command", "cd `"$punchDir`"; go run ./cmd/server") | Out-Null
+        $punchCmd = "cd `"$punchDir`""
+        if (Test-Path $centralConn) {
+            $punchCmd += "; `$env:ERP_CONNECTIONSTRINGS = '$centralConn'"
+        }
+        $punchCmd += "; go run ./cmd/server"
+        Start-Process -FilePath "powershell" -ArgumentList @("-NoExit", "-Command", $punchCmd) | Out-Null
+        Start-Sleep -Seconds 3
     }
 }
 

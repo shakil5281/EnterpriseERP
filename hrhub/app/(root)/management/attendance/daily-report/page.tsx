@@ -23,6 +23,7 @@ import {
     attendanceService,
     type BackendDailyAttendance,
 } from "@/lib/services/attendance"
+import { attendanceApi } from "@/lib/services/attendance-api"
 import { companyService, type Company } from "@/lib/services/company"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -187,13 +188,21 @@ export default function DailyAttendanceReportPage() {
         }
         setIsProcessing(true)
         try {
-            const result = await attendanceService.processDaily({
+            const result = await attendanceApi.processRange({
                 companyId,
-                date: fromDate,
+                startDate: fromDate,
+                endDate: toDate,
             })
-            toast.success(
-                `Processed ${result.recordsProcessed} employees (${result.presentCount} present, ${result.absentCount} absent)`,
-            )
+            if (result.errors.length > 0) {
+                toast.warning(
+                    `Processed ${result.daysProcessed} day(s), ${result.recordsProcessed} record(s). ${result.errors.length} day(s) failed — see console.`,
+                )
+                console.warn("Attendance process range errors:", result.errors)
+            } else {
+                toast.success(
+                    `Processed ${result.recordsProcessed} employee-day(s) (${result.presentCount} present, ${result.absentCount} absent)`,
+                )
+            }
             await fetchData()
         } catch (error: unknown) {
             console.error(error)

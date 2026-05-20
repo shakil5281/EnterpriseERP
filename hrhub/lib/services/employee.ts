@@ -15,7 +15,6 @@ import {
   resolveDepartmentGuid,
   resolveDesignationGuid,
   resolveSectionGuid,
-  resolveShiftGuid,
 } from "@/lib/services/organogram";
 
 export type {
@@ -45,16 +44,49 @@ function isGuid(value: string | undefined | null): value is string {
   );
 }
 
+const HR_EMPLOYEE_ID_PATTERN = /^EMP-\d{4,}$/i;
+
+/** HR API requires EMP-#### (4+ digits). Numeric-only values are normalized. */
+export function normalizeHrEmployeeId(
+  raw?: string | null,
+): string | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+
+  const upper = trimmed.toUpperCase();
+  if (HR_EMPLOYEE_ID_PATTERN.test(upper)) return upper;
+
+  if (/^\d+$/.test(trimmed)) {
+    const digits = trimmed.replace(/^0+/, "") || "0";
+    return digits.length < 4 ? `EMP-${digits.padStart(4, "0")}` : `EMP-${digits}`;
+  }
+
+  return trimmed;
+}
+
+export function isValidHrEmployeeId(raw?: string | null): boolean {
+  const normalized = normalizeHrEmployeeId(raw);
+  return !normalized || HR_EMPLOYEE_ID_PATTERN.test(normalized);
+}
+
+async function listCompaniesForResolve() {
+  try {
+    return await companyService.getMine();
+  } catch {
+    return await companyService.getAll();
+  }
+}
+
 async function resolveCompanyGuid(
   companyId?: number,
 ): Promise<string | undefined> {
   if (!companyId) return undefined;
-  const companies = await companyService.getAll();
+  const companies = await listCompaniesForResolve();
   return companies.find((c) => c.id === companyId)?.entityId;
 }
 
 async function firstCompanyGuid(): Promise<string | undefined> {
-  return (await companyService.getAll())[0]?.entityId;
+  return (await listCompaniesForResolve())[0]?.entityId;
 }
 
 async function resolveEmployeeGuid(
@@ -218,6 +250,7 @@ function mapHrDetailsToEmployee(row: HrEmployeeDetails): Employee {
     emergencyContactRelation: row.emergencyContacts?.[0]?.relation ?? undefined,
     emergencyContactPhone: row.emergencyContacts?.[0]?.phone,
     emergencyContactAddress: row.emergencyContacts?.[0]?.address ?? undefined,
+    documents: row.documents ?? [],
   };
 }
 
@@ -243,11 +276,15 @@ async function upsertAddress(
     payload.upazila ||
     payload.postOffice ||
     payload.postalCode;
-  if (!hasData) return;
 
   const row = existing.find(
     (a) => a.addressType.toLowerCase() === addressType.toLowerCase(),
   );
+  if (!hasData) {
+    if (row) await employeeService.deleteAddress(row.id);
+    return;
+  }
+
   const body = { addressType, ...payload };
   if (row) {
     await employeeService.updateAddress(row.id, body);
@@ -269,16 +306,6 @@ async function syncEmployeeSubResources(
     "Present",
     {
       country: "Bangladesh",
-      division: data.presentDivisionId
-        ? String(data.presentDivisionId)
-        : undefined,
-      district: data.presentDistrictId
-        ? String(data.presentDistrictId)
-        : undefined,
-      upazila: data.presentThanaId ? String(data.presentThanaId) : undefined,
-      postOffice: data.presentPostOfficeId
-        ? String(data.presentPostOfficeId)
-        : undefined,
       postalCode: data.presentPostalCode,
       addressLine: data.presentAddress,
     },
@@ -291,32 +318,22 @@ async function syncEmployeeSubResources(
     "Permanent",
     {
       country: "Bangladesh",
-      division: data.permanentDivisionId
-        ? String(data.permanentDivisionId)
-        : undefined,
-      district: data.permanentDistrictId
-        ? String(data.permanentDistrictId)
-        : undefined,
-      upazila: data.permanentThanaId
-        ? String(data.permanentThanaId)
-        : undefined,
-      postOffice: data.permanentPostOfficeId
-        ? String(data.permanentPostOfficeId)
-        : undefined,
       postalCode: data.permanentPostalCode,
       addressLine: data.permanentAddress,
     },
     data.companyId,
   );
 
-  if (
+  const hasBank =
     data.bankName ||
     data.bankAccountNo ||
     data.bankBranchName ||
-    data.bankRoutingNo
-  ) {
-    const primary =
-      details.bankAccounts.find((b) => b.isPrimary) ?? details.bankAccounts[0];
+    data.bankRoutingNo;
+  const primary =
+    details.bankAccounts.find((b) => b.isPrimary) ?? details.bankAccounts[0];
+  if (!hasBank) {
+    if (primary) await employeeService.deleteBankAccount(primary.id);
+  } else {
     const bankBody = {
       bankName: data.bankName,
       branchName: data.bankBranchName,
@@ -336,8 +353,11 @@ async function syncEmployeeSubResources(
     }
   }
 
-  if (data.emergencyContactName || data.emergencyContactPhone) {
-    const contact = details.emergencyContacts[0];
+  const hasEmergency = data.emergencyContactName || data.emergencyContactPhone;
+  const contact = details.emergencyContacts[0];
+  if (!hasEmergency) {
+    if (contact) await employeeService.deleteEmergencyContact(contact.id);
+  } else {
     const contactBody = {
       contactName: data.emergencyContactName || "Emergency Contact",
       relation: data.emergencyContactRelation,
@@ -353,34 +373,12 @@ async function syncEmployeeSubResources(
       });
     }
   }
-
-  if (data.shiftId && data.companyId) {
-    const shiftGuid = await resolveShiftGuid(data.shiftId, data.companyId);
-    if (shiftGuid) {
-      const companyGuid = await resolveCompanyGuid(data.companyId);
-      if (companyGuid) {
-        try {
-          await api.post("employee-shifts/assign", {
-            companyId: companyGuid,
-            employeeId,
-            shiftId: shiftGuid,
-            effectiveFrom: data.joinDate || new Date().toISOString(),
-            effectiveTo: null,
-            assignedBy: null,
-          });
-        } catch (err) {
-          console.error("Failed to assign shift:", err);
-        }
-      }
-    }
-  }
 }
 
 function needsManpowerListApi(params?: {
   sectionId?: number;
   designationId?: number;
   gender?: string;
-  religion?: string;
   joinDateFrom?: string;
   joinDateTo?: string;
 }): boolean {
@@ -508,83 +506,44 @@ export interface Employee {
   isActive: boolean;
   isOtEnabled: boolean;
   createdAt: string;
+  documents?: import("@/lib/services/hr-types").HrEmployeeDocument[];
 }
 
+/** Fields aligned with HR Service create + sub-resource APIs. */
 export interface CreateEmployeeDto {
   employeeId?: string;
   punchNumber?: number;
   fullNameEn: string;
   fullNameBn?: string;
   nid?: string;
-  proximity?: string;
   dateOfBirth?: string;
   gender?: string;
-  religion?: string;
   departmentId: number;
   sectionId?: number;
   designationId: number;
-  lineId?: number;
-  shiftId?: number;
-  groupId?: number;
-  floorId?: number;
   status: string;
   joinDate: string;
   email?: string;
   phoneNumber?: string;
   presentAddress?: string;
-  presentAddressBn?: string;
-  presentDivisionId?: EmployeeAddressEntityId;
-  presentDistrictId?: EmployeeAddressEntityId;
-  presentThanaId?: EmployeeAddressEntityId;
-  presentPostOfficeId?: EmployeeAddressEntityId;
   presentPostalCode?: string;
-
   permanentAddress?: string;
-  permanentAddressBn?: string;
-  permanentDivisionId?: EmployeeAddressEntityId;
-  permanentDistrictId?: EmployeeAddressEntityId;
-  permanentThanaId?: EmployeeAddressEntityId;
-  permanentPostOfficeId?: EmployeeAddressEntityId;
   permanentPostalCode?: string;
-  profileImageUrl?: string;
-  signatureImageUrl?: string;
-
-  // Family Information
-  fatherNameEn?: string;
-  fatherNameBn?: string;
-  motherNameEn?: string;
-  motherNameBn?: string;
-  maritalStatus?: string;
-  spouseNameEn?: string;
-  spouseNameBn?: string;
-  spouseOccupation?: string;
-  spouseContact?: string;
-
-  // Salary Information
   basicSalary?: number;
   houseRent?: number;
   medicalAllowance?: number;
   conveyance?: number;
   foodAllowance?: number;
-  otherAllowance?: number;
-  grossSalary?: number;
-
-  // Account Information
   bankName?: string;
   bankBranchName?: string;
   bankAccountNo?: string;
   bankRoutingNo?: string;
   bankAccountType?: string;
-
-  // Emergency Contact Info
   emergencyContactName?: string;
   emergencyContactRelation?: string;
   emergencyContactPhone?: string;
   emergencyContactAddress?: string;
   companyId?: number;
-  companyName?: string;
-  bloodGroup?: string;
-  isOtEnabled?: boolean;
 }
 
 export interface ManpowerSummary {
@@ -609,18 +568,12 @@ export type ManpowerFilterParams = {
   departmentId?: number;
   sectionId?: number;
   designationId?: number;
-  lineId?: number;
-  shiftId?: number;
-  groupId?: number;
-  floorId?: number;
   status?: string;
   searchTerm?: string;
   companyId?: number;
-  companyName?: string;
   joinDateFrom?: string;
   joinDateTo?: string;
   gender?: string;
-  religion?: string;
 };
 
 function mapSummaryBucket(row: HrManpowerSummary["departmentSummary"][number]): SummaryItem {
@@ -636,13 +589,6 @@ async function buildManpowerQueryParams(
   params?: ManpowerFilterParams,
   options?: { paging?: boolean; summary?: boolean },
 ): Promise<Record<string, string | number>> {
-  void params?.lineId;
-  void params?.shiftId;
-  void params?.groupId;
-  void params?.floorId;
-  void params?.companyName;
-  void params?.religion;
-
   const query: Record<string, string | number> = {};
 
   if (options?.paging !== false) {
@@ -699,7 +645,7 @@ async function buildManpowerQueryParams(
 
 export interface UpdateEmployeeDto extends CreateEmployeeDto {
   isActive: boolean;
-  isOtEnabled: boolean;
+  isOtEnabled?: boolean;
 }
 
 export interface EmployeeMini {
@@ -857,10 +803,16 @@ export const employeeService = {
     if (!data.punchNumber || data.punchNumber <= 0) {
       throw new Error("Punch number (device badge) is required and must be a positive integer.");
     }
+    const employeeID = normalizeHrEmployeeId(data.employeeId);
+    if (employeeID && !HR_EMPLOYEE_ID_PATTERN.test(employeeID)) {
+      throw new Error(
+        "Employee ID must match EMP-#### (e.g. EMP-0001) or leave empty to auto-generate.",
+      );
+    }
     const response = await api.post<unknown>("hr/Employees", {
       companyId,
       punchNumber: data.punchNumber,
-      employeeID: data.employeeId || null,
+      employeeID: employeeID ?? null,
       fullName: data.fullNameEn,
       banglaName: data.fullNameBn || null,
       gender: data.gender || null,
@@ -943,53 +895,6 @@ export const employeeService = {
     return employeeService.getEmployees({ searchTerm: query });
   },
 
-  exportTemplate: async () => {
-    const headers = [
-      "Employee ID",
-      "Full Name",
-      "Email",
-      "Phone",
-      "Join Date",
-      "Status",
-    ];
-    const url = window.URL.createObjectURL(
-      new Blob([headers.join(",")], { type: "text/csv;charset=utf-8" }),
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "Employee_Template.csv");
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-  },
-
-  exportDemo: async () => {
-    const rows = [
-      ["Employee ID", "Full Name", "Email", "Phone", "Join Date", "Status"],
-      [
-        "EMP-0001",
-        "Sample Employee",
-        "sample@erp.local",
-        "",
-        new Date().toISOString().slice(0, 10),
-        "Active",
-      ],
-    ];
-    const url = window.URL.createObjectURL(
-      new Blob([rows.map((r) => r.join(",")).join("\n")], {
-        type: "text/csv;charset=utf-8",
-      }),
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "Employee_Demo_Data.csv");
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-  },
-
   exportEmployees: async (params?: {
     departmentId?: number;
     sectionId?: number;
@@ -1050,198 +955,6 @@ export const employeeService = {
     link.click();
     link.remove();
     window.URL.revokeObjectURL(url);
-  },
-
-  importExcel: async (
-    file: File,
-  ): Promise<{
-    totalRows: number;
-    successCount: number;
-    errorCount: number;
-    warningCount: number;
-    createdCount: number;
-    updatedCount: number;
-    errors: Array<{ rowNumber: number; field: string; message: string }>;
-    warnings: Array<{ rowNumber: number; field: string; message: string }>;
-  }> => {
-    const { read, utils } = await import("xlsx");
-    const buffer = await file.arrayBuffer();
-    const workbook = read(buffer, { type: "array" });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    if (!sheet) {
-      return {
-        totalRows: 0,
-        successCount: 0,
-        errorCount: 1,
-        warningCount: 0,
-        createdCount: 0,
-        updatedCount: 0,
-        errors: [
-          {
-            rowNumber: 0,
-            field: "file",
-            message: "No worksheet found in file.",
-          },
-        ],
-        warnings: [],
-      };
-    }
-
-    const rows = utils.sheet_to_json<Record<string, unknown>>(sheet, {
-      defval: "",
-    });
-    const errors: Array<{ rowNumber: number; field: string; message: string }> =
-      [];
-    const warnings: Array<{
-      rowNumber: number;
-      field: string;
-      message: string;
-    }> = [];
-    let createdCount = 0;
-
-    const [companies, departments, designations] = await Promise.all([
-      companyService.getAll(),
-      organogramService.getDepartments(),
-      organogramService.getDesignations(),
-    ]);
-
-    const pick = (row: Record<string, unknown>, keys: string[]) => {
-      const normalized = Object.fromEntries(
-        Object.entries(row).map(([k, v]) => [k.trim().toLowerCase(), v]),
-      );
-      for (const key of keys) {
-        const val = normalized[key.toLowerCase()];
-        if (val !== undefined && val !== null && String(val).trim() !== "") {
-          return String(val).trim();
-        }
-      }
-      return "";
-    };
-
-    for (let i = 0; i < rows.length; i++) {
-      const rowNumber = i + 2;
-      const row = rows[i];
-      const fullName = pick(row, [
-        "full name",
-        "fullname",
-        "employee name",
-        "name",
-      ]);
-      const employeeID = pick(row, [
-        "employee id",
-        "employeeid",
-        "emp id",
-      ]);
-      const punchRaw = pick(row, ["punch number", "punchnumber", "badge", "card"]);
-      const punchNumber = punchRaw ? parseInt(punchRaw, 10) : NaN;
-      const departmentName = pick(row, ["department", "department name"]);
-      const designationName = pick(row, ["designation", "designation name"]);
-      const joinDateRaw = pick(row, ["join date", "joining date", "joindate"]);
-      const statusRaw = pick(row, ["status", "employment status"]) || "Active";
-
-      if (!fullName) {
-        errors.push({
-          rowNumber,
-          field: "Full Name",
-          message: "Full name is required.",
-        });
-        continue;
-      }
-
-      const department = departments.find(
-        (d) => d.nameEn.toLowerCase() === departmentName.toLowerCase(),
-      );
-      const designation = designations.find(
-        (d) => d.nameEn.toLowerCase() === designationName.toLowerCase(),
-      );
-
-      if (!department || !designation) {
-        errors.push({
-          rowNumber,
-          field: "Department/Designation",
-          message:
-            "Department and designation must match organogram names exactly.",
-        });
-        continue;
-      }
-
-      const company =
-        companies.find((c) => c.entityId === department.companyId) ??
-        companies[0];
-      if (!company?.entityId) {
-        errors.push({
-          rowNumber,
-          field: "Company",
-          message: "No company available for import.",
-        });
-        continue;
-      }
-
-      const joinDate = joinDateRaw
-        ? new Date(joinDateRaw).toISOString().slice(0, 10)
-        : new Date().toISOString().slice(0, 10);
-      if (Number.isNaN(Date.parse(joinDate))) {
-        errors.push({
-          rowNumber,
-          field: "Join Date",
-          message: "Invalid join date.",
-        });
-        continue;
-      }
-
-      try {
-        if (!Number.isFinite(punchNumber) || punchNumber <= 0) {
-          errors.push({
-            rowNumber,
-            field: "Punch Number",
-            message: "Punch number (device badge) is required and must be a positive integer.",
-          });
-          continue;
-        }
-
-        await employeeService.createEmployee({
-          employeeId: employeeID || undefined,
-          punchNumber,
-          fullNameEn: fullName,
-          email: pick(row, ["email"]) || undefined,
-          phoneNumber:
-            pick(row, ["phone", "phone number", "mobile"]) || undefined,
-          departmentId: department.id,
-          designationId: designation.id,
-          status: statusRaw,
-          joinDate,
-          companyId: company.id,
-        });
-        createdCount += 1;
-      } catch (err) {
-        errors.push({
-          rowNumber,
-          field: "Create",
-          message:
-            err instanceof Error ? err.message : "Failed to create employee.",
-        });
-      }
-    }
-
-    const successCount = createdCount;
-    return {
-      totalRows: rows.length,
-      successCount,
-      errorCount: errors.length,
-      warningCount: warnings.length,
-      createdCount,
-      updatedCount: 0,
-      errors,
-      warnings,
-    };
-  },
-
-  uploadImage: async (
-    file: File,
-    type: "profile" | "signature" = "profile",
-  ) => {
-    const url = URL.createObjectURL(file);
-    return { url, type };
   },
 
   transferEmployee: async (

@@ -39,12 +39,12 @@ import { Label } from "@/components/ui/label"
 import { DatePicker } from "@/components/ui/date-picker"
 import { format } from "date-fns"
 import { SummaryCard } from "@/components/summary-card"
-import { attendanceService, type DailySummaryResponse, type CommonFilterParams } from "@/lib/services/attendance"
+import { attendanceApi, type AttendanceQuery, type DailySummaryResponse } from "@/lib/services/attendance-api"
 import { organogramService } from "@/lib/services/organogram"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { AdvancedFilter } from "@/components/attendance/advanced-filter"
+import { AttendanceCompanyFilter } from "@/components/attendance/attendance-company-filter"
 
 const chartData = [
     { value: 40 }, { value: 45 }, { value: 42 }, { value: 48 },
@@ -59,25 +59,19 @@ export default function DailySummaryPage() {
     const [isExportingPdf, setIsExportingPdf] = React.useState(false)
     const [departments, setDepartments] = React.useState<any[]>([])
     const [deptFilter, setDeptFilter] = React.useState("all")
-    const [fullFilters, setFullFilters] = React.useState<CommonFilterParams>({
-        date: date ? format(date, "yyyy-MM-dd") : undefined
-    })
+    const [activeQuery, setActiveQuery] = React.useState<AttendanceQuery | null>(null)
 
-    const fetchData = React.useCallback(async () => {
+    const fetchData = React.useCallback(async (q: AttendanceQuery) => {
         setIsLoading(true)
         try {
-            const data = await attendanceService.getDailySummary(fullFilters)
+            const data = await attendanceApi.getDailySummary(q)
             setSummaryData(data)
         } catch (error) {
             toast.error("Failed to fetch daily summary data")
         } finally {
             setIsLoading(false)
         }
-    }, [fullFilters])
-
-    React.useEffect(() => {
-        fetchData()
-    }, [fetchData])
+    }, [])
 
     React.useEffect(() => {
         organogramService.getDepartments().then(setDepartments)
@@ -86,7 +80,7 @@ export default function DailySummaryPage() {
     const handleExportExcel = async () => {
         setIsExportingExcel(true)
         try {
-            await attendanceService.exportDailySummaryExcel(fullFilters)
+            if (activeQuery) await attendanceApi.exportDailySummaryCsv(activeQuery)
             toast.success("Excel exported successfully")
         } catch (error) {
             toast.error("Failed to export Excel")
@@ -98,7 +92,7 @@ export default function DailySummaryPage() {
     const handleExportPdf = async () => {
         setIsExportingPdf(true)
         try {
-            await attendanceService.exportDailySummaryPdf(fullFilters)
+            if (activeQuery) await attendanceApi.exportDailySummaryCsv(activeQuery)
             toast.success("PDF exported successfully")
         } catch (error) {
             toast.error("Failed to export PDF")
@@ -110,9 +104,7 @@ export default function DailySummaryPage() {
     const handleExportExcelAll = async () => {
         if (!date) return
         try {
-            await attendanceService.exportDailySummaryExcel({
-                date: format(date, "yyyy-MM-dd")
-            })
+            if (activeQuery) await attendanceApi.exportDailySummaryCsv(activeQuery)
             toast.success("Full Excel exported successfully")
         } catch (error) {
             toast.error("Failed to export full Excel")
@@ -294,15 +286,16 @@ export default function DailySummaryPage() {
 
                     {/* Filters */}
                     <div className="px-6">
-                        <AdvancedFilter
-                            onFilterChange={(newFilters: CommonFilterParams) => {
-                                if (newFilters.date) {
-                                    setDate(new Date(newFilters.date + "T00:00:00"))
+                        <AttendanceCompanyFilter
+                            onFilterChange={({ query, legacy }) => {
+                                if (query.date) {
+                                    setDate(new Date(query.date + "T00:00:00"))
                                 }
-                                setDeptFilter(newFilters.departmentId?.toString() || "all")
-                                setFullFilters(newFilters)
+                                setDeptFilter(legacy?.departmentId?.toString() || "all")
+                                setActiveQuery(query)
+                                fetchData(query)
                             }}
-                            initialFilters={fullFilters}
+                            initialDate={date ? format(date, "yyyy-MM-dd") : undefined}
                         />
                     </div>
 

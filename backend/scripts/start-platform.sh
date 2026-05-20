@@ -22,8 +22,11 @@ fi
 echo "Stopping existing Go process on port 5050 (PunchDataService)..."
 if command -v lsof >/dev/null 2>&1; then
     lsof -ti:5050 | xargs -r kill -9 || true
+    lsof -ti:8060 | xargs -r kill -9 || true
 else
     pkill -f "PunchDataService" || true
+    pkill -f "ImportExportService" || true
+    pkill -f "importexport" || true
 fi
 
 echo "Building EnterpriseERP.slnx..."
@@ -32,8 +35,18 @@ dotnet build "$SLN"
 
 echo "Starting PunchDataService (Go) -- http://127.0.0.1:5050 ..."
 punch_dir="$BACKEND_ROOT/Services/PunchDataService"
+central_conn="$BACKEND_ROOT/Configuration/connectionstrings.json"
 if [ -f "$punch_dir/go.mod" ]; then
+    if [ -f "$central_conn" ]; then
+        export ERP_CONNECTIONSTRINGS="$central_conn"
+    fi
     (cd "$punch_dir" && go run ./cmd/server &)
+fi
+
+echo "Starting ImportExportService (Go) -- http://127.0.0.1:8060 ..."
+import_dir="$BACKEND_ROOT/Services/ImportExportService"
+if [ -f "$import_dir/go.mod" ]; then
+    (cd "$import_dir" && go run ./cmd/api &)
 fi
 
 host_proj="$BACKEND_ROOT/Platform.Host/EnterpriseERP.Platform.Host.csproj"

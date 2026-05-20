@@ -122,7 +122,6 @@ export default function ManpowerListPage() {
             if (selectedCompanyId !== "all") params.companyId = parseInt(selectedCompanyId)
             if (companyName !== "all") params.companyName = companyName
             if (gender !== "all") params.gender = gender
-            if (religion !== "all") params.religion = religion
             if (dateRange?.from) params.joinDateFrom = dateRange.from.toISOString()
             if (dateRange?.to) params.joinDateTo = dateRange.to.toISOString()
             if (status !== "all") params.status = status
@@ -149,7 +148,6 @@ export default function ManpowerListPage() {
             if (selectedCompanyId !== "all") params.companyId = parseInt(selectedCompanyId)
             if (companyName !== "all") params.companyName = companyName
             if (gender !== "all") params.gender = gender
-            if (religion !== "all") params.religion = religion
             if (dateRange?.from) params.joinDateFrom = dateRange.from.toISOString()
             if (dateRange?.to) params.joinDateTo = dateRange.to.toISOString()
             if (status !== "all") params.status = status

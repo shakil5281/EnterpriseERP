@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/layout/site-header"
 import { SearchProvider } from "@/components/search-context"
 import { CommandMenu } from "@/components/command-menu"
 import { RouteAccessGuard } from "@/components/auth/route-access-guard"
+import { CompanyProvider } from "@/components/providers/company-context"
 
 export default function DashboardLayout({
   children,
@@ -12,6 +13,7 @@ export default function DashboardLayout({
 }>) {
   return (
     <RouteAccessGuard>
+      <CompanyProvider>
       <SearchProvider>
         <SidebarProvider
           style={
@@ -33,6 +35,7 @@ export default function DashboardLayout({
           <CommandMenu />
         </SidebarProvider>
       </SearchProvider>
+      </CompanyProvider>
     </RouteAccessGuard>
   );
 }

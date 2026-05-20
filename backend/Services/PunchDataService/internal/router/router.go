@@ -77,6 +77,7 @@ func New(opts Options) *gin.Engine {
 		if opts.RemoteCollect != nil {
 			remote := api.Group("/remote")
 			{
+				remote.GET("/collect/status", opts.RemoteCollect.Status)
 				remote.POST("/collect", opts.RemoteCollect.Collect)
 				remote.GET("/collect/preview", opts.RemoteCollect.Preview)
 				remote.GET("/collect/histories", opts.RemoteCollect.ListHistories)

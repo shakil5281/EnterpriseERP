@@ -1,6 +1,10 @@
 import axios from 'axios';
 import { getPublicApiBaseUrl } from '@/lib/api-base';
 import { unwrapApiData } from '@/lib/api-response';
+import {
+  getActiveCompanyHeaderValue,
+  syncActiveCompanyStorage,
+} from '@/lib/active-company-storage';
 
 const api = axios.create({
   baseURL: getPublicApiBaseUrl(),
@@ -12,10 +16,29 @@ const api = axios.create({
 // Add a request interceptor to add the auth token to headers
 api.interceptors.request.use(
   (config) => {
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      }
+      const userRaw = localStorage.getItem('user');
+      let isSuperAdmin = false;
+      if (userRaw) {
+        try {
+          const parsed = JSON.parse(userRaw) as { roles?: string[] };
+          isSuperAdmin = parsed.roles?.includes('SuperAdmin') ?? false;
+        } catch {
+          /* ignore */
+        }
+      }
+      const companyId = getActiveCompanyHeaderValue(isSuperAdmin);
+      if (companyId) {
+        config.headers['X-Company-Id'] = companyId;
+      } else {
+        delete config.headers['X-Company-Id'];
       }
     }
     return config;
@@ -63,6 +86,22 @@ api.interceptors.response.use(
         localStorage.setItem('refreshToken', newRefreshToken);
         // Update cookie as well
         document.cookie = `token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
+
+        let isSuperAdmin = false;
+        const userRaw = localStorage.getItem('user');
+        if (userRaw) {
+          try {
+            const parsed = JSON.parse(userRaw) as { roles?: string[] };
+            isSuperAdmin = parsed.roles?.includes('SuperAdmin') ?? false;
+          } catch {
+            /* ignore */
+          }
+        }
+        syncActiveCompanyStorage({
+          allowedCompanyIds: [],
+          isSuperAdmin,
+          accessToken: token,
+        });
 
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         return api(originalRequest);

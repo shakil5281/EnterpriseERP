@@ -13,6 +13,8 @@ import (
 type AppConfig struct {
 	Server            ServerConfig            `json:"Server"`
 	ConnectionStrings ConnectionStringsConfig `json:"ConnectionStrings"`
+	// connectionStringsSource is set at load time (not from JSON).
+	connectionStringsSource string
 	Jwt               JwtConfig               `json:"Jwt"`
 	Cors              CorsConfig              `json:"Cors"`
 	PunchData         PunchDataConfig         `json:"PunchData"`
@@ -104,12 +106,12 @@ func Load() (*AppConfig, error) {
 		}
 	}
 
-	central := filepath.Clean(filepath.Join(root, "..", "..", "Configuration", "connectionstrings.json"))
-	if _, err := os.Stat(central); err == nil {
+	centralPath := findCentralConnectionStringsFile(root)
+	if centralPath != "" {
 		var centralCfg struct {
 			ConnectionStrings ConnectionStringsConfig `json:"ConnectionStrings"`
 		}
-		if err := readJSON(central, &centralCfg); err == nil {
+		if err := readJSON(centralPath, &centralCfg); err == nil {
 			if strings.TrimSpace(centralCfg.ConnectionStrings.PunchDataDb) != "" {
 				cfg.ConnectionStrings.PunchDataDb = centralCfg.ConnectionStrings.PunchDataDb
 			}
@@ -118,10 +120,19 @@ func Load() (*AppConfig, error) {
 			}
 		}
 	}
+	cfg.connectionStringsSource = centralPath
 
 	applyEnvOverrides(cfg)
 	applyDefaults(cfg)
 	return cfg, nil
+}
+
+// ConnectionStringsSource returns the central connectionstrings.json path when merged, else "".
+func (c *AppConfig) ConnectionStringsSource() string {
+	if c == nil {
+		return ""
+	}
+	return c.connectionStringsSource
 }
 
 func readJSON(path string, into any) error {
@@ -212,6 +223,41 @@ func projectRoot() (string, error) {
 		}
 	}
 	return "", fmt.Errorf("could not locate project root (go.mod / appsettings.json)")
+}
+
+// findCentralConnectionStringsFile locates backend/Configuration/connectionstrings.json.
+func findCentralConnectionStringsFile(projectRoot string) string {
+	const fileName = "connectionstrings.json"
+	candidates := []string{
+		filepath.Clean(filepath.Join(projectRoot, "..", "..", "Configuration", fileName)),
+	}
+	if v := strings.TrimSpace(os.Getenv("ERP_CONNECTIONSTRINGS")); v != "" {
+		candidates = append([]string{v}, candidates...)
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		dir := cwd
+		for i := 0; i < 12; i++ {
+			candidates = append(candidates, filepath.Join(dir, "Configuration", fileName))
+			candidates = append(candidates, filepath.Join(dir, "backend", "Configuration", fileName))
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+	seen := map[string]struct{}{}
+	for _, c := range candidates {
+		c = filepath.Clean(c)
+		if _, ok := seen[c]; ok {
+			continue
+		}
+		seen[c] = struct{}{}
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	return ""
 }
 
 func walkUpForFile(start, fileName string) string {

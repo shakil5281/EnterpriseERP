@@ -22,7 +22,6 @@ export interface Company {
   email: string;
   status: string;
   founded: number;
-  branch: number;
   logoPath?: string;
   authorizeSignaturePath?: string;
 }
@@ -30,6 +29,8 @@ export interface Company {
 interface CompanySummaryApi {
   id: string;
   companyNameEn: string;
+  industry?: string | null;
+  logoUrl?: string | null;
   status: string;
 }
 
@@ -53,6 +54,9 @@ interface CompanyDetailsApi {
   bin?: string | null;
   tin?: string | null;
   logoUrl?: string | null;
+  authorizeSignatureUrl?: string | null;
+  industry?: string | null;
+  foundedYear?: number | null;
   status: string;
   createdAt: string;
 }
@@ -67,18 +71,16 @@ function mapSummaryToCompany(row: CompanySummaryApi): Company {
     addressBn: "",
     phoneNumber: "",
     registrationNo: "",
-    industry: "-",
+    industry: row.industry ?? "",
     email: "",
     status: row.status,
     founded: new Date().getFullYear(),
-    branch: 1,
-    logoPath: undefined,
+    logoPath: row.logoUrl ?? undefined,
     authorizeSignaturePath: undefined,
   };
 }
 
 function mapDetailsToCompany(d: CompanyDetailsApi): Company {
-  const created = d.createdAt ? new Date(d.createdAt) : new Date();
   return {
     id: stableIntFromGuid(d.id),
     entityId: d.id,
@@ -88,24 +90,18 @@ function mapDetailsToCompany(d: CompanyDetailsApi): Company {
     addressBn: d.addressBn ?? "",
     phoneNumber: d.phone ?? "",
     registrationNo: d.tradeLicenseNo ?? "",
-    industry: "-",
+    industry: d.industry ?? "",
     email: d.email ?? "",
     status: d.status,
-    founded: Number.isFinite(created.getFullYear()) ? created.getFullYear() : new Date().getFullYear(),
-    branch: 1,
+    founded: d.foundedYear ?? new Date().getFullYear(),
     logoPath: d.logoUrl ?? undefined,
-    authorizeSignaturePath: undefined,
+    authorizeSignaturePath: d.authorizeSignatureUrl ?? undefined,
   };
-}
-
-function readFormString(fd: FormData, key: string): string {
-  const v = fd.get(key);
-  return typeof v === "string" ? v.trim() : "";
 }
 
 export interface AssignCompanyDto {
   userId: string;
-  companyIds: number[];
+  companyIds: string[];
 }
 
 export interface UserCompanyAccess {
@@ -130,55 +126,36 @@ export const companyService = {
     return (page.items ?? []).map(mapSummaryToCompany);
   },
 
+  getMine: async (): Promise<Company[]> => {
+    const response = await api.get<unknown>("companies/mine", {
+      params: { Page: 1, PageSize: 200 },
+    });
+    const page = unwrapApiData<PagedResultApi<CompanySummaryApi>>(response.data);
+    return (page.items ?? []).map(mapSummaryToCompany);
+  },
+
   getById: async (id: string): Promise<Company> => {
     const response = await api.get<unknown>(`companies/${encodeURIComponent(id)}`);
     const dto = unwrapApiData<CompanyDetailsApi>(response.data);
     return mapDetailsToCompany(dto);
   },
 
-  /** Create from browser form (JSON to match `CompaniesController`). */
+  /** Create via multipart form (matches `CompaniesController` [FromForm]). */
   create: async (form: FormData): Promise<string> => {
-    const body = {
-      companyNameEn: readFormString(form, "companyNameEn"),
-      companyNameBn: readFormString(form, "companyNameBn") || null,
-      addressEn: readFormString(form, "addressEn") || null,
-      addressBn: readFormString(form, "addressBn") || null,
-      email: readFormString(form, "email") || null,
-      phone: readFormString(form, "phoneNumber") || null,
-      website: null as string | null,
-      tradeLicenseNo: readFormString(form, "registrationNo") || null,
-      bin: null as string | null,
-      tin: null as string | null,
-      logoUrl: null as string | null,
-    };
-    const response = await api.post<unknown>("companies", body);
+    const response = await api.post<unknown>("companies", form);
     return unwrapApiData<string>(response.data);
   },
 
-  /** Update from browser form (JSON to match `CompaniesController`). */
+  /** Update via multipart form (matches `CompaniesController` [FromForm]). */
   update: async (id: string, form: FormData): Promise<void> => {
-    const body = {
-      companyNameEn: readFormString(form, "companyNameEn"),
-      companyNameBn: readFormString(form, "companyNameBn") || null,
-      addressEn: readFormString(form, "addressEn") || null,
-      addressBn: readFormString(form, "addressBn") || null,
-      email: readFormString(form, "email") || null,
-      phone: readFormString(form, "phoneNumber") || null,
-      website: null as string | null,
-      tradeLicenseNo: readFormString(form, "registrationNo") || null,
-      bin: null as string | null,
-      tin: null as string | null,
-      logoUrl: null as string | null,
-      status: readFormString(form, "status") || "Active",
-    };
-    await api.put(`companies/${encodeURIComponent(id)}`, body);
+    await api.put(`companies/${encodeURIComponent(id)}`, form);
   },
 
   delete: async (id: string): Promise<void> => {
     await api.delete(`companies/${encodeURIComponent(id)}`);
   },
 
-  setUserCompanies: async (userId: string, items: { companyId: number; isDefaultCompany: boolean }[]) => {
+  setUserCompanies: async (userId: string, items: { companyId: string; isDefaultCompany: boolean }[]) => {
     const response = await api.post<unknown>(`users/${encodeURIComponent(userId)}/companies`, { items });
     return unwrapResponse<UserCompanyAccess[]>(response);
   },

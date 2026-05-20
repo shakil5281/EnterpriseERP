@@ -18,6 +18,8 @@ public sealed class AuthDbContext : IdentityDbContext<AppUser, AppRole, Guid>
 
 	public DbSet<UserCompanyAccess> UserCompanyAccesses => Set<UserCompanyAccess>();
 
+	public DbSet<RoutePermission> RoutePermissions => Set<RoutePermission>();
+
 	public DbSet<UserLoginHistory> UserLoginHistories => Set<UserLoginHistory>();
 
 	public DbSet<UserDevice> UserDevices => Set<UserDevice>();
@@ -72,10 +74,19 @@ public sealed class AuthDbContext : IdentityDbContext<AppUser, AppRole, Guid>
 		});
 		builder.Entity(delegate(EntityTypeBuilder<UserCompanyAccess> b)
 		{
-			b.HasIndex((UserCompanyAccess x) => new { x.UserId, x.CompanyId }).IsUnique();
+			b.HasIndex((UserCompanyAccess x) => new { x.UserId, x.CompanyGuid }).IsUnique();
 			b.HasIndex((UserCompanyAccess x) => new { x.UserId, x.IsDefaultCompany });
 			b.HasOne((UserCompanyAccess x) => x.User).WithMany().HasForeignKey((UserCompanyAccess x) => x.UserId)
 				.OnDelete(DeleteBehavior.Cascade);
+		});
+		builder.Entity(delegate(EntityTypeBuilder<RoutePermission> b)
+		{
+			b.Property((RoutePermission x) => x.Module).HasMaxLength(64);
+			b.Property((RoutePermission x) => x.RoutePattern).HasMaxLength(512);
+			b.Property((RoutePermission x) => x.HttpMethod).HasMaxLength(16);
+			b.Property((RoutePermission x) => x.PermissionCode).HasMaxLength(128);
+			b.HasIndex((RoutePermission x) => x.RoutePattern);
+			b.HasIndex((RoutePermission x) => x.PermissionCode);
 		});
 		builder.Entity(delegate(EntityTypeBuilder<UserLoginHistory> b)
 		{

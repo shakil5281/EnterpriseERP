@@ -1,5 +1,11 @@
 import api from "../api";
 import { unwrapApiData, firstApiErrorMessage } from "@/lib/api-response";
+import { resolveCompanyGuid, isValidCompanyGuid } from "@/lib/company-id";
+import {
+  syncActiveCompanyStorage,
+  clearActiveCompanyStorage,
+} from "@/lib/active-company-storage";
+import type { Company } from "@/lib/services/company";
 
 /** Auth API + HR gateway use camelCase envelopes. */
 interface LoginEnvelope {
@@ -29,7 +35,9 @@ interface UserProfileEnvelope {
   twoFactorEnabled: boolean;
   roles: string[];
   permissions: string[];
-  companyAccess: Array<{ id: string; companyId: number; isDefaultCompany: boolean }>;
+  companyAccess: Array<{ id: string; companyId: string; isDefaultCompany: boolean }>;
+  tenantScope?: string;
+  defaultCompanyId?: string | null;
 }
 
 interface UserListItemEnvelope {
@@ -43,7 +51,7 @@ interface UserListItemEnvelope {
   isLocked: boolean;
   lastLoginAt?: string | null;
   roles?: string[];
-  companyAccess?: Array<{ id: string; companyId: number; isDefaultCompany: boolean }>;
+  companyAccess?: Array<{ id: string; companyId: string; isDefaultCompany: boolean }>;
 }
 export interface LoginResponse {
   token: string;
@@ -73,7 +81,9 @@ export interface User {
   roles: string[];
   /** Populated from `auth/me` when available */
   permissions?: string[];
-  assignedCompanyIds?: number[];
+  assignedCompanyIds?: string[];
+  defaultCompanyId?: string | null;
+  tenantScope?: string;
 }
 
 export interface RoleDetails {
@@ -101,7 +111,7 @@ export interface UpdatePermissionDto {
 
 export interface UserCompanyAccess {
   id: string;
-  companyId: number;
+  companyId: string;
   isDefaultCompany: boolean;
 }
 
@@ -151,6 +161,7 @@ function storeSessionFromLogin(data: LoginEnvelope) {
   document.cookie = `token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
   localStorage.setItem("token", token);
   localStorage.setItem("refreshToken", data.refreshToken);
+  const isSuperAdmin = data.roles?.includes("SuperAdmin") ?? false;
   localStorage.setItem(
     "user",
     JSON.stringify({
@@ -161,10 +172,22 @@ function storeSessionFromLogin(data: LoginEnvelope) {
       roles: data.roles,
     }),
   );
+  syncActiveCompanyStorage({
+    allowedCompanyIds: [],
+    isSuperAdmin,
+    accessToken: token,
+  });
 }
 
 function mapProfileToUser(p: UserProfileEnvelope): User {
-  return {
+  const assignedCompanyIds = p.companyAccess
+    .map((c) => String(c.companyId))
+    .filter((id) => isValidCompanyGuid(id));
+  const defaultCompanyId =
+    p.defaultCompanyId?.toString() ??
+    p.companyAccess.find((c) => c.isDefaultCompany)?.companyId?.toString() ??
+    null;
+  const user: User = {
     id: p.userId,
     username: p.username,
     email: p.email,
@@ -177,8 +200,18 @@ function mapProfileToUser(p: UserProfileEnvelope): User {
     twoFactorEnabled: p.twoFactorEnabled,
     roles: [...p.roles],
     permissions: [...p.permissions],
-    assignedCompanyIds: p.companyAccess.map((c) => c.companyId),
+    assignedCompanyIds,
+    defaultCompanyId,
+    tenantScope: p.tenantScope,
   };
+  syncActiveCompanyStorage({
+    allowedCompanyIds: assignedCompanyIds,
+    defaultCompanyId,
+    isSuperAdmin: p.roles.includes("SuperAdmin"),
+    accessToken:
+      typeof window !== "undefined" ? localStorage.getItem("token") ?? undefined : undefined,
+  });
+  return user;
 }
 
 function mapListItemToUser(row: UserListItemEnvelope): User {
@@ -193,7 +226,9 @@ function mapListItemToUser(row: UserListItemEnvelope): User {
     isLocked: row.isLocked,
     lastLoginAt: row.lastLoginAt,
     roles: [...(row.roles ?? [])],
-    assignedCompanyIds: (row.companyAccess ?? []).map((c) => c.companyId),
+    assignedCompanyIds: (row.companyAccess ?? [])
+      .map((c) => String(c.companyId))
+      .filter((id) => isValidCompanyGuid(id)),
   };
 }
 
@@ -297,8 +332,16 @@ export const authService = {
   },
 
   async createUser(
-    userData: Partial<User> & { password: string; username: string; email: string; role?: string; fullName?: string },
-  ): Promise<{ success: boolean; message: string }> {
+    userData: Partial<User> & {
+      password: string;
+      username: string;
+      email: string;
+      role?: string;
+      fullName?: string;
+      companyIds?: Array<string | number>;
+      companies?: Company[];
+    },
+  ): Promise<{ success: boolean; message: string; userId?: string }> {
     try {
       const reg = await api.post("auth/register", {
         username: userData.username,
@@ -312,7 +355,24 @@ export const authService = {
           roleNames: [userData.role],
         });
       }
-      return { success: true, message: "User created." };
+      if (
+        userData.companyIds?.length &&
+        userData.role !== "SuperAdmin"
+      ) {
+        const assign = await authService.setUserCompanies(
+          created.userId,
+          userData.companyIds,
+          userData.companies,
+        );
+        if (!assign.success) {
+          return {
+            success: false,
+            message: `User created but company assignment failed: ${assign.message}`,
+            userId: created.userId,
+          };
+        }
+      }
+      return { success: true, message: "User created.", userId: created.userId };
     } catch (e: unknown) {
       const ax = e as { response?: { data?: unknown }; message?: string };
       return {
@@ -453,13 +513,27 @@ export const authService = {
     }
   },
 
-  async setUserCompanies(userId: string, companyIds: number[]): Promise<{ success: boolean; message: string }> {
+  async setUserCompanies(
+    userId: string,
+    companyIds: Array<string | number>,
+    companies?: Company[],
+  ): Promise<{ success: boolean; message: string }> {
     try {
-      const items = companyIds.map((companyId, index) => ({
+      const resolved = companyIds
+        .map((id) => resolveCompanyGuid(id, companies))
+        .filter((id): id is string => !!id);
+
+      const unique = [...new Set(resolved)];
+      if (unique.length === 0) {
+        return { success: false, message: "Select at least one valid company." };
+      }
+
+      const items = unique.map((companyId, index) => ({
         companyId,
         isDefaultCompany: index === 0,
       }));
-      await api.post(`users/${userId}/companies`, { items });
+
+      await api.post(`users/${encodeURIComponent(userId)}/companies`, { items });
       return { success: true, message: "Company access updated." };
     } catch (e: unknown) {
       const ax = e as { response?: { data?: unknown }; message?: string };
@@ -553,6 +627,7 @@ export const authService = {
     localStorage.removeItem("token");
     localStorage.removeItem("refreshToken");
     localStorage.removeItem("user");
+    clearActiveCompanyStorage();
     window.location.href = "/login";
   },
 

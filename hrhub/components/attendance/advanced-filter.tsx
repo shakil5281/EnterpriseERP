@@ -84,7 +84,7 @@ export function AdvancedFilter({
         if (!isAdmin && user && user.assignedCompanyIds && user.assignedCompanyIds.length > 0) {
             // If user has assigned companies and is NOT an admin, auto-select the first one and disable
             companyService.getAll().then(allCompanies => {
-                const assignedCompany = allCompanies.find(c => c.id === user.assignedCompanyIds![0])
+                const assignedCompany = allCompanies.find(c => c.entityId === user.assignedCompanyIds![0])
                 if (assignedCompany) {
                     setFilters(prev => ({ ...prev, companyName: assignedCompany.companyNameEn }))
                     setIsCompanyDisabled(true)
@@ -100,7 +100,7 @@ export function AdvancedFilter({
         companyService.getAll().then(allCompanies => {
             // Filter companies based on user's assigned companies (only for non-admins)
             if (!isAdmin && user && user.assignedCompanyIds && user.assignedCompanyIds.length > 0) {
-                const filteredCompanies = allCompanies.filter(c => user.assignedCompanyIds!.includes(c.id))
+                const filteredCompanies = allCompanies.filter(c => user.assignedCompanyIds!.includes(c.entityId))
                 setCompanies(filteredCompanies)
             } else {
                 setCompanies(allCompanies)

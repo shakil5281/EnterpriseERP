@@ -9,6 +9,7 @@ import (
 	"github.com/enterprise-erp/importexport/internal/config"
 	"github.com/enterprise-erp/importexport/internal/database"
 	"github.com/enterprise-erp/importexport/internal/jobs"
+	"github.com/enterprise-erp/importexport/internal/services/hrclient"
 	"github.com/enterprise-erp/importexport/internal/services/importsvc"
 	"github.com/enterprise-erp/importexport/internal/storage"
 	"github.com/enterprise-erp/importexport/internal/worker"
@@ -29,11 +30,18 @@ func main() {
 		logger.Error("db", "error", err)
 		os.Exit(1)
 	}
+	companyDSN := config.NormalizeSQLServerDSN(cfg.ConnectionStrings.CompanyDb)
+	companyDB, err := database.Open(companyDSN, logger)
+	if err != nil {
+		logger.Error("company db", "error", err)
+		os.Exit(1)
+	}
 	dataRoot := filepath.Join(".", "data")
 	store := storage.LocalStorage{Root: dataRoot}
 	svc := &importsvc.Service{
-		DB: gdb, Store: store, ExportDir: cfg.Storage.ExportDir,
+		DB: gdb, CompanyDB: companyDB, Store: store, ExportDir: cfg.Storage.ExportDir,
 		LargeThreshold: cfg.Asynq.ImportLargeRowThreshold,
+		HR:             hrclient.New(cfg.Services.HrBaseUrl),
 	}
 	h := worker.NewHandler(svc, logger)
 	srv := asynq.NewServer(

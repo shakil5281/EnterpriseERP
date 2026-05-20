@@ -90,7 +90,7 @@ func (h *ImportHandler) Confirm(c *gin.Context) {
 		response.FailWithStatus(c, http.StatusBadRequest, response.Err("VALIDATION", err.Error()))
 		return
 	}
-	job, err := h.Svc.Confirm(companyID, middleware.UserID(c), req.SessionID)
+	job, err := h.Svc.Confirm(companyID, middleware.UserID(c), req.SessionID, middleware.BearerToken(c))
 	if err != nil {
 		response.FailWithStatus(c, http.StatusBadRequest, response.Err("IMPORT", err.Error()))
 		return

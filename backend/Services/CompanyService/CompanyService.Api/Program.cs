@@ -3,6 +3,7 @@ using CompanyService.Domain.Entities;
 using CompanyService.Infrastructure;
 using CompanyService.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -103,6 +104,17 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<CompanyDbContext>("company-db");
 
 var app = builder.Build();
+
+var uploadRoot = Path.Combine(
+    app.Environment.ContentRootPath,
+    app.Configuration["CompanyFiles:UploadRoot"] ?? "uploads");
+Directory.CreateDirectory(uploadRoot);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(uploadRoot),
+    RequestPath = "/uploads",
+});
+
 app.UseSerilogRequestLogging();
 app.UseSwagger();
 app.UseSwaggerUI(o => o.SwaggerEndpoint("/swagger/v1/swagger.json", "Company v1"));

@@ -210,7 +210,7 @@ export default function MonthlySalarySheetPage() {
             header: "Actions",
             cell: ({ row }) => (
                 <div className="flex items-center gap-2">
-                    <Link href={`/management/payroll/payslip/${row.original.id}`}>
+                    <Link href={`/management/payroll/payslip/${row.original.periodId}/${row.original.employeeGuid}`}>
                         <Button size="icon" variant="ghost" className="h-8 w-8">
                             <IconEye className="size-4" />
                         </Button>

@@ -39,6 +39,18 @@ async function companyGuidFromLegacyCompanyId(companyId: number): Promise<string
   return rows.find((c) => stableIntFromGuid(c.id) === companyId)?.id;
 }
 
+async function resolveCompanyGuidParam(companyId: number | string): Promise<string | undefined> {
+  const text = String(companyId).trim();
+  if (text.includes("-")) {
+    return text;
+  }
+  const numeric = Number(text);
+  if (!Number.isFinite(numeric)) {
+    return undefined;
+  }
+  return companyGuidFromLegacyCompanyId(numeric);
+}
+
 interface DepartmentApi {
   id: string;
   companyId: string;
@@ -709,11 +721,11 @@ export const organogramService = {
     return response.data;
   },
 
-  getGroups: async (params?: { companyName?: string; companyId?: number }) => {
+  getGroups: async (params?: { companyName?: string; companyId?: number | string }) => {
     void params?.companyName;
     let companyGuid: string | undefined;
     if (params?.companyId !== undefined) {
-      companyGuid = await companyGuidFromLegacyCompanyId(params.companyId);
+      companyGuid = await resolveCompanyGuidParam(params.companyId);
       if (!companyGuid) return [];
     }
     return fetchGroupsInternal(companyGuid);
@@ -753,11 +765,11 @@ export const organogramService = {
     return unwrapApiData<string>(response.data);
   },
 
-  getFloors: async (params?: { companyName?: string; companyId?: number }) => {
+  getFloors: async (params?: { companyName?: string; companyId?: number | string }) => {
     void params?.companyName;
     let companyGuid: string | undefined;
     if (params?.companyId !== undefined) {
-      companyGuid = await companyGuidFromLegacyCompanyId(params.companyId);
+      companyGuid = await resolveCompanyGuidParam(params.companyId);
       if (!companyGuid) return [];
     }
     return fetchFloorsInternal(companyGuid);
@@ -797,49 +809,6 @@ export const organogramService = {
     return unwrapApiData<string>(response.data);
   },
 
-  downloadTemplate: async () => {
-    const response = await api.get(`${ORG}/export-template`, {
-      responseType: "blob",
-    });
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "Organogram_Template.xlsx");
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  },
-
-  importFromExcel: async (file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    const response = await api.post<ImportResult>(`${ORG}/import`, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
-    return response.data;
-  },
 };
 
-export interface ImportResult {
-  totalRows: number;
-  successCount: number;
-  errorCount: number;
-  warningCount: number;
-  updatedCount: number;
-  createdCount: number;
-  errors: ImportError[];
-  warnings: ImportWarning[];
-}
-
-export interface ImportError {
-  rowNumber: number;
-  field: string;
-  message: string;
-}
-
-export interface ImportWarning {
-  rowNumber: number;
-  message: string;
-}
+export type { ImportResult } from "@/lib/services/import-export";

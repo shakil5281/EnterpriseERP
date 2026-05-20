@@ -6,6 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using AuthService.Application.Abstractions.Authentication;
 using AuthService.Application.Models;
+using AuthService.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using AuthService.Contracts.Auth;
 using AuthService.Contracts.CompanyAccess;
 using AuthService.Contracts.Common;
@@ -188,6 +190,30 @@ public sealed class AuthController(
 			return NotFound(ToErrorResponse(errors.Select((string e) => new ApiError("PROFILE_NOT_FOUND", e)).ToList()));
 		}
 		return Ok(ToSuccess(data));
+	}
+
+	[Authorize]
+	[HttpGet("access-matrix")]
+	[ProducesResponseType(typeof(ApiResponse<IReadOnlyList<AccessMatrixItemDto>>), 200)]
+	public async Task<IActionResult> AccessMatrix(
+		[FromServices] AuthDbContext db,
+		CancellationToken cancellationToken)
+	{
+		var items = await db.RoutePermissions.AsNoTracking()
+			.Where(r => !r.IsDeleted)
+			.OrderBy(r => r.Module)
+			.ThenBy(r => r.RoutePattern)
+			.Select(r => new AccessMatrixItemDto
+			{
+				Module = r.Module,
+				RoutePattern = r.RoutePattern,
+				HttpMethod = r.HttpMethod,
+				PermissionCode = r.PermissionCode,
+				IsMenuRoute = r.IsMenuRoute,
+			})
+			.ToListAsync(cancellationToken);
+
+		return Ok(ToSuccess(items));
 	}
 
 	[Authorize]

@@ -6,58 +6,48 @@ import {
     IconArrowLeft,
     IconLoader,
     IconPrinter,
-    IconFileExport,
-    IconFileDownload
 } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
-import { leaveService, type LeaveApplication, type LeaveBalance } from "@/lib/services/leave"
+import { leaveService, type BackendLeaveBalance } from "@/lib/services/leave"
+import { enrichApplication, type LeaveApplicationView } from "@/lib/services/leave-helpers"
 import { toast } from "sonner"
 import { format } from "date-fns"
+import { useCompanyContext } from "@/components/providers/company-context"
 
 export default function LeaveApplicationExportPage() {
     const params = useParams()
     const router = useRouter()
     const id = params.id as string
+    const { activeCompanyId } = useCompanyContext()
     const componentRef = React.useRef<HTMLDivElement>(null)
 
-    const [application, setApplication] = React.useState<LeaveApplication | null>(null)
-    const [balances, setBalances] = React.useState<LeaveBalance[]>([])
+    const [application, setApplication] = React.useState<LeaveApplicationView | null>(null)
+    const [balances, setBalances] = React.useState<BackendLeaveBalance[]>([])
     const [isLoading, setIsLoading] = React.useState(true)
 
     React.useEffect(() => {
         const fetchData = async () => {
+            if (!activeCompanyId) return
             try {
-                const data = await leaveService.getApplication(parseInt(id))
-                setApplication(data)
-
-                if (data.employeeCard) {
-                    const balanceData = await leaveService.getBalance(data.employeeCard)
-                    setBalances(balanceData)
-                }
-            } catch (error) {
+                const app = await leaveService.getLeaveApplicationById(id)
+                const view = await enrichApplication(app, activeCompanyId)
+                setApplication(view)
+                const balanceData = await leaveService.getEmployeeBalances(app.employeeId, {
+                    companyId: activeCompanyId,
+                    year: new Date().getFullYear(),
+                })
+                setBalances(balanceData)
+            } catch {
                 toast.error("Failed to load data")
             } finally {
                 setIsLoading(false)
             }
         }
         fetchData()
-    }, [id])
+    }, [id, activeCompanyId])
 
     const handlePrint = () => {
         window.print()
-    }
-
-    const handleDownloadPdf = async () => {
-        if (!application) return
-
-        const toastId = toast.loading("Generating PDF...")
-        try {
-            await leaveService.downloadPdf(parseInt(id))
-            toast.success("PDF downloaded successfully", { id: toastId })
-        } catch (error) {
-            console.error("PDF Download Error:", error)
-            toast.error("Failed to download PDF", { id: toastId })
-        }
     }
 
     if (isLoading) {
@@ -72,8 +62,13 @@ export default function LeaveApplicationExportPage() {
 
     // Helper for table data
     const getLeaveBalance = (typeName: string) => {
-        const found = balances.find(b => b.leaveTypeName.toLowerCase().includes(typeName.toLowerCase()))
-        return found || { totalAllocated: 0, totalTaken: 0, balance: 0 }
+        const found = balances.find((b) => {
+            const name = (b.leaveName || b.leaveCode || "").toLowerCase()
+            return name.includes(typeName.toLowerCase())
+        })
+        return found
+            ? { totalAllocated: found.entitledDays, totalTaken: found.usedDays, balance: found.balanceDays }
+            : { totalAllocated: 0, totalTaken: 0, balance: 0 }
     }
 
     const casualLeave = getLeaveBalance("Casual")
@@ -90,10 +85,6 @@ export default function LeaveApplicationExportPage() {
                     Back
                 </Button>
                 <div className="flex gap-2">
-                    <Button variant="outline" className="gap-2" onClick={handleDownloadPdf}>
-                        <IconFileDownload className="size-4" />
-                        Download PDF
-                    </Button>
                     <Button variant="outline" className="gap-2" onClick={handlePrint}>
                         <IconPrinter className="size-4" />
                         Print / Save PDF

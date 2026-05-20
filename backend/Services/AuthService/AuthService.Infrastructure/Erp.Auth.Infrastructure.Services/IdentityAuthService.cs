@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AuthService.Application.Abstractions.Authentication;
+using AuthService.Application.Security;
 using AuthService.Application.Abstractions.CompanyAccess;
 using AuthService.Application.Models;
 using AuthService.Contracts.Auth;
@@ -15,6 +16,7 @@ using AuthService.Infrastructure.Identity;
 using AuthService.Infrastructure.Options;
 using AuthService.Infrastructure.Persistence;
 using AuthService.Infrastructure.Security;
+using Erp.BuildingBlocks.CommonSecurity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -170,7 +172,8 @@ public sealed class IdentityAuthService(
 		logger.LogInformation("Registered user {UserId} {Username}", user.Id, user.UserName);
 		LoginResponse? regResponse;
 		IReadOnlyList<string> regErrors;
-		(regResponse, _, regErrors) = await IssueTokensAsync(user, roles, permissions, context, cancellationToken);
+		var companyRecords = await companyAccessRepository.ListActiveByUserIdAsync(user.Id, cancellationToken);
+		(regResponse, _, regErrors) = await IssueTokensAsync(user, roles, permissions, companyRecords, context, cancellationToken);
 		await db.SaveChangesAsync(cancellationToken);
 		return (Response: regResponse, Errors: regErrors);
 	}
@@ -203,12 +206,20 @@ public sealed class IdentityAuthService(
 					existing.IsRevoked = true;
 					existing.RevokedReason = "rotated";
 					List<string> roles = (await userManager.GetRolesAsync(user)).OrderBy((string x) => x).ToList();
+					var companyRecords = await companyAccessRepository.ListActiveByUserIdAsync(user.Id, cancellationToken);
+					var (allowed, companyError) = TenantLoginValidator.ValidateCompanyAccessForLogin(roles, companyRecords);
+					if (!allowed)
+					{
+						result = (null, new[] { companyError! });
+					}
+					else
+					{
 					LoginResponse? response;
 					Guid? newRefreshId;
 					IReadOnlyList<string> errors;
 					string? carryIp = context?.IpAddress ?? existing.IpAddress;
 					AuthRequestContext merged = new AuthRequestContext(carryIp, context?.MacAddress ?? existing.MacAddress, context?.DeviceFingerprint ?? existing.DeviceFingerprint, context?.UserAgent);
-					(response, newRefreshId, errors) = await IssueTokensAsync(user, roles, await LoadPermissionsForRolesAsync(roles, cancellationToken), merged, cancellationToken, existing.FamilyId);
+					(response, newRefreshId, errors) = await IssueTokensAsync(user, roles, await LoadPermissionsForRolesAsync(roles, cancellationToken), companyRecords, merged, cancellationToken, existing.FamilyId);
 					if (response == null || !newRefreshId.HasValue)
 					{
 						result = (null, errors);
@@ -219,6 +230,7 @@ public sealed class IdentityAuthService(
 						await db.SaveChangesAsync(cancellationToken);
 						await transaction.CommitAsync(cancellationToken);
 						result = (response, Array.Empty<string>());
+					}
 					}
 				}
 			}
@@ -251,12 +263,14 @@ public sealed class IdentityAuthService(
 		bool locked = user.LockoutEnd.HasValue && user.LockoutEnd > now;
 		List<string> roles = (await userManager.GetRolesAsync(user)).OrderBy((string x) => x).ToList();
 		IReadOnlyList<string> permissions = await LoadPermissionsForRolesAsync(roles, cancellationToken);
-		List<UserCompanyAccessDto> companyDtos = (await companyAccessRepository.ListActiveByUserIdAsync(userId, cancellationToken)).Select((UserCompanyAccessRecord c) => new UserCompanyAccessDto
+		var companyRecords = await companyAccessRepository.ListActiveByUserIdAsync(userId, cancellationToken);
+		List<UserCompanyAccessDto> companyDtos = companyRecords.Select(c => new UserCompanyAccessDto
 		{
 			Id = c.Id,
-			CompanyId = c.CompanyId,
-			IsDefaultCompany = c.IsDefaultCompany
+			CompanyId = c.CompanyGuid,
+			IsDefaultCompany = c.IsDefaultCompany,
 		}).ToList();
+		var tenant = BuildTenantTokenContext(roles, companyRecords);
 		bool tf = await twoFactor.IsTwoFactorEnabledAsync(userId, cancellationToken);
 		return (Response: new UserProfileResponse
 		{
@@ -272,7 +286,9 @@ public sealed class IdentityAuthService(
 			TwoFactorEnabled = tf,
 			Roles = roles,
 			Permissions = permissions,
-			CompanyAccess = companyDtos
+			CompanyAccess = companyDtos,
+			TenantScope = tenant.TenantScope,
+			DefaultCompanyId = tenant.DefaultCompanyGuid,
 		}, Errors: Array.Empty<string>());
 	}
 
@@ -321,12 +337,39 @@ public sealed class IdentityAuthService(
 		await AppendLoginHistoryAsync(user.Id, context, isSuccess: true, null, cancellationToken);
 		await UpsertDeviceAsync(user.Id, context, cancellationToken);
 		List<string> roles = (await userManager.GetRolesAsync(user)).OrderBy((string x) => x).ToList();
+		var companyRecords = await companyAccessRepository.ListActiveByUserIdAsync(user.Id, cancellationToken);
+		var (allowed, companyError) = TenantLoginValidator.ValidateCompanyAccessForLogin(roles, companyRecords);
+		if (!allowed)
+		{
+			await AppendLoginHistoryAsync(user.Id, context, isSuccess: false, companyError, cancellationToken);
+			await db.SaveChangesAsync(cancellationToken);
+			return (Response: null, Errors: new[] { companyError! });
+		}
+
 		LoginResponse? response;
 		Guid? rid;
 		IReadOnlyList<string> errors;
-		(response, rid, errors) = await IssueTokensAsync(user, roles, await LoadPermissionsForRolesAsync(roles, cancellationToken), context, cancellationToken);
+		(response, rid, errors) = await IssueTokensAsync(user, roles, await LoadPermissionsForRolesAsync(roles, cancellationToken), companyRecords, context, cancellationToken);
 		await db.SaveChangesAsync(cancellationToken);
 		return (response, errors);
+	}
+
+	private static TenantTokenContext BuildTenantTokenContext(
+		IReadOnlyList<string> roles,
+		IReadOnlyList<UserCompanyAccessRecord> companyRecords)
+	{
+		var isSuperAdmin = roles.Contains("SuperAdmin", StringComparer.OrdinalIgnoreCase);
+		var companyGuids = companyRecords.Select(c => c.CompanyGuid).Distinct().ToList();
+		var defaultCompany = companyRecords.FirstOrDefault(c => c.IsDefaultCompany)?.CompanyGuid
+			?? companyGuids.FirstOrDefault();
+
+		return new TenantTokenContext
+		{
+			IsSuperAdmin = isSuperAdmin,
+			TenantScope = isSuperAdmin ? SecurityClaimTypes.TenantScopeGlobal : SecurityClaimTypes.TenantScopeCompany,
+			CompanyGuids = companyGuids,
+			DefaultCompanyGuid = defaultCompany == Guid.Empty ? null : defaultCompany,
+		};
 	}
 
 	private async Task AppendLoginHistoryAsync(Guid userId, AuthRequestContext? context, bool isSuccess, string? failureReason, CancellationToken cancellationToken)
@@ -402,9 +445,17 @@ public sealed class IdentityAuthService(
 			select x).ToListAsync(cancellationToken);
 	}
 
-	private async Task<(LoginResponse? Response, Guid? NewRefreshTokenId, IReadOnlyList<string> Errors)> IssueTokensAsync(AppUser user, IReadOnlyList<string> roles, IReadOnlyList<string> permissions, AuthRequestContext? context, CancellationToken cancellationToken, Guid? familyId = null)
+	private async Task<(LoginResponse? Response, Guid? NewRefreshTokenId, IReadOnlyList<string> Errors)> IssueTokensAsync(
+		AppUser user,
+		IReadOnlyList<string> roles,
+		IReadOnlyList<string> permissions,
+		IReadOnlyList<UserCompanyAccessRecord> companyRecords,
+		AuthRequestContext? context,
+		CancellationToken cancellationToken,
+		Guid? familyId = null)
 	{
-		(string, DateTime) tuple = jwtTokenIssuer.CreateAccessToken(user, roles, permissions);
+		var tenant = BuildTenantTokenContext(roles, companyRecords);
+		(string, DateTime) tuple = jwtTokenIssuer.CreateAccessToken(user, roles, permissions, tenant);
 		string accessToken = tuple.Item1;
 		DateTime expiresAtUtc = tuple.Item2;
 		string rawRefresh = JwtTokenIssuer.CreateRawRefreshToken();

@@ -26,8 +26,10 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { ColumnDef } from "@tanstack/react-table"
-import { AdvancedFilter } from "@/components/attendance/advanced-filter"
-import { CommonFilterParams, attendanceService } from "@/lib/services/attendance"
+import { AttendanceCompanyFilter } from "@/components/attendance/attendance-company-filter"
+import { CommonFilterParams } from "@/lib/services/attendance"
+import { attendanceApi, type AttendanceQuery } from "@/lib/services/attendance-api"
+import { useAuth } from "@/components/providers/auth-provider"
 import { employeeService, EmployeeSimple } from "@/lib/services/employee"
 import {
     Dialog,
@@ -59,6 +61,8 @@ interface EmployeeRow {
 }
 
 export default function ManualAttendancePage() {
+    const { user } = useAuth()
+    const [activeQuery, setActiveQuery] = React.useState<AttendanceQuery | null>(null)
     // State Management
     const [employees, setEmployees] = React.useState<EmployeeRow[]>([])
     const [selectedEmployees, setSelectedEmployees] = React.useState<EmployeeRow[]>([])
@@ -135,14 +139,22 @@ export default function ManualAttendancePage() {
 
         setIsLoading(true)
         try {
-            await attendanceService.bulkManualEntry({
-                employeeIds: selectedEmployees.map(emp => emp.employeeId),
-                companyId: fullFilters.companyId || (selectedEmployees.length > 0 ? selectedEmployees[0].companyId : 1),
-                date: format(bulkCheckIn, "yyyy-MM-dd'T'00:00:00"),
-                inTime: bulkCheckIn ? format(bulkCheckIn, "yyyy-MM-dd'T'HH:mm:ss") : undefined,
-                outTime: bulkCheckOut ? format(bulkCheckOut, "yyyy-MM-dd'T'HH:mm:ss") : undefined,
-                status: bulkStatus,
-                reason: bulkRemarks || "Manual Entry"
+            if (!activeQuery) {
+                toast.error("Apply filters and select a company first")
+                return
+            }
+            const adminId = user?.id ?? "00000000-0000-0000-0000-000000000001"
+            const entryDate = format(bulkCheckIn, "yyyy-MM-dd")
+            await attendanceApi.bulkAdjust({
+                companyId: activeQuery.companyId,
+                adminId,
+                entries: selectedEmployees.map((emp) => ({
+                    employeeID: emp.employeeId,
+                    date: entryDate,
+                    inTime: bulkCheckIn?.toISOString(),
+                    outTime: bulkCheckOut?.toISOString(),
+                    remarks: bulkRemarks || bulkStatus,
+                })),
             })
 
             toast.success(`Attendance recorded for ${selectedEmployees.length} employees`)
@@ -236,18 +248,20 @@ export default function ManualAttendancePage() {
 
             <Card className="border-none shadow-xl bg-background/50 backdrop-blur-sm">
                 <CardContent className="p-6">
-                    <AdvancedFilter
-                        onFilterChange={(newFilters) => {
-                            setFullFilters(newFilters)
-                            fetchEmployees(newFilters)
+                    <AttendanceCompanyFilter
+                        onFilterChange={({ query, legacy }) => {
+                            setActiveQuery(query)
+                            const next = {
+                                ...fullFilters,
+                                companyId: legacy?.companyId,
+                                departmentId: legacy?.departmentId,
+                                sectionId: legacy?.sectionId,
+                                designationId: legacy?.designationId,
+                            }
+                            setFullFilters(next)
+                            fetchEmployees(next)
                         }}
-                        initialFilters={fullFilters}
                         showDate={false}
-                        statusOptions={[
-                            { label: "All Statuses", value: "all" },
-                            { label: "Active", value: "Active" },
-                            { label: "Inactive", value: "Inactive" }
-                        ]}
                     />
                 </CardContent>
             </Card>

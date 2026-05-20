@@ -1,7 +1,13 @@
 "use client"
 
 import * as React from "react"
-import { format, parseISO } from "date-fns"
+import { format } from "date-fns"
+import {
+    formatAttendanceDate,
+    formatAttendanceWeekday,
+    formatPunchTime,
+    parsePunchTimeToDate,
+} from "@/lib/format-attendance-time"
 import {
     IconArrowLeft,
     IconRefresh,
@@ -22,8 +28,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { NativeSelect } from "@/components/ui/native-select"
 import { DataTable } from "@/components/data-table"
 import { Badge } from "@/components/ui/badge"
-import { missingEntryService, MissingEntry, MissingEntrySummary } from "@/lib/services/missingEntry"
-import { attendanceService, CommonFilterParams } from "@/lib/services/attendance"
+import { missingEntryService, type MissingEntry, type MissingEntrySummary } from "@/lib/services/missingEntry"
+import { attendanceApi, type AttendanceQuery } from "@/lib/services/attendance-api"
+import { useAuth } from "@/components/providers/auth-provider"
 import { toast } from "sonner"
 import {
     Sheet,
@@ -37,10 +44,11 @@ import {
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { AdvancedFilter } from "@/components/attendance/advanced-filter"
+import { AttendanceCompanyFilter } from "@/components/attendance/attendance-company-filter"
 
 export default function MissingEntryPage() {
     const router = useRouter()
+    const { user } = useAuth()
     const [isLoading, setIsLoading] = React.useState(false)
     const [filteredData, setFilteredData] = React.useState<MissingEntry[]>([])
     const [summary, setSummary] = React.useState<MissingEntrySummary | null>(null)
@@ -55,11 +63,7 @@ export default function MissingEntryPage() {
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
     // Filter state
-    const [fullFilters, setFullFilters] = React.useState<CommonFilterParams>({
-        startDate: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), "yyyy-MM-dd"),
-        endDate: format(new Date(), "yyyy-MM-dd"),
-        status: "all"
-    })
+    const [activeQuery, setActiveQuery] = React.useState<AttendanceQuery | null>(null)
 
     const columns: ColumnDef<MissingEntry>[] = [
         {
@@ -70,15 +74,12 @@ export default function MissingEntryPage() {
         {
             accessorKey: "date",
             header: "Date",
-            cell: ({ row }) => {
-                const date = new Date(row.original.date)
-                return (
+            cell: ({ row }) => (
                     <div className="flex flex-col">
-                        <span className="text-sm font-medium text-foreground">{format(date, "dd MMM yyyy")}</span>
-                        <span className="text-xs text-muted-foreground uppercase">{format(date, "EEEE")}</span>
+                        <span className="text-sm font-medium text-foreground">{formatAttendanceDate(row.original.date)}</span>
+                        <span className="text-xs text-muted-foreground uppercase">{formatAttendanceWeekday(row.original.date)}</span>
                     </div>
                 )
-            }
         },
         {
             accessorKey: "employeeId",
@@ -104,18 +105,21 @@ export default function MissingEntryPage() {
             id: "punches",
             header: "In/Out Time",
             cell: ({ row }) => {
-                const inTime = row.original.inTime;
-                const outTime = row.original.outTime;
+                const { date, inTime, outTime } = row.original
                 return (
                     <div className="flex items-center gap-3">
                         <div className="flex flex-col">
                             <span className="text-[10px] font-bold text-muted-foreground uppercase opacity-50">In</span>
-                            <span className={cn("text-sm font-medium tabular-nums", !inTime && "text-destructive")}>{inTime ? format(new Date(inTime), "hh:mm aa") : "--:--"}</span>
+                            <span className={cn("text-sm font-medium tabular-nums", !inTime && "text-destructive")}>
+                                {formatPunchTime(inTime, date)}
+                            </span>
                         </div>
                         <div className="w-px h-6 bg-muted-foreground/10" />
                         <div className="flex flex-col">
                             <span className="text-[10px] font-bold text-muted-foreground uppercase opacity-50">Out</span>
-                            <span className={cn("text-sm font-medium tabular-nums", !outTime && "text-destructive")}>{outTime ? format(new Date(outTime), "hh:mm aa") : "--:--"}</span>
+                            <span className={cn("text-sm font-medium tabular-nums", !outTime && "text-destructive")}>
+                                {formatPunchTime(outTime, date)}
+                            </span>
                         </div>
                     </div>
                 )
@@ -139,8 +143,11 @@ export default function MissingEntryPage() {
                     className="h-8 rounded-lg font-bold gap-2"
                     onClick={() => {
                         setEditingEntry(row.original)
-                        setManualInTime(row.original.inTime ? new Date(row.original.inTime) : new Date(row.original.date))
-                        setManualOutTime(row.original.outTime ? new Date(row.original.outTime) : new Date(row.original.date))
+                        const dayBase =
+                            parsePunchTimeToDate("09:00", row.original.date)
+                            ?? new Date(row.original.date)
+                        setManualInTime(parsePunchTimeToDate(row.original.inTime, row.original.date) ?? dayBase)
+                        setManualOutTime(parsePunchTimeToDate(row.original.outTime, row.original.date) ?? dayBase)
                         setManualStatus("Present")
                         setManualReason("Correcting missing punch")
                         setIsSheetOpen(true)
@@ -157,14 +164,18 @@ export default function MissingEntryPage() {
 
         setIsSubmitting(true)
         try {
-            await attendanceService.createManualEntry({
-                employeeId: editingEntry.employeeId,
-                companyId: editingEntry.companyId,
-                date: editingEntry.date,
-                inTime: manualInTime ? format(manualInTime, "yyyy-MM-dd'T'HH:mm:ss") : undefined,
-                outTime: manualOutTime ? format(manualOutTime, "yyyy-MM-dd'T'HH:mm:ss") : undefined,
-                status: manualStatus,
-                reason: manualReason
+            if (!activeQuery) return
+            const adminId = user?.id ?? "00000000-0000-0000-0000-000000000001"
+            await attendanceApi.bulkAdjust({
+                companyId: activeQuery.companyId,
+                adminId,
+                entries: [{
+                    employeeID: editingEntry.employeeId,
+                    date: editingEntry.date,
+                    inTime: manualInTime?.toISOString(),
+                    outTime: manualOutTime?.toISOString(),
+                    remarks: manualReason,
+                }],
             })
             toast.success("Punch fixed successfully")
             setIsSheetOpen(false)
@@ -181,14 +192,18 @@ export default function MissingEntryPage() {
 
         setIsSubmitting(true)
         try {
-            await attendanceService.bulkManualEntry({
-                employeeIds: selectedRows.map(r => r.employeeId),
-                companyId: selectedRows[0].companyId,
-                date: selectedRows[0].date,
-                inTime: manualInTime ? format(manualInTime, "yyyy-MM-dd'T'HH:mm:ss") : undefined,
-                outTime: manualOutTime ? format(manualOutTime, "yyyy-MM-dd'T'HH:mm:ss") : undefined,
-                status: manualStatus,
-                reason: manualReason
+            if (!activeQuery) return
+            const adminId = user?.id ?? "00000000-0000-0000-0000-000000000001"
+            await attendanceApi.bulkAdjust({
+                companyId: activeQuery.companyId,
+                adminId,
+                entries: selectedRows.map((r) => ({
+                    employeeID: r.employeeId,
+                    date: r.date,
+                    inTime: manualInTime?.toISOString(),
+                    outTime: manualOutTime?.toISOString(),
+                    remarks: manualReason,
+                })),
             })
             toast.success(`Bulk fix completed for ${selectedRows.length} employees`)
             setSelectedRows([])
@@ -201,25 +216,16 @@ export default function MissingEntryPage() {
         }
     }
 
-    const handleSearch = async () => {
-        if (!fullFilters.startDate || !fullFilters.endDate) {
-            toast.error("Date range required")
+    const handleSearch = async (q?: AttendanceQuery) => {
+        const query = q ?? activeQuery
+        if (!query) {
+            toast.error("Apply filters first")
             return
         }
 
         setIsLoading(true)
         try {
-            const params: any = {
-                fromDate: fullFilters.startDate,
-                toDate: fullFilters.endDate,
-                ...Object.fromEntries(
-                    Object.entries(fullFilters).filter(([key]) =>
-                        !['startDate', 'endDate', 'date'].includes(key)
-                    )
-                )
-            }
-
-            const data = await missingEntryService.getMissingEntries(params)
+            const data = await missingEntryService.getMissingEntries(query)
             setFilteredData(data.entries)
             setSummary(data.summary)
             setHasSearched(true)
@@ -260,7 +266,7 @@ export default function MissingEntryPage() {
                             Fix Selected ({selectedRows.length})
                         </Button>
                     )}
-                    <Button variant="outline" size="sm" onClick={handleSearch} disabled={isLoading}>
+                    <Button variant="outline" size="sm" onClick={() => handleSearch()} disabled={isLoading}>
                         <IconRefresh size={18} className={cn("mr-2", isLoading && "animate-spin")} /> Refresh
                     </Button>
                     <Button variant="outline" size="sm" disabled={filteredData.length === 0}>
@@ -305,32 +311,15 @@ export default function MissingEntryPage() {
                     </div>
                 )}
 
-                <AdvancedFilter
-                    onFilterChange={(newFilters) => {
-                        setFullFilters(newFilters)
-                        // Trigger search automatically when filters are applied
-                        setIsLoading(true)
-                        const params: any = {
-                            fromDate: newFilters.startDate,
-                            toDate: newFilters.endDate,
-                            ...Object.fromEntries(
-                                Object.entries(newFilters).filter(([key]) =>
-                                    !['startDate', 'endDate', 'date'].includes(key)
-                                )
-                            )
-                        }
-                        missingEntryService.getMissingEntries(params)
-                            .then(data => {
-                                setFilteredData(data.entries)
-                                setSummary(data.summary)
-                                setHasSearched(true)
-                            })
-                            .catch(() => toast.error("Failed to fetch records"))
-                            .finally(() => setIsLoading(false))
-                    }}
-                    initialFilters={fullFilters}
+                <AttendanceCompanyFilter
                     showDate={false}
-                    showDateRange={true}
+                    showDateRange
+                    initialStartDate={format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), "yyyy-MM-dd")}
+                    initialEndDate={format(new Date(), "yyyy-MM-dd")}
+                    onFilterChange={({ query }) => {
+                        setActiveQuery(query)
+                        handleSearch(query)
+                    }}
                     isLoading={isLoading}
                 />
 

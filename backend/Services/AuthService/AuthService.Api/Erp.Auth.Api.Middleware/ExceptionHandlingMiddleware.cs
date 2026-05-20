@@ -16,6 +16,16 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Ex
 		{
 			await next(context);
 		}
+		catch (InvalidOperationException business)
+		{
+			logger.LogWarning(business, "Business rule violation");
+			await WriteErrorAsync(context, HttpStatusCode.BadRequest, "BUSINESS_RULE", business.Message);
+		}
+		catch (UnauthorizedAccessException denied)
+		{
+			logger.LogWarning(denied, "Access denied");
+			await WriteErrorAsync(context, HttpStatusCode.Forbidden, "Forbidden", denied.Message);
+		}
 		catch (Exception exception)
 		{
 			logger.LogError(exception, "Unhandled exception");

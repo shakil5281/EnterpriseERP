@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
+using Microsoft.Extensions.FileProviders;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authorization;
 using AuthService.Api.Controllers;
@@ -46,6 +48,9 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using Erp.BuildingBlocks.Hosting;
+using Erp.BuildingBlocks.CommonSecurity;
+using AuthService.Application.Abstractions.CompanyAccess;
+using EnterpriseERP.Platform.Host.Services;
 using Asp.Versioning;
 using FinishingService.API.Controllers;
 using FinishingService.Infrastructure;
@@ -69,6 +74,9 @@ builder.Host.UseSerilog((ctx, cfg) =>
     cfg.WriteTo.Console();
 });
 
+builder.Services.AddEnterpriseTenantSecurity(builder.Configuration);
+builder.Services.AddScoped<ITenantCompanyAccessResolver, AuthTenantCompanyAccessResolver>();
+builder.Services.AddScoped<ICompanyExistenceChecker, CompanyExistenceChecker>();
 builder.Services.AddAuthApplication();
 builder.Services.AddAuthInfrastructure(builder.Configuration);
 builder.Services.AddCompanyInfrastructure(builder.Configuration);
@@ -171,6 +179,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+        options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -181,6 +190,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwt.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey)),
             ClockSkew = TimeSpan.FromSeconds(30),
+            NameClaimType = "sub",
+            RoleClaimType = ClaimTypes.Role,
         };
     });
 
@@ -301,6 +312,16 @@ builder.Services.AddReverseProxy()
 
 var app = builder.Build();
 
+var companyUploadRoot = Path.Combine(
+    app.Environment.ContentRootPath,
+    app.Configuration["CompanyFiles:UploadRoot"] ?? "uploads");
+Directory.CreateDirectory(companyUploadRoot);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(companyUploadRoot),
+    RequestPath = "/uploads",
+});
+
 app.UseSerilogRequestLogging();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
@@ -340,6 +361,7 @@ app.UseSwaggerUI(o =>
 });
 
 app.UseAuthentication();
+app.UseEnterpriseTenantSecurity();
 app.UseAuthorization();
 
 app.MapHealthChecks("/health");
@@ -417,7 +439,13 @@ await using (var scope = app.Services.CreateAsyncScope())
     var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
     var roles = scope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>();
     var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("AuthDataSeeder");
-    await AuthDataSeeder.SeedAsync(authDb, users, roles, logger);
+    var defaultCompanyId = await companyDb.Companies.Select(c => c.Id).FirstOrDefaultAsync();
+    await AuthDataSeeder.SeedAsync(authDb, users, roles, logger, defaultCompanyId == Guid.Empty ? null : defaultCompanyId);
+    var superAdmin = await users.FindByNameAsync("superadmin");
+    if (superAdmin is not null && defaultCompanyId != Guid.Empty)
+    {
+        await AuthDataSeeder.EnsureUserCompanyAccessAsync(authDb, superAdmin.Id, defaultCompanyId, logger);
+    }
 
     var attendanceDb = scope.ServiceProvider.GetRequiredService<AttendanceDbContext>();
     var leaveDb = scope.ServiceProvider.GetRequiredService<LeaveDbContext>();

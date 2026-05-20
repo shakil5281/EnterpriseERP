@@ -32,4 +32,8 @@ public sealed class UserProfileResponse
 	public IReadOnlyList<string> Permissions { get; init; } = Array.Empty<string>();
 
 	public IReadOnlyList<UserCompanyAccessDto> CompanyAccess { get; init; } = Array.Empty<UserCompanyAccessDto>();
+
+	public string TenantScope { get; init; } = "company";
+
+	public Guid? DefaultCompanyId { get; init; }
 }

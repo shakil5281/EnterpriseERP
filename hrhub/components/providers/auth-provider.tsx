@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { authService, User, LoginResponse } from "@/lib/services/auth"
+import { syncActiveCompanyStorage } from "@/lib/active-company-storage"
 import { useRouter } from "next/navigation"
 import { FullScreenLoading } from "@/components/loading-state"
 
@@ -46,6 +47,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     if (profile && profile.roles && profile.roles.length > 0) {
                         // Only set user when we have complete data with roles
                         setUser(profile);
+                        syncActiveCompanyStorage({
+                            allowedCompanyIds: profile.assignedCompanyIds ?? [],
+                            defaultCompanyId: profile.defaultCompanyId ?? null,
+                            isSuperAdmin: profile.roles.includes("SuperAdmin"),
+                            accessToken: localStorage.getItem("token") ?? undefined,
+                        });
                         // Update localStorage with fresh data
                         localStorage.setItem('user', JSON.stringify({
                             username: profile.username,
@@ -136,23 +143,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null)
     }
 
+    const isSuperAdmin = () => !!user?.roles?.includes("SuperAdmin")
+
     const hasRole = (role: string) => {
         if (!user || !user.roles) return false
-        // SuperAdmin and Admin bypass - full access to all modules
-        if (user.roles.includes("SuperAdmin") || user.roles.includes("Admin")) return true
+        if (isSuperAdmin()) return true
         return user.roles.includes(role)
     }
 
     const hasAnyRole = (roles: string[]) => {
         if (!user || !user.roles) return false
-        // SuperAdmin and Admin bypass - full access to all modules
-        if (user.roles.includes("SuperAdmin") || user.roles.includes("Admin")) return true
+        if (isSuperAdmin()) return true
         return roles.some(role => user.roles.includes(role))
     }
 
     const hasPermission = (permission: string) => {
         if (!user) return false
-        if (hasRole("SuperAdmin") || hasRole("Admin")) return true
+        if (isSuperAdmin()) return true
         return !!user.permissions?.includes(permission)
     }
 

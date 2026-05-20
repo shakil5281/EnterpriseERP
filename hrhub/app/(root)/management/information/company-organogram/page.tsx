@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { organogramService, loadOrganogramLookup, Department, Section, Designation, Line } from "@/lib/services/organogram"
+import { importExportService } from "@/lib/services/import-export"
 import { companyService, Company } from "@/lib/services/company"
 import { toast } from "sonner"
 import { NativeSelect } from "@/components/ui/native-select"
@@ -424,7 +425,7 @@ export default function CompanyOrganogramPage() {
                         size="sm"
                         onClick={async () => {
                             try {
-                                await organogramService.downloadTemplate()
+                                await importExportService.downloadOrganogramDemo()
                                 toast.success("Template downloaded")
                             } catch (e) {
                                 toast.error("Failed to download")

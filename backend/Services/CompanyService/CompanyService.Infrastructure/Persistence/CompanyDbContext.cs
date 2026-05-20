@@ -42,6 +42,9 @@ public sealed class CompanyDbContext(DbContextOptions<CompanyDbContext> options)
             b.Property(x => x.BIN).HasMaxLength(100);
             b.Property(x => x.TIN).HasMaxLength(100);
             b.Property(x => x.LogoUrl).HasMaxLength(500);
+            b.Property(x => x.AuthorizeSignatureUrl).HasMaxLength(500);
+            b.Property(x => x.Industry).HasMaxLength(100);
+            b.Property(x => x.FoundedYear);
             b.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("Active");
             b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSDATETIME()");
         });

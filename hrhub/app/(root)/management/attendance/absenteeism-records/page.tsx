@@ -20,19 +20,16 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { absenteeismService, type AbsenteeismRecord, type AbsenteeismSummary } from "@/lib/services/absenteeism"
-import { type CommonFilterParams } from "@/lib/services/attendance"
+import { type AttendanceQuery } from "@/lib/services/attendance-api"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { AdvancedFilter } from "@/components/attendance/advanced-filter"
+import { AttendanceCompanyFilter } from "@/components/attendance/attendance-company-filter"
 
 export default function AbsenteeismRecordsPage() {
     const router = useRouter()
     const [isLoading, setIsLoading] = React.useState(false)
-    const [fullFilters, setFullFilters] = React.useState<CommonFilterParams>({
-        startDate: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), "yyyy-MM-dd"),
-        endDate: format(new Date(), "yyyy-MM-dd")
-    })
+    const [activeQuery, setActiveQuery] = React.useState<AttendanceQuery | null>(null)
     const [filteredData, setFilteredData] = React.useState<AbsenteeismRecord[]>([])
     const [summary, setSummary] = React.useState<AbsenteeismSummary | null>(null)
     const [hasSearched, setHasSearched] = React.useState(false)
@@ -101,7 +98,8 @@ export default function AbsenteeismRecordsPage() {
     const handleSearch = async () => {
         setIsLoading(true)
         try {
-            const data = await absenteeismService.getAbsenteeismRecords(fullFilters)
+            if (!activeQuery) return
+            const data = await absenteeismService.getAbsenteeismRecords(activeQuery)
             setFilteredData(data.records)
             setSummary(data.summary)
             setHasSearched(true)
@@ -115,7 +113,7 @@ export default function AbsenteeismRecordsPage() {
 
     const handleExportExcel = async () => {
         try {
-            await absenteeismService.exportAbsenteeismExcel(fullFilters);
+            if (activeQuery) await absenteeismService.exportAbsenteeismExcel(activeQuery);
             toast.success("Excel exported successfully");
         } catch (error) {
             toast.error("Excel export failed");
@@ -124,7 +122,7 @@ export default function AbsenteeismRecordsPage() {
 
     const handleExportPdf = async () => {
         try {
-            await absenteeismService.exportAbsenteeismPdf(fullFilters);
+            if (activeQuery) await absenteeismService.exportAbsenteeismPdf(activeQuery);
             toast.success("PDF exported successfully");
         } catch (error) {
             toast.error("PDF export failed");
@@ -226,13 +224,12 @@ export default function AbsenteeismRecordsPage() {
                         <CardTitle className="text-sm font-medium">Search Filters</CardTitle>
                     </CardHeader>
                     <CardContent className="p-6">
-                        <AdvancedFilter
+                        <AttendanceCompanyFilter
                             showDate={false}
-                            showDateRange={true}
-                            onFilterChange={(newFilters: CommonFilterParams) => {
-                                setFullFilters(newFilters)
-                            }}
-                            initialFilters={fullFilters}
+                            showDateRange
+                            initialStartDate={format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), "yyyy-MM-dd")}
+                            initialEndDate={format(new Date(), "yyyy-MM-dd")}
+                            onFilterChange={({ query }) => setActiveQuery(query)}
                         />
                         <div className="mt-4 flex justify-end">
                             <Button onClick={handleSearch} disabled={isLoading} className="w-full sm:w-auto">

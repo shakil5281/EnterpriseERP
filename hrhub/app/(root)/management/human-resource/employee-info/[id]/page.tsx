@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
@@ -28,7 +28,7 @@ import { StatusChangeSheet } from "@/components/hr/status-change-sheet"
 import { TransferSheet } from "@/components/hr/transfer-sheet"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { getImageUrl } from "@/lib/utils"
+import { EmployeeDocumentsPanel } from "@/components/hr/employee-documents-panel"
 
 export default function EmployeeDetailsPage() {
     const params = useParams()
@@ -112,17 +112,9 @@ export default function EmployeeDetailsPage() {
                 <div className="h-32 bg-primary/10 relative">
                     <div className="absolute -bottom-16 left-8 flex items-end gap-6">
                         <div className="h-32 w-32 rounded-2xl bg-white p-1.5 shadow-lg relative overflow-hidden ring-4 ring-white">
-                            {employee.profileImageUrl ? (
-                                <img
-                                    src={getImageUrl(employee.profileImageUrl)}
-                                    alt={employee.fullNameEn}
-                                    className="h-full w-full object-cover rounded-xl"
-                                />
-                            ) : (
-                                <div className="h-full w-full bg-muted flex items-center justify-center rounded-xl">
-                                    <IconUser className="h-16 w-16 text-muted-foreground/30" />
-                                </div>
-                            )}
+                            <div className="h-full w-full bg-muted flex items-center justify-center rounded-xl">
+                                <IconUser className="h-16 w-16 text-muted-foreground/30" />
+                            </div>
                         </div>
                         <div className="pb-2">
                             <div className="flex items-center gap-3">
@@ -134,7 +126,7 @@ export default function EmployeeDetailsPage() {
                             </div>
                             <p className="text-lg font-medium text-muted-foreground mt-1 flex items-center gap-2">
                                 <IconBriefcase className="h-4 w-4" />
-                                {employee.designationName} • {employee.departmentName}
+                                {employee.designationName} â€¢ {employee.departmentName}
                             </p>
                         </div>
                     </div>
@@ -155,7 +147,8 @@ export default function EmployeeDetailsPage() {
                     <TabsTrigger value="personal" className="px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">Personal</TabsTrigger>
                     <TabsTrigger value="employment" className="px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">Employment</TabsTrigger>
                     <TabsTrigger value="salary" className="px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">Salary & Bank</TabsTrigger>
-                    <TabsTrigger value="family" className="px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">Family & Emergency</TabsTrigger>
+                    <TabsTrigger value="emergency" className="px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">Emergency</TabsTrigger>
+                    <TabsTrigger value="documents" className="px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">Documents</TabsTrigger>
                     <TabsTrigger value="history" className="px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">History</TabsTrigger>
                 </TabsList>
 
@@ -168,9 +161,7 @@ export default function EmployeeDetailsPage() {
                                 <DetailItem label="NID Number" value={employee.nid} />
                                 <DetailItem label="Date of Birth" value={employee.dateOfBirth ? format(new Date(employee.dateOfBirth), "dd MMM yyyy") : "N/A"} />
                                 <DetailItem label="Gender" value={employee.gender} />
-                                <DetailItem label="Religion" value={employee.religion} />
-                                <DetailItem label="Proximity/Card ID" value={employee.proximity} />
-                                <DetailItem label="Blood Group" value={employee.bloodGroup} />
+                                <DetailItem label="Punch number" value={employee.punchNumber} />
                             </CardContent>
                         </Card>
 
@@ -198,12 +189,8 @@ export default function EmployeeDetailsPage() {
                                 <DetailItem label="Company Name" value={employee.companyName} />
                                 <DetailItem label="Department" value={employee.departmentName} />
                                 <DetailItem label="Section" value={employee.sectionName} />
-                                <DetailItem label="Line" value={employee.lineName} />
-                                <DetailItem label="Group" value={employee.groupName} />
-                                <DetailItem label="Floor" value={employee.floorName} />
-                                <DetailItem label="Shift" value={employee.shiftName} />
-                                <DetailItem label="Overtime Status" value={employee.isOtEnabled ? "Enabled" : "Disabled"} />
-                                <DetailItem label="Account Activity" value={employee.isActive ? "Active" : "Disabled"} />
+                                <DetailItem label="Designation" value={employee.designationName} />
+                                <DetailItem label="Status" value={employee.status} />
                             </div>
                         </CardContent>
                     </Card>
@@ -216,17 +203,16 @@ export default function EmployeeDetailsPage() {
                             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
                                 <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
                                     <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Gross Salary</p>
-                                    <p className="text-2xl font-black text-primary">৳ {(employee.grossSalary || 0).toLocaleString()}</p>
+                                    <p className="text-2xl font-black text-primary">à§³ {(employee.grossSalary || 0).toLocaleString()}</p>
                                 </div>
                                 <div className="space-y-4">
-                                    <DetailItem label="Basic Salary" value={`৳ ${(employee.basicSalary || 0).toLocaleString()}`} />
-                                    <DetailItem label="House Rent" value={`৳ ${(employee.houseRent || 0).toLocaleString()}`} />
-                                    <DetailItem label="Medical Allowance" value={`৳ ${(employee.medicalAllowance || 0).toLocaleString()}`} />
+                                    <DetailItem label="Basic Salary" value={`à§³ ${(employee.basicSalary || 0).toLocaleString()}`} />
+                                    <DetailItem label="House Rent" value={`à§³ ${(employee.houseRent || 0).toLocaleString()}`} />
+                                    <DetailItem label="Medical Allowance" value={`à§³ ${(employee.medicalAllowance || 0).toLocaleString()}`} />
                                 </div>
                                 <div className="space-y-4">
-                                    <DetailItem label="Conveyance" value={`৳ ${(employee.conveyance || 0).toLocaleString()}`} />
-                                    <DetailItem label="Food Allowance" value={`৳ ${(employee.foodAllowance || 0).toLocaleString()}`} />
-                                    <DetailItem label="Other Allowances" value={`৳ ${(employee.otherAllowance || 0).toLocaleString()}`} />
+                                    <DetailItem label="Conveyance" value={`à§³ ${(employee.conveyance || 0).toLocaleString()}`} />
+                                    <DetailItem label="Food Allowance" value={`à§³ ${(employee.foodAllowance || 0).toLocaleString()}`} />
                                 </div>
                             </CardContent>
                         </Card>
@@ -244,41 +230,28 @@ export default function EmployeeDetailsPage() {
                     </div>
                 </TabsContent>
 
-                <TabsContent value="family" className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Card className="border-none shadow-sm shadow-black/5">
-                            <CardHeader><CardTitle className="text-lg font-bold flex items-center gap-2 text-primary"><IconUsers className="h-5 w-5" />Family Information</CardTitle></CardHeader>
-                            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                <DetailItem label="Father's Name (EN)" value={employee.fatherNameEn} />
-                                <DetailItem label="Father's Name (BN)" value={employee.fatherNameBn} />
-                                <DetailItem label="Mother's Name (EN)" value={employee.motherNameEn} />
-                                <DetailItem label="Mother's Name (BN)" value={employee.motherNameBn} />
-                                <DetailItem label="Marital Status" value={employee.maritalStatus} />
-                                <DetailItem label="Spouse Name (EN)" value={employee.spouseNameEn} />
-                                <DetailItem label="Spouse Occupation" value={employee.spouseOccupation} />
-                                <DetailItem label="Spouse Contact" value={employee.spouseContact} />
-                            </CardContent>
-                        </Card>
+                <TabsContent value="emergency" className="space-y-6">
+                    <Card className="border-none shadow-sm shadow-black/5">
+                        <CardHeader><CardTitle className="text-lg font-bold flex items-center gap-2 text-primary"><IconPhoneCall className="h-5 w-5" />Emergency contact</CardTitle></CardHeader>
+                        <CardContent className="space-y-4">
+                            <DetailItem label="Name" value={employee.emergencyContactName} />
+                            <DetailItem label="Relation" value={employee.emergencyContactRelation} />
+                            <DetailItem label="Phone" value={employee.emergencyContactPhone} />
+                            <DetailItem label="Address" value={employee.emergencyContactAddress} />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
 
-                        <Card className="border-none shadow-sm shadow-black/5">
-                            <CardHeader><CardTitle className="text-lg font-bold flex items-center gap-2 text-primary"><IconPhoneCall className="h-5 w-5" />Emergency Contact</CardTitle></CardHeader>
-                            <CardContent className="space-y-6">
-                                <div className="flex items-center gap-4 bg-red-50/50 p-4 rounded-xl border border-red-100">
-                                    <div className="h-32 w-32 rounded-full border-4 border-white bg-linear-to-br from-primary/10 to-primary/30 flex items-center justify-center overflow-hidden">
-                                        <IconPhoneCall className="h-6 w-6 text-red-600" />
-                                    </div>
-                                    <div>
-                                        <p className="text-lg font-bold text-red-900">{employee.emergencyContactName}</p>
-                                        <p className="text-xs font-bold text-red-600 uppercase tracking-wider">{employee.emergencyContactRelation}</p>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 gap-4 px-2">
-                                    <DetailItem label="Phone Number" value={employee.emergencyContactPhone} />
-                                    <DetailItem label="Address" value={employee.emergencyContactAddress} />
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
+                <TabsContent value="documents">
+                    {employee.entityId ? (
+                        <EmployeeDocumentsPanel
+                            employeeEntityId={employee.entityId}
+                            documents={employee.documents ?? []}
+                            onChanged={() =>
+                                employeeService.getEmployee(id, companyIdInt).then(setEmployee)
+                            }
+                        />
+                    ) : null}
                 </TabsContent>
 
                 <TabsContent value="history">
@@ -345,7 +318,7 @@ function DetailItem({ label, value }: { label: string, value: string | number | 
     return (
         <div className="space-y-1">
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
-            <p className="text-sm font-medium text-gray-800">{value || "—"}</p>
+            <p className="text-sm font-medium text-gray-800">{value || "â€”"}</p>
         </div>
     )
 }

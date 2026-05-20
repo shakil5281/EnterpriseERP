@@ -96,12 +96,19 @@ func main() {
 
 	var remoteSQL *sql.DB
 	var remoteColSvc *collector.RemoteService
-	remoteEnabled := strings.TrimSpace(cfg.ConnectionStrings.RemoteZktecoDb) != ""
-	if remoteEnabled {
+	remoteConfigured := strings.TrimSpace(cfg.ConnectionStrings.RemoteZktecoDb) != ""
+	if src := cfg.ConnectionStringsSource(); src != "" {
+		logger.Info("merged connection strings", "file", src)
+	}
+	if remoteConfigured {
+		logger.Info("remote ZKTeco SQL configured", "database", "zkteco")
+	} else {
+		logger.Warn("RemoteZktecoDb is empty; set it in appsettings.Development.json or backend/Configuration/connectionstrings.json, then restart PunchDataService")
+	}
+	if remoteConfigured {
 		remoteSQL, err = db.OpenRemote(cfg.ConnectionStrings.RemoteZktecoDb)
 		if err != nil {
-			remoteEnabled = false
-			logger.Warn("remote ZKTeco collect disabled because database connection failed", "error", err)
+			logger.Warn("remote ZKTeco startup ping failed; collect will retry on first request", "error", err)
 		} else {
 			remoteColSvc = collector.NewRemoteService(
 				repo,
@@ -143,7 +150,19 @@ func main() {
 		Punches:       handlers.NewPunchesHandler(repo, procSvc),
 		Machines:      handlers.NewMachinesHandler(repo, zkClient, syncSvc),
 		Imports:       handlers.NewImportsHandler(repo),
-		RemoteCollect: handlers.NewRemoteCollectHandler(remoteColSvc, repo, remoteEnabled),
+		RemoteCollect: handlers.NewRemoteCollectHandler(handlers.RemoteCollectHandlerConfig{
+			Repo:          repo,
+			RemoteConnStr: cfg.ConnectionStrings.RemoteZktecoDb,
+			Publisher:     publisher,
+			Logger:        logger,
+			Options: collector.RemoteOptions{
+				Source:              cfg.RemoteCollect.Source,
+				PageSize:            cfg.RemoteCollect.DefaultBatchSize,
+				MaxPageSize:         cfg.RemoteCollect.MaxBatchSize,
+				MaxRowsPerCollect:   cfg.RemoteCollect.MaxRowsPerCollect,
+				DefaultLookbackDays: cfg.RemoteCollect.DefaultLookbackDays,
+			},
+		}, remoteColSvc),
 	})
 
 	srv := &http.Server{

@@ -71,8 +71,9 @@ export function LoginForm({
         })
         setIsLoading(false)
       } else {
-        toast.error("Login failed", {
-          description: response.message || "Invalid username or password.",
+        const msg = response.message || "Invalid username or password."
+        toast.error(msg.includes("company") ? "Cannot sign in" : "Login failed", {
+          description: msg,
         })
         setIsLoading(false)
       }

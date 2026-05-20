@@ -45,20 +45,11 @@ const companyColumns: ColumnDef<Company>[] = [
         cell: ({ row }) => <span className="font-medium">{row.original.companyNameEn}</span>,
     },
     {
-        accessorKey: "branch",
-        header: "Branch Type",
-        cell: ({ row }) => (
-            <Badge variant={row.original.branch === 1 ? "default" : "secondary"}>
-                {row.original.branch === 1 ? "Primary" : "Secondary"}
-            </Badge>
-        ),
-    },
-    {
         accessorKey: "industry",
         header: "Industry",
         cell: ({ row }) => (
             <Badge variant="outline" className="text-muted-foreground px-1.5 font-normal">
-                {row.original.industry}
+                {row.original.industry || "—"}
             </Badge>
         ),
     },

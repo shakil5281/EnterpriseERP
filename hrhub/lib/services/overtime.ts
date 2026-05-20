@@ -1,81 +1,21 @@
-import api from '../api';
-import { type CommonFilterParams } from './attendance';
+import { attendanceApi, type AttendanceQuery, type DailyOtSheetRow, type DailyOtSummaryRow } from "./attendance-api";
 
-export interface DailyOTSheet {
-    id: number;
-    employeeCard: number;
-    employeeId: string;
-    employeeName: string;
-    department: string;
-    section: string;
-    line: string;
-    designation: string;
-    date: string;
-    inTime: string | null;
-    outTime: string | null;
-    regularHours: number;
-    otHours: number;
-    remarks: string | null;
-}
-
-export interface OTSheetResponse {
-    records: DailyOTSheet[];
-    totalOTHours: number;
-    totalEmployees: number;
-}
-
-export interface DailyOTSummary {
-    id: number;
-    name: string;
-    employeeCount: number;
-    totalOTHours: number;
-    averageOTPerEmployee: number;
-    totalRegularHours: number;
-}
-
-export interface OTSummaryResponse {
-    departmentSummaries: DailyOTSummary[];
-    sectionSummaries: DailyOTSummary[];
-    lineSummaries: DailyOTSummary[];
-    grandTotalOTHours: number;
-    totalEmployees: number;
-    date: string;
-}
+export type { DailyOtSheetRow, DailyOtSummaryRow } from "./attendance-api";
 
 export const overtimeService = {
-    getDailyOTSheet: async (params: CommonFilterParams) => {
-        const response = await api.get<OTSheetResponse>('/attendance/daily-ot-sheet', { params });
-        return response.data;
-    },
+  getDailyOTSheet: async (q: AttendanceQuery): Promise<DailyOtSheetRow[]> => {
+    return attendanceApi.getDailyOTSheet(q);
+  },
 
-    getDailyOTSummary: async (params: CommonFilterParams) => {
-        const response = await api.get<OTSummaryResponse>('/attendance/daily-ot-summary', { params });
-        return response.data;
-    },
+  getDailyOTSummary: async (q: AttendanceQuery): Promise<DailyOtSummaryRow[]> => {
+    return attendanceApi.getDailyOTSummary(q);
+  },
 
-    exportDailyOTSheetExcel: async (params: CommonFilterParams) => {
-        const response = await api.get('/attendance/daily-ot-sheet/export/excel', {
-            params,
-            responseType: 'blob'
-        });
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `Daily_OT_Sheet_${params.date}.xlsx`);
-        document.body.appendChild(link);
-        link.click();
-    },
+  exportDailyOTSheetExcel: async (q: AttendanceQuery) => {
+    await attendanceApi.exportDailyReportCsv(q, `daily-ot-sheet-${q.fromDate}.csv`);
+  },
 
-    exportDailyOTSummaryExcel: async (params: CommonFilterParams) => {
-        const response = await api.get('/attendance/daily-ot-summary/export/excel', {
-            params,
-            responseType: 'blob'
-        });
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `Daily_OT_Summary_${params.date}.xlsx`);
-        document.body.appendChild(link);
-        link.click();
-    }
+  exportDailyOTSummaryExcel: async (q: AttendanceQuery) => {
+    await attendanceApi.exportDailySummaryCsv(q, `daily-ot-summary-${q.fromDate}.csv`);
+  },
 };

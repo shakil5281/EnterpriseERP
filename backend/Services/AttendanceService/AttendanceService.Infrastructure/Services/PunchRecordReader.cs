@@ -6,17 +6,11 @@ namespace AttendanceService.Infrastructure.Services;
 
 public sealed class PunchRecordReader(PunchDataReadDbContext db) : IPunchRecordReader
 {
-    public async Task<IReadOnlyList<PunchRecordRow>> GetForCompanyAndDateAsync(
+    public Task<IReadOnlyList<PunchRecordRow>> GetForCompanyAndDateAsync(
         int punchCompanyId,
         DateTime date,
-        CancellationToken cancellationToken = default)
-    {
-        return await GetForCompanyAndRangeAsync(
-            punchCompanyId,
-            date.Date,
-            date.Date.AddDays(1),
-            cancellationToken);
-    }
+        CancellationToken cancellationToken = default) =>
+        GetForCompanyAndRangeAsync(punchCompanyId, date.Date, date.Date.AddDays(1), cancellationToken);
 
     public async Task<IReadOnlyList<PunchRecordRow>> GetForCompanyAndRangeAsync(
         int punchCompanyId,
@@ -26,21 +20,35 @@ public sealed class PunchRecordReader(PunchDataReadDbContext db) : IPunchRecordR
     {
         var dayStart = ToDhakaOffset(fromInclusive);
         var dayEnd = ToDhakaOffset(toExclusive);
-        var rows = await db.PunchRecords
+
+        // Raw SQL + keyless long types — avoids EF casting bigint columns to int.
+        var rows = await db.PunchRecordRows
+            .FromSqlInterpolated($"""
+                SELECT Id, CompanyId, PunchNumber, DeviceId, PunchTime
+                FROM PunchRecords
+                WHERE CompanyId = {punchCompanyId}
+                  AND PunchTime >= {dayStart}
+                  AND PunchTime < {dayEnd}
+                ORDER BY PunchTime
+                """)
             .AsNoTracking()
-            .Where(p => p.CompanyId == (long)punchCompanyId && p.PunchTime >= dayStart && p.PunchTime < dayEnd)
-            .OrderBy(p => p.PunchTime)
             .ToListAsync(cancellationToken);
 
         return rows
             .Select(p => new PunchRecordRow(
                 Guid.TryParse(p.Id, out var punchId) ? punchId : Guid.Empty,
-                (int)p.CompanyId,
-                p.PunchNumber,
-                p.DeviceId,
+                ToCompanyIdInt(p.CompanyId),
+                ToPunchNumberInt(p.PunchNumber),
+                p.DeviceId ?? string.Empty,
                 DateTime.SpecifyKind(p.PunchTime.DateTime, DateTimeKind.Unspecified)))
             .ToList();
     }
+
+    private static int ToPunchNumberInt(long punchNumber) =>
+        punchNumber is > 0 and <= int.MaxValue ? (int)punchNumber : 0;
+
+    private static int ToCompanyIdInt(long companyId) =>
+        companyId is > 0 and <= int.MaxValue ? (int)companyId : 0;
 
     private static DateTimeOffset ToDhakaOffset(DateTime value)
     {

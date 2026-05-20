@@ -15,6 +15,7 @@ import (
 	"github.com/enterprise-erp/importexport/internal/jobs"
 	"github.com/enterprise-erp/importexport/internal/services/csvsvc"
 	excelsvc "github.com/enterprise-erp/importexport/internal/services/excel"
+	"github.com/enterprise-erp/importexport/internal/services/hrclient"
 	"github.com/enterprise-erp/importexport/internal/storage"
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
@@ -46,6 +47,7 @@ type Service struct {
 	ExportDir      string
 	LargeThreshold int
 	AsynqClient    *asynq.Client
+	HR             *hrclient.Client
 }
 
 type previewCache struct {
@@ -57,6 +59,7 @@ type previewCache struct {
 	TotalRows   int            `json:"totalRows"`
 	ValidRows   int            `json:"validRows"`
 	InvalidRows int            `json:"invalidRows"`
+	BearerToken string         `json:"bearerToken,omitempty"`
 }
 
 func (s *Service) Preview(companyID, userID uuid.UUID, module, absFilePath, fileName string) (*dto.ImportPreviewResult, error) {
@@ -89,7 +92,7 @@ func (s *Service) Preview(companyID, userID uuid.UUID, module, absFilePath, file
 	}, nil
 }
 
-func (s *Service) Confirm(companyID, userID uuid.UUID, sessionID uuid.UUID) (*dto.ImportJobDTO, error) {
+func (s *Service) Confirm(companyID, userID uuid.UUID, sessionID uuid.UUID, bearer string) (*dto.ImportJobDTO, error) {
 	var sess models.ImportPreviewSession
 	if err := s.DB.First(&sess, "id = ? AND company_id = ?", sessionID, companyID).Error; err != nil {
 		return nil, fmt.Errorf("session not found")
@@ -100,6 +103,15 @@ func (s *Service) Confirm(companyID, userID uuid.UUID, sessionID uuid.UUID) (*dt
 	var cache previewCache
 	if err := json.Unmarshal([]byte(sess.PayloadJSON), &cache); err != nil {
 		return nil, err
+	}
+	if strings.TrimSpace(bearer) != "" {
+		cache.BearerToken = bearer
+		payload, err := json.Marshal(cache)
+		if err != nil {
+			return nil, err
+		}
+		sess.PayloadJSON = string(payload)
+		_ = s.DB.Save(&sess).Error
 	}
 	if cache.ValidRows > s.LargeThreshold && s.AsynqClient != nil {
 		return s.enqueueLargeImport(companyID, userID, sess, cache)
@@ -145,7 +157,7 @@ func (s *Service) ProcessLargeImport(jobID, sessionID uuid.UUID) error {
 	}
 	job.Status = string(enums.ImportProcessing)
 	_ = s.DB.Save(&job)
-	_, err := s.finalizeImport(&job, sess.CompanyID, sess.CreatedBy, cache)
+	_, err := s.finalizeImport(&job, sess.CompanyID, sess.CreatedBy, cache, cache.BearerToken)
 	return err
 }
 
@@ -160,7 +172,7 @@ func (s *Service) runImport(companyID, userID uuid.UUID, sess models.ImportPrevi
 	if err := s.DB.Create(&job).Error; err != nil {
 		return nil, err
 	}
-	dtoJob, err := s.finalizeImport(&job, companyID, userID, cache)
+	dtoJob, err := s.finalizeImport(&job, companyID, userID, cache, cache.BearerToken)
 	if err != nil {
 		return nil, err
 	}
@@ -168,40 +180,66 @@ func (s *Service) runImport(companyID, userID uuid.UUID, sess models.ImportPrevi
 	return dtoJob, nil
 }
 
-func (s *Service) finalizeImport(job *models.ImportJob, companyID, userID uuid.UUID, cache previewCache) (*dto.ImportJobDTO, error) {
-	var staging []models.ImportStagingRow
-	validCount := cache.ValidRows
-	if cache.ValidJSON != "" && cache.ValidJSON != "[]" {
-		staging = append(staging, models.ImportStagingRow{
-			ImportJobID: job.ID, RowNumber: 0, ModuleName: cache.ModuleName,
-			PayloadJSON: cache.ValidJSON, Status: "Staged",
-		})
+func (s *Service) finalizeImport(job *models.ImportJob, companyID, userID uuid.UUID, cache previewCache, bearerToken string) (*dto.ImportJobDTO, error) {
+	bearer := bearerToken
+	if bearer == "" {
+		bearer = cache.BearerToken
 	}
-	for _, e := range cache.Errors {
+
+	allErrors := append([]dto.RowError{}, cache.Errors...)
+	successCount := 0
+	failedPreview := cache.InvalidRows
+
+	if isEmployeeModule(cache.ModuleName) {
+		applied, applyErrors, err := s.applyEmployeeImport(job, companyID, cache, bearer)
+		if err != nil {
+			return nil, err
+		}
+		successCount = applied
+		allErrors = mergeRowErrors(allErrors, applyErrors)
+		failedPreview = countUniqueErrorRows(allErrors)
+	} else {
+		successCount = cache.ValidRows
+		if cache.ValidJSON != "" && cache.ValidJSON != "[]" {
+			staging := []models.ImportStagingRow{{
+				ImportJobID: job.ID, RowNumber: 0, ModuleName: cache.ModuleName,
+				PayloadJSON: cache.ValidJSON, Status: "Staged",
+			}}
+			_ = s.DB.Create(&staging).Error
+		}
+	}
+
+	for _, e := range allErrors {
 		_ = s.DB.Create(&models.ImportJobError{
 			ImportJobID: job.ID, RowNumber: e.Row, Column: e.Column, Message: e.Message,
 		}).Error
 	}
-	if len(cache.Errors) > 0 {
-		errPath, err := s.writeErrorArtifact(job.ID, cache.Errors)
+	if len(allErrors) > 0 {
+		errPath, err := s.writeErrorArtifact(job.ID, allErrors)
 		if err == nil {
 			job.ErrorFilePath = errPath
 		}
 	}
-	if len(staging) > 0 {
-		_ = s.DB.Create(&staging).Error
-	}
-	job.SuccessRows = validCount
-	job.FailedRows = cache.InvalidRows
+
+	job.SuccessRows = successCount
+	job.FailedRows = failedPreview
 	now := time.Now()
 	job.CompletedAt = &now
-	if cache.InvalidRows > 0 && validCount > 0 {
+	if failedPreview > 0 && successCount > 0 {
 		job.Status = string(enums.ImportCompleted)
 		job.Remarks = "partial success"
-	} else if cache.InvalidRows > 0 {
-		job.Status = string(enums.ImportFailed)
+	} else if failedPreview > 0 || successCount == 0 && cache.TotalRows > 0 {
+		if successCount == 0 && cache.TotalRows > 0 {
+			job.Status = string(enums.ImportFailed)
+		} else if failedPreview > 0 && successCount == 0 {
+			job.Status = string(enums.ImportFailed)
+		}
 	} else {
 		job.Status = string(enums.ImportCompleted)
+	}
+	if successCount > 0 && failedPreview == 0 {
+		job.Status = string(enums.ImportCompleted)
+		job.Remarks = ""
 	}
 	_ = s.DB.Save(job)
 	return toImportDTO(*job), nil

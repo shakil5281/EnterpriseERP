@@ -341,38 +341,4 @@ export const addressService = {
     return writeMutation(response.data);
   },
 
-  exportTemplate: async () => {
-    const response = await api.get(`${ADDR}/export-template`, {
-      responseType: "blob",
-    });
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "Address_Template.xlsx");
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  },
-  exportDemo: async () => {
-    const response = await api.get(`${ADDR}/export-demo`, {
-      responseType: "blob",
-    });
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "Address_Demo_Data.xlsx");
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  },
-  importExcel: async (file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    const response = await api.post<unknown>(`${ADDR}/import`, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
-    return unwrapApiData<unknown>(response.data);
-  },
 };

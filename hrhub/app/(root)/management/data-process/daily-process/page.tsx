@@ -16,7 +16,7 @@ import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { DateRange } from "react-day-picker"
 import { eachDayOfInterval, format } from "date-fns"
-import { attendanceService } from "@/lib/services/attendance"
+import { attendanceApi } from "@/lib/services/attendance-api"
 import { companyService, type Company } from "@/lib/services/company"
 import { NativeSelect } from "@/components/ui/native-select"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
@@ -64,28 +64,26 @@ export default function DailyProcessPage() {
         }
 
         const end = range.to ?? range.from
-        const days = eachDayOfInterval({ start: range.from, end })
 
         setProcessing(true)
-        setProgress(5)
+        setProgress(10)
         setResult(null)
 
         try {
-            let totalRecords = 0
-            let processed = 0
-            for (const day of days) {
-                const result = await attendanceService.processDaily({
-                    companyId,
-                    date: format(day, "yyyy-MM-dd"),
-                })
-                totalRecords += result.recordsProcessed
-                processed += 1
-                setProgress(Math.round((processed / days.length) * 100))
+            const batch = await attendanceApi.processRange({
+                companyId,
+                startDate: format(range.from, "yyyy-MM-dd"),
+                endDate: format(end, "yyyy-MM-dd"),
+            })
+            const totalRecords = batch.recordsProcessed
+            setProgress(100)
+            if (batch.errors.length > 0) {
+                toast.warning(`${batch.errors.length} day(s) failed during processing`)
             }
 
             const label =
-                days.length === 1
-                    ? format(days[0], "dd MMM yyyy")
+                range.from.getTime() === end.getTime()
+                    ? format(range.from, "dd MMM yyyy")
                     : `${format(range.from, "dd MMM yyyy")} – ${format(end, "dd MMM yyyy")}`
 
             setResult(`Processed ${totalRecords} employee-day records for ${label}.`)
