@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using SecurityService.Contracts;
 using SecurityService.Domain;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace SecurityService.Application.Services;
 
 public sealed class SecurityOperationsService(
@@ -130,7 +132,7 @@ public sealed class SecurityOperationsService(
         entity.ApprovalStatus = ApprovalStatuses.Approved;
         entity.Status = EmployeeOutPassStatuses.Approved;
         entity.ApprovedBy = currentUser.UserId;
-        entity.ApprovedAt = DateTime.UtcNow;
+        entity.ApprovedAt = BusinessTime.Now;
         AddAction(entity.CompanyId, entity.GateId, "EmployeeOutPass", entity.Id, "EmployeeOutPassApproved", null);
         await db.SaveChangesAsync(cancellationToken);
         await PublishAsync(SecurityEventNames.EmployeeOutPassApproved, entity.CompanyId, entity.Id, entity, cancellationToken);
@@ -285,7 +287,7 @@ public sealed class SecurityOperationsService(
 
         entity.ApprovalStatus = ApprovalStatuses.Approved;
         entity.ApprovedBy = currentUser.UserId;
-        entity.ApprovedAt = DateTime.UtcNow;
+        entity.ApprovedAt = BusinessTime.Now;
         entity.Status = GatePassStatuses.Approved;
         AddAction(entity.CompanyId, entity.GateId, SecurityReferenceTypes.GatePass, entity.Id, "GatePassApproved", null);
         await db.SaveChangesAsync(cancellationToken);
@@ -403,7 +405,7 @@ public sealed class SecurityOperationsService(
         var entity = await db.BillEntries.FirstOrDefaultAsync(x => x.Id == id, cancellationToken) ?? throw NotFound("BillEntry", id);
         entity.Status = WorkflowStatuses.Approved;
         entity.ApprovedBy = currentUser.UserId;
-        entity.ApprovedAt = DateTime.UtcNow;
+        entity.ApprovedAt = BusinessTime.Now;
         AddAction(entity.CompanyId, null, SecurityReferenceTypes.BillEntry, entity.Id, "BillEntryApproved", null);
         await db.SaveChangesAsync(cancellationToken);
         await PublishAsync(SecurityEventNames.BillEntryApproved, entity.CompanyId, entity.Id, entity, cancellationToken);
@@ -544,7 +546,7 @@ public sealed class SecurityOperationsService(
     }
 
     private Task PublishAsync(string eventName, Guid companyId, Guid entityId, object payload, CancellationToken cancellationToken) =>
-        publisher.PublishAsync(new IntegrationEvent(eventName, companyId, entityId, DateTime.UtcNow, payload), cancellationToken);
+        publisher.PublishAsync(new IntegrationEvent(eventName, companyId, entityId, BusinessTime.Now, payload), cancellationToken);
 
     private static KeyNotFoundException NotFound(string entityName, Guid id) => new($"{entityName} '{id}' was not found.");
 }

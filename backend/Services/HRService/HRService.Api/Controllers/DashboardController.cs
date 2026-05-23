@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace HRService.Api.Controllers;
 
 [ApiController]
@@ -40,7 +42,7 @@ public sealed class DashboardController(HrDbContext db) : ControllerBase
         CancellationToken cancellationToken)
     {
         var total = await db.Employees.CountAsync(e => !e.IsDeleted, cancellationToken);
-        var today = DateTime.UtcNow.Date;
+        var today = BusinessTime.Now.Date;
         var stats = Enumerable.Range(0, 7)
             .Select(i => today.AddDays(-6 + i))
             .Select(d => new AttendanceStatDto(d.ToString("MMM dd"), 0, total))

@@ -12,10 +12,12 @@ public sealed class DailyAttendance : AuditableEntity
     public string EmployeeID { get; set; } = string.Empty;
     public DateTime AttendanceDate { get; set; }
     public Guid? ShiftId { get; set; }
-    public string? ShiftCode { get; set; }
+    public string? ShiftName { get; set; }
     
     public DateTime? InTime { get; set; }
     public DateTime? OutTime { get; set; }
+    public Guid? InPunchId { get; set; }
+    public Guid? OutPunchId { get; set; }
     
     public AttendanceStatus Status { get; set; }
     public DayType DayType { get; set; }

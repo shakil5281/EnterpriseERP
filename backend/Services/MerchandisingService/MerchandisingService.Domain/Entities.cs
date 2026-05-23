@@ -1,10 +1,12 @@
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace MerchandisingService.Domain;
 
 public abstract class AuditableEntity
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid CompanyId { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
     public DateTime? UpdatedAt { get; set; }
     public string? CreatedBy { get; set; }
     public string? UpdatedBy { get; set; }
@@ -168,7 +170,7 @@ public sealed class OrderStatusHistory
     public string FromStatus { get; set; } = string.Empty;
     public string ToStatus { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
-    public DateTime ChangedAt { get; set; } = DateTime.UtcNow;
+    public DateTime ChangedAt { get; set; } = BusinessTime.Now;
     public string? ChangedBy { get; set; }
 }
 
@@ -179,7 +181,7 @@ public sealed class MerchandisingAuditLog
     public string EntityName { get; set; } = string.Empty;
     public Guid EntityId { get; set; }
     public string Action { get; set; } = string.Empty;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
     public string? UserName { get; set; }
     public string? ChangesJson { get; set; }
 }

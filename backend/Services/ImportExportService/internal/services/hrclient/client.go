@@ -35,6 +35,7 @@ type CreateEmployeeRequest struct {
 	MedicalAllowance     float64 `json:"medicalAllowance"`
 	ConveyanceAllowance  float64 `json:"conveyanceAllowance"`
 	FoodAllowance        float64 `json:"foodAllowance"`
+	IsOtEnabled          bool    `json:"isOtEnabled"`
 }
 
 type apiEnvelope struct {

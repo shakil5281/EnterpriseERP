@@ -1,3 +1,5 @@
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace PayrollService.Domain.Entities;
 
 public abstract class Entity
@@ -10,32 +12,6 @@ public interface ICompanyScoped
     Guid CompanyId { get; set; }
 }
 
-public sealed class PayrollPolicy : Entity, ICompanyScoped
-{
-    public Guid CompanyId { get; set; }
-    public string PolicyName { get; set; } = string.Empty;
-    public string SalaryCalculationType { get; set; } = "Monthly";
-    public string MonthDayCalculationType { get; set; } = "FixedDays";
-    public int? FixedMonthDays { get; set; }
-    public bool UseAttendanceForSalary { get; set; } = true;
-    public bool UseApprovedAttendanceOnly { get; set; } = true;
-    public bool AllowOvertime { get; set; } = true;
-    public string? OvertimeCalculationType { get; set; } = "BasicSalaryBased";
-    public decimal OvertimeMultiplier { get; set; } = 2;
-    public decimal OvertimeDivisor { get; set; } = 208;
-    public bool AllowLateDeduction { get; set; }
-    public string? LateDeductionType { get; set; }
-    public bool AllowAbsentDeduction { get; set; } = true;
-    public bool AllowTiffinBill { get; set; }
-    public bool AllowNightBill { get; set; }
-    public bool AllowAttendanceBonus { get; set; }
-    public bool AllowFestivalBonus { get; set; }
-    public bool AllowEarnLeaveEncashment { get; set; }
-    public bool IsActive { get; set; } = true;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime? UpdatedAt { get; set; }
-}
-
 public sealed class SalaryStructure : Entity, ICompanyScoped
 {
     public Guid CompanyId { get; set; }
@@ -43,7 +19,7 @@ public sealed class SalaryStructure : Entity, ICompanyScoped
     public string StructureName { get; set; } = string.Empty;
     public Guid? GradeId { get; set; }
     public bool IsActive { get; set; } = true;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
     public ICollection<SalaryStructureComponent> Components { get; set; } = new List<SalaryStructureComponent>();
 }
 
@@ -67,6 +43,7 @@ public sealed class EmployeeSalary : Entity, ICompanyScoped
     public Guid CompanyId { get; set; }
     public Guid EmployeeId { get; set; }
     public Guid? SalaryStructureId { get; set; }
+    public string SalaryCalculationType { get; set; } = "Monthly";
     public decimal GrossSalary { get; set; }
     public decimal BasicSalary { get; set; }
     public decimal HouseRent { get; set; }
@@ -76,7 +53,7 @@ public sealed class EmployeeSalary : Entity, ICompanyScoped
     public DateOnly EffectiveFrom { get; set; }
     public DateOnly? EffectiveTo { get; set; }
     public bool IsCurrent { get; set; } = true;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
     public Guid? CreatedBy { get; set; }
 }
 
@@ -94,28 +71,66 @@ public sealed class SalaryIncrementRequestEntity : Entity, ICompanyScoped
     public string? Reason { get; set; }
     public string Status { get; set; } = "Pending";
     public Guid RequestedBy { get; set; }
-    public DateTime RequestedAt { get; set; } = DateTime.UtcNow;
+    public DateTime RequestedAt { get; set; } = BusinessTime.Now;
     public Guid? ApprovedBy { get; set; }
     public DateTime? ApprovedAt { get; set; }
 }
 
-public sealed class PayrollPeriod : Entity, ICompanyScoped
+public sealed class PayrollPolicyTemplate : Entity
+{
+    public string PolicyCode { get; set; } = string.Empty;
+    public string PolicyName { get; set; } = string.Empty;
+    public int Version { get; set; } = 1;
+    public string Status { get; set; } = "Active";
+    public string ComplianceMode { get; set; } = "FullCompliance";
+    public decimal FixedMedical { get; set; } = 750;
+    public decimal FixedFood { get; set; } = 1250;
+    public decimal FixedConveyance { get; set; } = 450;
+    public decimal BasicDivisor { get; set; } = 1.5m;
+    public string OtBase { get; set; } = "Basic";
+    public decimal OtDivisor { get; set; } = 208;
+    public decimal OtMultiplier { get; set; } = 2;
+    public string AbsentBase { get; set; } = "Basic";
+    public string AbsentDayDivisor { get; set; } = "FixedDays";
+    public int? FixedAbsentDays { get; set; } = 30;
+    public string MonthDayCalculationType { get; set; } = "FixedDays";
+    public int? FixedMonthDays { get; set; } = 30;
+    public bool RequireAttendanceApproval { get; set; } = true;
+    public bool AllowAbsentDeduction { get; set; } = true;
+    public bool AllowLateDeduction { get; set; }
+    public bool AllowOvertime { get; set; } = true;
+    public bool AllowTiffinBill { get; set; }
+    public bool AllowNightBill { get; set; }
+    public bool AllowAttendanceBonus { get; set; }
+    public bool AllowEarnLeaveEncashment { get; set; } = true;
+    public bool AllowFestivalBonus { get; set; } = true;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
+}
+
+public sealed class CompanyPayrollPolicyAssignment : Entity, ICompanyScoped
+{
+    public Guid CompanyId { get; set; }
+    public Guid PolicyTemplateId { get; set; }
+    public PayrollPolicyTemplate? PolicyTemplate { get; set; }
+    public decimal? FixedOvertimeRate { get; set; }
+    public DateOnly EffectiveFrom { get; set; }
+    public bool IsActive { get; set; } = true;
+    public Guid? AssignedBy { get; set; }
+    public DateTime AssignedAt { get; set; } = BusinessTime.Now;
+}
+
+public sealed class PayrollRun : Entity, ICompanyScoped
 {
     public Guid CompanyId { get; set; }
     public int YearNo { get; set; }
     public int MonthNo { get; set; }
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
-    public string Status { get; set; } = "Open";
-    public bool IsAttendanceLocked { get; set; }
-    public bool IsPayrollLocked { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-}
-
-public sealed class PayrollRun : Entity, ICompanyScoped
-{
-    public Guid CompanyId { get; set; }
-    public Guid PayrollPeriodId { get; set; }
+    public string ProcessingMode { get; set; } = "FullCompliance";
+    public string? AppliedPolicyCode { get; set; }
+    public int? AppliedPolicyVersion { get; set; }
+    public string? OvertimeCalculationType { get; set; }
+    public decimal? FixedOvertimeRate { get; set; }
     public int RunNo { get; set; }
     public string RunStatus { get; set; } = "Started";
     public int TotalEmployees { get; set; }
@@ -123,18 +138,28 @@ public sealed class PayrollRun : Entity, ICompanyScoped
     public int FailedEmployees { get; set; }
     public string? ErrorMessage { get; set; }
     public Guid? ProcessedBy { get; set; }
-    public DateTime ProcessedAt { get; set; } = DateTime.UtcNow;
+    public DateTime ProcessedAt { get; set; } = BusinessTime.Now;
 }
 
 public sealed class EmployeePayroll : Entity, ICompanyScoped
 {
     public Guid CompanyId { get; set; }
-    public Guid PayrollPeriodId { get; set; }
+    public int YearNo { get; set; }
+    public int MonthNo { get; set; }
     public Guid PayrollRunId { get; set; }
     public Guid EmployeeId { get; set; }
+    public string ProcessingMode { get; set; } = "FullCompliance";
     public string SalaryCalculationType { get; set; } = "Monthly";
+    public string? OvertimeCalculationType { get; set; }
+    public string? AppliedPolicyCode { get; set; }
+    public int? AppliedPolicyVersion { get; set; }
+    public string? AppliedPolicySnapshotJson { get; set; }
     public decimal GrossSalary { get; set; }
     public decimal BasicSalary { get; set; }
+    public decimal HouseRent { get; set; }
+    public decimal MedicalAllowance { get; set; }
+    public decimal FoodAllowance { get; set; }
+    public decimal ConveyanceAllowance { get; set; }
     public decimal TotalDays { get; set; }
     public decimal WorkingDays { get; set; }
     public decimal PresentDays { get; set; }
@@ -164,7 +189,7 @@ public sealed class EmployeePayroll : Entity, ICompanyScoped
     public decimal TotalDeduction { get; set; }
     public decimal NetSalary { get; set; }
     public string Status { get; set; } = "Draft";
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
     public ICollection<PayrollEarning> Earnings { get; set; } = new List<PayrollEarning>();
     public ICollection<PayrollDeduction> Deductions { get; set; } = new List<PayrollDeduction>();
 }
@@ -207,7 +232,7 @@ public sealed class SalaryAdvance : Entity, ICompanyScoped
     public Guid? RequestedBy { get; set; }
     public Guid? ApprovedBy { get; set; }
     public DateTime? ApprovedAt { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
     public ICollection<SalaryAdvanceInstallment> Installments { get; set; } = new List<SalaryAdvanceInstallment>();
 }
 
@@ -239,31 +264,6 @@ public sealed class AllowanceBill : Entity, ICompanyScoped
     public string? Remarks { get; set; }
 }
 
-public sealed class PayrollApproval : Entity, ICompanyScoped
-{
-    public Guid CompanyId { get; set; }
-    public Guid PayrollPeriodId { get; set; }
-    public int ApprovalLevel { get; set; }
-    public string ApprovalStatus { get; set; } = "Pending";
-    public Guid? ApprovedBy { get; set; }
-    public DateTime? ApprovedAt { get; set; }
-    public Guid? RejectedBy { get; set; }
-    public DateTime? RejectedAt { get; set; }
-    public string? Remarks { get; set; }
-}
-
-public sealed class PayrollLock : Entity, ICompanyScoped
-{
-    public Guid CompanyId { get; set; }
-    public Guid PayrollPeriodId { get; set; }
-    public Guid LockedBy { get; set; }
-    public DateTime LockedAt { get; set; } = DateTime.UtcNow;
-    public string? UnlockReason { get; set; }
-    public Guid? UnlockedBy { get; set; }
-    public DateTime? UnlockedAt { get; set; }
-    public bool IsLocked { get; set; } = true;
-}
-
 public sealed class FinalSettlement : Entity, ICompanyScoped
 {
     public Guid CompanyId { get; set; }
@@ -292,7 +292,7 @@ public sealed class PayrollDeductionEntry : Entity, ICompanyScoped
     public int MonthNo { get; set; }
     public string Status { get; set; } = "Approved";
     public string? Remarks { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
 }
 
 public sealed class PayrollAuditLog : Entity, ICompanyScoped
@@ -303,5 +303,5 @@ public sealed class PayrollAuditLog : Entity, ICompanyScoped
     public string Action { get; set; } = string.Empty;
     public Guid? ActorId { get; set; }
     public string? Remarks { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
 }

@@ -2,6 +2,8 @@ using AccountsService.Contracts;
 using AccountsService.Domain;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace AccountsService.Application.Services;
 
 public sealed class VoucherPostingService(IAccountsDbContext db, IIntegrationEventPublisher publisher) : IVoucherPostingService
@@ -97,7 +99,7 @@ public sealed class VoucherPostingService(IAccountsDbContext db, IIntegrationEve
 
         voucher.Status = VoucherStatuses.Posted;
         voucher.PostedBy = postedBy;
-        voucher.PostedAt = DateTime.UtcNow;
+        voucher.PostedAt = BusinessTime.Now;
         db.Add(new AccountsAuditLog { CompanyId = voucher.CompanyId, EntityName = nameof(Voucher), EntityId = voucher.Id, Action = "Posted", UserId = postedBy });
         await db.SaveChangesAsync(cancellationToken);
         await publisher.PublishAsync(new VoucherPosted(voucher.CompanyId, voucher.Id, voucher.VoucherNo, voucher.VoucherDate, voucher.TotalDebit, voucher.TotalCredit), cancellationToken);

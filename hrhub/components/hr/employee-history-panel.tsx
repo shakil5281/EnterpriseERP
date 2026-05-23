@@ -6,6 +6,7 @@ import { employeeService } from "@/lib/services/employee";
 import type { HrStatusHistoryItem, HrTransferItem } from "@/lib/services/hr-types";
 import { format } from "date-fns";
 import { IconLoader } from "@tabler/icons-react";
+import { toast } from "sonner";
 
 type EmployeeHistoryPanelProps = {
   employeeId: string;
@@ -21,23 +22,35 @@ export function EmployeeHistoryPanel({
   );
   const [transfers, setTransfers] = React.useState<HrTransferItem[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [transfersError, setTransfersError] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      try {
-        const [status, transferRows] = await Promise.all([
-          employeeService.getStatusHistory(employeeId, companyId),
-          employeeService.getEmployeeTransfers(employeeId, companyId),
-        ]);
-        if (!cancelled) {
-          setStatusHistory(status);
-          setTransfers(transferRows);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+      setTransfersError(false);
+      const [statusResult, transferResult] = await Promise.allSettled([
+        employeeService.getStatusHistory(employeeId, companyId),
+        employeeService.getEmployeeTransfers(employeeId, companyId),
+      ]);
+      if (cancelled) return;
+
+      if (statusResult.status === "fulfilled") {
+        setStatusHistory(statusResult.value);
+      } else {
+        setStatusHistory([]);
+        toast.error("Failed to load status history");
       }
+
+      if (transferResult.status === "fulfilled") {
+        setTransfers(transferResult.value);
+      } else {
+        setTransfers([]);
+        setTransfersError(true);
+        toast.error("Failed to load transfer history");
+      }
+
+      setLoading(false);
     })();
     return () => {
       cancelled = true;
@@ -84,7 +97,11 @@ export function EmployeeHistoryPanel({
           <CardTitle className="text-lg">Transfer history</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {transfers.length === 0 ? (
+          {transfersError ? (
+            <p className="text-sm text-muted-foreground">
+              Transfer history could not be loaded.
+            </p>
+          ) : transfers.length === 0 ? (
             <p className="text-sm text-muted-foreground">No transfers yet.</p>
           ) : (
             transfers.map((row) => (

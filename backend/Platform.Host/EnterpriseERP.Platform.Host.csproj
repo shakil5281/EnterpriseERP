@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>EnterpriseERP.Platform.Host</AssemblyName>
     <RootNamespace>EnterpriseERP.Platform.Host</RootNamespace>
+    <!-- Composite host references many *.Api projects that each ship appsettings.json. -->
+    <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
   </PropertyGroup>
 
   <ItemGroup>

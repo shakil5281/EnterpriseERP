@@ -10,6 +10,9 @@ public class AttendanceDbContext : DbContext, IAttendanceDbContext
 
     public DbSet<DailyAttendance> DailyAttendances => Set<DailyAttendance>();
     public DbSet<DeviceLog> DeviceLogs => Set<DeviceLog>();
+    public DbSet<AttendanceProcessBatch> AttendanceProcessBatches => Set<AttendanceProcessBatch>();
+    public DbSet<AttendanceProcessError> AttendanceProcessErrors => Set<AttendanceProcessError>();
+    public DbSet<AttendanceBillRecord> AttendanceBillRecords => Set<AttendanceBillRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -20,6 +23,8 @@ public class AttendanceDbContext : DbContext, IAttendanceDbContext
             entity.Property(e => e.EmployeeID).HasMaxLength(32).IsRequired();
             entity.HasIndex(e => new { e.CompanyId, e.EmployeeId, e.AttendanceDate }).IsUnique();
             entity.HasIndex(e => new { e.CompanyId, e.PunchNumber, e.AttendanceDate });
+            entity.HasIndex(e => e.InPunchId);
+            entity.HasIndex(e => e.OutPunchId);
         });
 
         modelBuilder.Entity<DeviceLog>(entity =>
@@ -31,6 +36,25 @@ public class AttendanceDbContext : DbContext, IAttendanceDbContext
             entity.HasIndex(e => new { e.CompanyId, e.PunchNumber, e.PunchTime, e.DeviceSerial })
                 .IsUnique()
                 .HasFilter("[DeviceSerial] IS NOT NULL");
+        });
+
+        modelBuilder.Entity<AttendanceProcessBatch>(entity =>
+        {
+            entity.HasIndex(e => new { e.CompanyId, e.StartedAt });
+        });
+
+        modelBuilder.Entity<AttendanceProcessError>(entity =>
+        {
+            entity.HasIndex(e => new { e.BatchId, e.AttendanceDate });
+        });
+
+        modelBuilder.Entity<AttendanceBillRecord>(entity =>
+        {
+            entity.ToTable("AttendanceBillRecords");
+            entity.HasIndex(e => new { e.CompanyId, e.BillType, e.BillDate });
+            entity.HasIndex(e => new { e.CompanyId, e.EmployeeId, e.BillType, e.BillDate }).IsUnique();
+            entity.Property(e => e.EmployeeId).HasColumnName("HrEmployeeId");
+            entity.Property(e => e.Amount).HasPrecision(18, 2);
         });
     }
 

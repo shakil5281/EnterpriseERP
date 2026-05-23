@@ -2,6 +2,8 @@ using MerchandisingService.Application;
 using MerchandisingService.Domain;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace MerchandisingService.Infrastructure.Persistence;
 
 public sealed class MerchandisingDbContext(DbContextOptions<MerchandisingDbContext> options) : DbContext(options), IMerchandisingDbContext
@@ -213,7 +215,7 @@ public sealed class MerchandisingDbContext(DbContextOptions<MerchandisingDbConte
 
     private void AddAuditEntries()
     {
-        var entries = ChangeTracker.Entries<AuditableEntity>()
+        var entries = ChangeTracker.Entries<MerchandisingService.Domain.AuditableEntity>()
             .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
             .ToList();
 
@@ -222,12 +224,12 @@ public sealed class MerchandisingDbContext(DbContextOptions<MerchandisingDbConte
             var entity = entry.Entity;
             if (entry.State == EntityState.Added)
             {
-                entity.CreatedAt = DateTime.UtcNow;
+                entity.CreatedAt = BusinessTime.Now;
             }
 
             if (entry.State == EntityState.Modified)
             {
-                entity.UpdatedAt = DateTime.UtcNow;
+                entity.UpdatedAt = BusinessTime.Now;
             }
 
             AuditLogs.Add(new MerchandisingAuditLog
@@ -240,7 +242,7 @@ public sealed class MerchandisingDbContext(DbContextOptions<MerchandisingDbConte
         }
     }
 
-    private static void ConfigureAuditable<TEntity>(ModelBuilder modelBuilder) where TEntity : AuditableEntity
+    private static void ConfigureAuditable<TEntity>(ModelBuilder modelBuilder) where TEntity : MerchandisingService.Domain.AuditableEntity
     {
         modelBuilder.Entity<TEntity>(e =>
         {

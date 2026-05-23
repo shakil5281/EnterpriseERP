@@ -1,16 +1,19 @@
 import axios from 'axios';
 import { getPublicApiBaseUrl } from '@/lib/api-base';
-import { unwrapApiData } from '@/lib/api-response';
 import {
   getActiveCompanyHeaderValue,
-  syncActiveCompanyStorage,
 } from '@/lib/active-company-storage';
+import {
+  clearSessionAndRedirectToLogin,
+  isSkippableAuthRetryUrl,
+  refreshAccessToken,
+} from '@/lib/auth-session';
 
 const api = axios.create({
-  baseURL: getPublicApiBaseUrl(),
-  headers: {
-    'Content-Type': 'application/json',
-  },
+    baseURL: getPublicApiBaseUrl(),
+    headers: {
+        'Content-Type': 'application/json',
+    },
 });
 
 // Add a request interceptor to add the auth token to headers
@@ -53,65 +56,28 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    // Don't try to refresh token for login or register requests
     if (
       error.response?.status === 401 &&
+      originalRequest &&
       !originalRequest._retry &&
-      !originalRequest.url?.includes('auth/login') &&
-      !originalRequest.url?.includes('auth/register') &&
-      !originalRequest.url?.includes('auth/verify-2fa')
+      !isSkippableAuthRetryUrl(originalRequest.url)
     ) {
       originalRequest._retry = true;
-      try {
-        if (typeof window === 'undefined') {
-          return Promise.reject(error);
-        }
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (!refreshToken) {
-          return Promise.reject(error);
-        }
-        const refreshUrl = `${getPublicApiBaseUrl()}/auth/refresh-token`;
-        const response = await axios.post(refreshUrl, {
-          refreshToken,
-          accessToken: localStorage.getItem('token'),
-        });
+      if (typeof window === 'undefined') {
+        return Promise.reject(error);
+      }
 
-        const envelope = unwrapApiData<{
-          accessToken: string;
-          refreshToken: string;
-        }>(response.data);
-        const token = envelope.accessToken;
-        const newRefreshToken = envelope.refreshToken;
-        localStorage.setItem('token', token);
-        localStorage.setItem('refreshToken', newRefreshToken);
-        // Update cookie as well
-        document.cookie = `token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
-
-        let isSuperAdmin = false;
-        const userRaw = localStorage.getItem('user');
-        if (userRaw) {
-          try {
-            const parsed = JSON.parse(userRaw) as { roles?: string[] };
-            isSuperAdmin = parsed.roles?.includes('SuperAdmin') ?? false;
-          } catch {
-            /* ignore */
-          }
-        }
-        syncActiveCompanyStorage({
-          allowedCompanyIds: [],
-          isSuperAdmin,
-          accessToken: token,
-        });
-
-        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      const hadRefreshToken = !!localStorage.getItem('refreshToken');
+      const token = await refreshAccessToken();
+      if (token) {
+        originalRequest.headers = originalRequest.headers ?? {};
+        originalRequest.headers.Authorization = `Bearer ${token}`;
+        api.defaults.headers.common.Authorization = `Bearer ${token}`;
         return api(originalRequest);
-      } catch (refreshError) {
-        // Clear everything on failure
-        document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
-        localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
+      }
+
+      if (hadRefreshToken) {
+        clearSessionAndRedirectToLogin();
       }
     }
     return Promise.reject(error);

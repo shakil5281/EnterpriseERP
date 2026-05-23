@@ -15,7 +15,8 @@ public static class PayrollApplication
         services.AddScoped<IOvertimeCalculationService, OvertimeCalculationService>();
         services.AddScoped<IBonusCalculationService, BonusCalculationService>();
         services.AddScoped<IPayrollCalculationService, PayrollCalculationService>();
-        services.AddScoped<IFinalSettlementService, FinalSettlementService>();
+        services.AddScoped<ISalaryStructureCalculator, SalaryStructureCalculator>();
+        services.AddScoped<IPolicyResolver, PolicyResolver>();
         return services;
     }
 }

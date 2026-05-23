@@ -1,3 +1,5 @@
+using ShiftService.Domain.Enums;
+
 namespace ShiftService.Domain.Entities;
 
 public sealed class ShiftBreak
@@ -7,6 +9,7 @@ public sealed class ShiftBreak
     public Guid ShiftId { get; set; }
     public Shift? Shift { get; set; }
 
+    public BreakType BreakType { get; set; } = BreakType.Lunch;
     public string BreakName { get; set; } = string.Empty;
     public TimeSpan BreakStartTime { get; set; }
     public TimeSpan BreakEndTime { get; set; }

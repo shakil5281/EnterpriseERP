@@ -2,6 +2,8 @@ using FinishingService.Application;
 using FinishingService.Domain;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace FinishingService.Infrastructure.Persistence;
 
 public sealed class FinishingDbContext(DbContextOptions<FinishingDbContext> options) : DbContext(options), IFinishingDbContext
@@ -43,10 +45,10 @@ public sealed class FinishingDbContext(DbContextOptions<FinishingDbContext> opti
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        foreach (var entry in ChangeTracker.Entries<AuditableEntity>().Where(x => x.State is EntityState.Added or EntityState.Modified))
+        foreach (var entry in ChangeTracker.Entries<FinishingService.Domain.AuditableEntity>().Where(x => x.State is EntityState.Added or EntityState.Modified))
         {
-            if (entry.State == EntityState.Added) entry.Entity.CreatedAt = DateTime.UtcNow;
-            if (entry.State == EntityState.Modified) entry.Entity.UpdatedAt = DateTime.UtcNow;
+            if (entry.State == EntityState.Added) entry.Entity.CreatedAt = BusinessTime.Now;
+            if (entry.State == EntityState.Modified) entry.Entity.UpdatedAt = BusinessTime.Now;
         }
         return base.SaveChangesAsync(cancellationToken);
     }
@@ -200,7 +202,7 @@ public sealed class FinishingDbContext(DbContextOptions<FinishingDbContext> opti
         Seed(modelBuilder);
     }
 
-    private static void ConfigureAuditable<TEntity>(ModelBuilder modelBuilder) where TEntity : AuditableEntity
+    private static void ConfigureAuditable<TEntity>(ModelBuilder modelBuilder) where TEntity : FinishingService.Domain.AuditableEntity
     {
         modelBuilder.Entity<TEntity>(e =>
         {

@@ -4,23 +4,6 @@ using PayrollService.Domain.Entities;
 
 namespace PayrollService.Infrastructure.Persistence.Configurations;
 
-public sealed class PayrollPolicyConfiguration : IEntityTypeConfiguration<PayrollPolicy>
-{
-    public void Configure(EntityTypeBuilder<PayrollPolicy> b)
-    {
-        b.ToTable("PayrollPolicies");
-        b.HasKey(x => x.Id);
-        b.HasIndex(x => new { x.CompanyId, x.PolicyName }).IsUnique();
-        b.Property(x => x.PolicyName).HasMaxLength(150).IsRequired();
-        b.Property(x => x.SalaryCalculationType).HasMaxLength(50).IsRequired();
-        b.Property(x => x.MonthDayCalculationType).HasMaxLength(50).IsRequired();
-        b.Property(x => x.OvertimeCalculationType).HasMaxLength(50);
-        b.Property(x => x.LateDeductionType).HasMaxLength(50);
-        b.Property(x => x.OvertimeMultiplier).HasPrecision(18, 2).HasDefaultValue(2);
-        b.Property(x => x.OvertimeDivisor).HasPrecision(18, 2).HasDefaultValue(208);
-    }
-}
-
 public sealed class SalaryStructureConfiguration : IEntityTypeConfiguration<SalaryStructure>
 {
     public void Configure(EntityTypeBuilder<SalaryStructure> b)
@@ -58,6 +41,7 @@ public sealed class EmployeeSalaryConfiguration : IEntityTypeConfiguration<Emplo
         b.ToTable("EmployeeSalaries");
         b.HasKey(x => x.Id);
         b.HasIndex(x => new { x.CompanyId, x.EmployeeId, x.IsCurrent }).HasFilter("[IsCurrent] = 1").IsUnique();
+        b.Property(x => x.SalaryCalculationType).HasMaxLength(50).HasDefaultValue("Monthly");
         ConfigureMoney(b.Property(x => x.GrossSalary));
         ConfigureMoney(b.Property(x => x.BasicSalary));
         ConfigureMoney(b.Property(x => x.HouseRent));
@@ -69,14 +53,42 @@ public sealed class EmployeeSalaryConfiguration : IEntityTypeConfiguration<Emplo
     private static void ConfigureMoney(PropertyBuilder<decimal> p) => p.HasPrecision(18, 2);
 }
 
-public sealed class PayrollPeriodConfiguration : IEntityTypeConfiguration<PayrollPeriod>
+public sealed class PayrollPolicyTemplateConfiguration : IEntityTypeConfiguration<PayrollPolicyTemplate>
 {
-    public void Configure(EntityTypeBuilder<PayrollPeriod> b)
+    public void Configure(EntityTypeBuilder<PayrollPolicyTemplate> b)
     {
-        b.ToTable("PayrollPeriods");
+        b.ToTable("PayrollPolicyTemplates");
         b.HasKey(x => x.Id);
-        b.HasIndex(x => new { x.CompanyId, x.YearNo, x.MonthNo }).IsUnique();
-        b.Property(x => x.Status).HasMaxLength(50).HasDefaultValue("Open");
+        b.HasIndex(x => x.PolicyCode).IsUnique();
+        b.Property(x => x.PolicyCode).HasMaxLength(80).IsRequired();
+        b.Property(x => x.PolicyName).HasMaxLength(200).IsRequired();
+        b.Property(x => x.Status).HasMaxLength(50).HasDefaultValue("Active");
+        b.Property(x => x.ComplianceMode).HasMaxLength(50).IsRequired();
+        b.Property(x => x.OtBase).HasMaxLength(20).IsRequired();
+        b.Property(x => x.AbsentBase).HasMaxLength(20).IsRequired();
+        b.Property(x => x.AbsentDayDivisor).HasMaxLength(30).IsRequired();
+        b.Property(x => x.MonthDayCalculationType).HasMaxLength(30).IsRequired();
+        b.Property(x => x.FixedMedical).HasPrecision(18, 2);
+        b.Property(x => x.FixedFood).HasPrecision(18, 2);
+        b.Property(x => x.FixedConveyance).HasPrecision(18, 2);
+        b.Property(x => x.BasicDivisor).HasPrecision(18, 4);
+        b.Property(x => x.OtDivisor).HasPrecision(18, 2);
+        b.Property(x => x.OtMultiplier).HasPrecision(18, 2);
+    }
+}
+
+public sealed class CompanyPayrollPolicyAssignmentConfiguration : IEntityTypeConfiguration<CompanyPayrollPolicyAssignment>
+{
+    public void Configure(EntityTypeBuilder<CompanyPayrollPolicyAssignment> b)
+    {
+        b.ToTable("CompanyPayrollPolicyAssignments");
+        b.HasKey(x => x.Id);
+        b.HasIndex(x => new { x.CompanyId, x.IsActive }).HasFilter("[IsActive] = 1");
+        b.Property(x => x.FixedOvertimeRate).HasPrecision(18, 2);
+        b.HasOne(x => x.PolicyTemplate)
+            .WithMany()
+            .HasForeignKey(x => x.PolicyTemplateId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -86,8 +98,12 @@ public sealed class PayrollRunConfiguration : IEntityTypeConfiguration<PayrollRu
     {
         b.ToTable("PayrollRuns");
         b.HasKey(x => x.Id);
-        b.HasIndex(x => new { x.PayrollPeriodId, x.RunNo }).IsUnique();
+        b.HasIndex(x => new { x.CompanyId, x.YearNo, x.MonthNo, x.RunNo }).IsUnique();
         b.Property(x => x.RunStatus).HasMaxLength(50).IsRequired();
+        b.Property(x => x.ProcessingMode).HasMaxLength(50).IsRequired();
+        b.Property(x => x.AppliedPolicyCode).HasMaxLength(80);
+        b.Property(x => x.OvertimeCalculationType).HasMaxLength(50);
+        b.Property(x => x.FixedOvertimeRate).HasPrecision(18, 2);
     }
 }
 
@@ -97,8 +113,12 @@ public sealed class EmployeePayrollConfiguration : IEntityTypeConfiguration<Empl
     {
         b.ToTable("EmployeePayrolls");
         b.HasKey(x => x.Id);
-        b.HasIndex(x => new { x.CompanyId, x.PayrollPeriodId, x.EmployeeId }).IsUnique();
+        b.HasIndex(x => new { x.CompanyId, x.EmployeeId, x.YearNo, x.MonthNo }).IsUnique();
+        b.Property(x => x.ProcessingMode).HasMaxLength(50).IsRequired();
         b.Property(x => x.SalaryCalculationType).HasMaxLength(50).IsRequired();
+        b.Property(x => x.OvertimeCalculationType).HasMaxLength(50);
+        b.Property(x => x.AppliedPolicyCode).HasMaxLength(80);
+        b.Property(x => x.AppliedPolicySnapshotJson).HasColumnType("nvarchar(max)");
         b.Property(x => x.Status).HasMaxLength(50).HasDefaultValue("Draft");
         foreach (var property in typeof(EmployeePayroll).GetProperties().Where(p => p.PropertyType == typeof(decimal)))
         {
@@ -140,8 +160,6 @@ public sealed class RemainingPayrollConfigurations :
     IEntityTypeConfiguration<SalaryAdvance>,
     IEntityTypeConfiguration<SalaryAdvanceInstallment>,
     IEntityTypeConfiguration<AllowanceBill>,
-    IEntityTypeConfiguration<PayrollApproval>,
-    IEntityTypeConfiguration<PayrollLock>,
     IEntityTypeConfiguration<FinalSettlement>,
     IEntityTypeConfiguration<PayrollDeductionEntry>,
     IEntityTypeConfiguration<PayrollAuditLog>
@@ -183,21 +201,6 @@ public sealed class RemainingPayrollConfigurations :
         b.Property(x => x.Status).HasMaxLength(50).HasDefaultValue("Pending");
         b.Property(x => x.Remarks).HasMaxLength(300);
         Money(b, nameof(AllowanceBill.Quantity), nameof(AllowanceBill.Rate), nameof(AllowanceBill.Amount));
-    }
-
-    public void Configure(EntityTypeBuilder<PayrollApproval> b)
-    {
-        b.ToTable("PayrollApprovals");
-        b.HasKey(x => x.Id);
-        b.Property(x => x.ApprovalStatus).HasMaxLength(50).HasDefaultValue("Pending");
-        b.Property(x => x.Remarks).HasMaxLength(500);
-    }
-
-    public void Configure(EntityTypeBuilder<PayrollLock> b)
-    {
-        b.ToTable("PayrollLocks");
-        b.HasKey(x => x.Id);
-        b.Property(x => x.UnlockReason).HasMaxLength(500);
     }
 
     public void Configure(EntityTypeBuilder<FinalSettlement> b)

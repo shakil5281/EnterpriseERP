@@ -7,6 +7,9 @@ public interface IAttendanceDbContext
 {
     DbSet<DailyAttendance> DailyAttendances { get; }
     DbSet<DeviceLog> DeviceLogs { get; }
-    
+    DbSet<AttendanceProcessBatch> AttendanceProcessBatches { get; }
+    DbSet<AttendanceProcessError> AttendanceProcessErrors { get; }
+    DbSet<AttendanceBillRecord> AttendanceBillRecords { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

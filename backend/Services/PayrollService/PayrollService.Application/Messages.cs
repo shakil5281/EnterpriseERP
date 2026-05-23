@@ -1,11 +1,8 @@
 using MediatR;
 using PayrollService.Contracts;
+using PayrollService.Domain.Enums;
 
 namespace PayrollService.Application;
-
-public sealed record CreatePayrollPolicyCommand(CreatePayrollPolicyRequest Request) : IRequest<ApiResponse<PayrollPolicyDto>>;
-public sealed record UpdatePayrollPolicyCommand(Guid Id, UpdatePayrollPolicyRequest Request) : IRequest<ApiResponse<PayrollPolicyDto>>;
-public sealed record SetPayrollPolicyActiveCommand(Guid Id, bool IsActive) : IRequest<ApiResponse<PayrollPolicyDto>>;
 
 public sealed record CreateSalaryStructureCommand(CreateSalaryStructureRequest Request) : IRequest<ApiResponse<SalaryStructureDto>>;
 public sealed record AddSalaryStructureComponentCommand(Guid SalaryStructureId, CreateSalaryStructureComponentRequest Request) : IRequest<ApiResponse<SalaryStructureComponentDto>>;
@@ -15,14 +12,8 @@ public sealed record CreateSalaryIncrementCommand(SalaryIncrementRequest Request
 public sealed record ApproveSalaryIncrementCommand(Guid Id, Guid ApprovedBy) : IRequest<ApiResponse<SalaryIncrementDto>>;
 public sealed record RejectSalaryIncrementCommand(Guid Id, Guid RejectedBy, string? Remarks) : IRequest<ApiResponse<SalaryIncrementDto>>;
 
-public sealed record CreatePayrollPeriodCommand(CreatePayrollPeriodRequest Request) : IRequest<ApiResponse<PayrollPeriodDto>>;
 public sealed record ProcessPayrollCommand(ProcessPayrollRequest Request) : IRequest<ApiResponse<PayrollSummaryDto>>;
 public sealed record ReprocessPayrollCommand(ProcessPayrollRequest Request) : IRequest<ApiResponse<PayrollSummaryDto>>;
-public sealed record SubmitPayrollCommand(Guid PayrollPeriodId, Guid SubmittedBy) : IRequest<ApiResponse<PayrollPeriodDto>>;
-public sealed record ApprovePayrollCommand(Guid PayrollPeriodId, Guid ApprovedBy, string? Remarks) : IRequest<ApiResponse<PayrollPeriodDto>>;
-public sealed record RejectPayrollCommand(Guid PayrollPeriodId, Guid RejectedBy, string? Remarks) : IRequest<ApiResponse<PayrollPeriodDto>>;
-public sealed record LockPayrollCommand(Guid PayrollPeriodId, Guid LockedBy, string? Remarks) : IRequest<ApiResponse<PayrollPeriodDto>>;
-public sealed record UnlockPayrollCommand(Guid PayrollPeriodId, Guid UnlockedBy, string UnlockReason) : IRequest<ApiResponse<PayrollPeriodDto>>;
 
 public sealed record CreateSalaryAdvanceCommand(SalaryAdvanceRequest Request) : IRequest<ApiResponse<SalaryAdvanceDto>>;
 public sealed record ApproveSalaryAdvanceCommand(Guid Id, Guid ApprovedBy) : IRequest<ApiResponse<SalaryAdvanceDto>>;
@@ -33,14 +24,14 @@ public sealed record ApproveAllowanceBillCommand(Guid Id, Guid ApprovedBy) : IRe
 public sealed record RejectAllowanceBillCommand(Guid Id, Guid RejectedBy, string? Remarks) : IRequest<ApiResponse<AllowanceBillDto>>;
 
 public sealed record CreateDeductionCommand(CreateDeductionRequest Request) : IRequest<ApiResponse<DeductionDto>>;
-public sealed record GeneratePayslipCommand(Guid PayrollPeriodId, Guid EmployeeId) : IRequest<ApiResponse<PayslipDto>>;
+public sealed record GeneratePayslipCommand(Guid CompanyId, int YearNo, int MonthNo, Guid EmployeeId) : IRequest<ApiResponse<PayslipDto>>;
 public sealed record GenerateFinalSettlementCommand(FinalSettlementRequest Request) : IRequest<ApiResponse<FinalSettlementDto>>;
 public sealed record ApproveFinalSettlementCommand(Guid Id, Guid ApprovedBy) : IRequest<ApiResponse<FinalSettlementDto>>;
 
-public sealed record GetPayrollPolicyQuery(Guid? Id, Guid? CompanyId) : IRequest<ApiResponse<IReadOnlyList<PayrollPolicyDto>>>;
-public sealed record GetPayrollPeriodQuery(Guid? Id, Guid? CompanyId) : IRequest<ApiResponse<IReadOnlyList<PayrollPeriodDto>>>;
 public sealed record GetEmployeePayrollQuery(
-    Guid PayrollPeriodId,
+    Guid CompanyId,
+    int YearNo,
+    int MonthNo,
     Guid? EmployeeId,
     int? DepartmentId = null,
     int? SectionId = null,
@@ -50,7 +41,9 @@ public sealed record GetEmployeePayrollQuery(
     string? SearchTerm = null) : IRequest<ApiResponse<IReadOnlyList<EmployeePayrollDto>>>;
 
 public sealed record GetSalarySheetQuery(
-    Guid PayrollPeriodId,
+    Guid CompanyId,
+    int YearNo,
+    int MonthNo,
     int? DepartmentId = null,
     int? SectionId = null,
     int? DesignationId = null,
@@ -58,10 +51,10 @@ public sealed record GetSalarySheetQuery(
     string? Status = null,
     string? SearchTerm = null) : IRequest<ApiResponse<IReadOnlyList<SalarySheetRowDto>>>;
 
-public sealed record GetPayrollSummaryBreakdownQuery(Guid PayrollPeriodId) : IRequest<ApiResponse<PayrollSummaryBreakdownDto>>;
-public sealed record GetPayslipQuery(Guid PayrollPeriodId, Guid EmployeeId) : IRequest<ApiResponse<PayslipDto>>;
-public sealed record GetBankSheetQuery(Guid PayrollPeriodId) : IRequest<ApiResponse<IReadOnlyList<BankSheetRowDto>>>;
-public sealed record GetPayrollSummaryQuery(Guid PayrollPeriodId) : IRequest<ApiResponse<PayrollSummaryDto>>;
+public sealed record GetPayrollSummaryBreakdownQuery(Guid CompanyId, int YearNo, int MonthNo) : IRequest<ApiResponse<PayrollSummaryBreakdownDto>>;
+public sealed record GetPayslipQuery(Guid CompanyId, int YearNo, int MonthNo, Guid EmployeeId) : IRequest<ApiResponse<PayslipDto>>;
+public sealed record GetBankSheetQuery(Guid CompanyId, int YearNo, int MonthNo) : IRequest<ApiResponse<IReadOnlyList<BankSheetRowDto>>>;
+public sealed record GetPayrollSummaryQuery(Guid CompanyId, int YearNo, int MonthNo) : IRequest<ApiResponse<PayrollSummaryDto>>;
 public sealed record GetSalaryAdvanceBalanceQuery(Guid CompanyId, Guid EmployeeId) : IRequest<ApiResponse<SalaryAdvanceBalanceDto>>;
 public sealed record GetSalaryIncrementHistoryQuery(Guid CompanyId, Guid? EmployeeId) : IRequest<ApiResponse<IReadOnlyList<SalaryIncrementDto>>>;
 public sealed record GetAllowanceBillsQuery(Guid CompanyId, Guid? EmployeeId, DateOnly? FromDate, DateOnly? ToDate) : IRequest<ApiResponse<IReadOnlyList<AllowanceBillDto>>>;
@@ -71,7 +64,6 @@ public sealed record GetSalaryStructuresQuery(Guid CompanyId) : IRequest<ApiResp
 public sealed record GetSalaryStructureComponentsQuery(Guid SalaryStructureId) : IRequest<ApiResponse<IReadOnlyList<SalaryStructureComponentDto>>>;
 public sealed record GetCurrentEmployeeSalaryQuery(Guid CompanyId, Guid EmployeeId) : IRequest<ApiResponse<EmployeeSalaryDto>>;
 public sealed record GetEmployeeSalaryHistoryQuery(Guid CompanyId, Guid EmployeeId) : IRequest<ApiResponse<IReadOnlyList<EmployeeSalaryDto>>>;
-public sealed record CheckPayrollLockQuery(Guid CompanyId, int YearNo, int MonthNo) : IRequest<ApiResponse<PayrollLockCheckDto>>;
 
 public sealed record ListSalaryAdvancesQuery(Guid CompanyId, string? Status, int? Year, int? Month) : IRequest<ApiResponse<IReadOnlyList<SalaryAdvanceDto>>>;
 public sealed record GetSalaryAdvanceSummaryQuery(Guid CompanyId, int? Year, int? Month) : IRequest<ApiResponse<SalaryAdvanceSummaryDto>>;
@@ -85,4 +77,10 @@ public sealed record GetPayrollBonusesQuery(Guid CompanyId, int YearNo, int? Mon
 public sealed record CreatePayrollBonusCommand(CreatePayrollBonusRequest Request) : IRequest<ApiResponse<PayrollBonusRowDto>>;
 public sealed record ProcessFestivalBonusCommand(ProcessFestivalBonusRequest Request) : IRequest<ApiResponse<FestivalBonusProcessResultDto>>;
 public sealed record DeletePayrollBonusCommand(Guid EmployeePayrollId) : IRequest<ApiResponse<bool>>;
-public sealed record GetFestivalBonusBankSheetQuery(Guid PayrollPeriodId) : IRequest<ApiResponse<IReadOnlyList<FestivalBonusBankSheetRowDto>>>;
+public sealed record GetFestivalBonusBankSheetQuery(Guid CompanyId, int YearNo, int MonthNo) : IRequest<ApiResponse<IReadOnlyList<FestivalBonusBankSheetRowDto>>>;
+
+public sealed record GetPayrollPolicyTemplatesQuery() : IRequest<ApiResponse<IReadOnlyList<PayrollPolicyTemplateDto>>>;
+public sealed record GetAdminCompanyPayrollPolicyQuery(Guid CompanyId) : IRequest<ApiResponse<CompanyPayrollPolicyAssignmentDto?>>;
+public sealed record GetCompanyPayrollPolicySummaryQuery(Guid CompanyId) : IRequest<ApiResponse<CompanyPayrollPolicySummaryDto?>>;
+public sealed record AssignCompanyPayrollPolicyCommand(AssignCompanyPayrollPolicyRequest Request) : IRequest<ApiResponse<CompanyPayrollPolicyAssignmentDto>>;
+public sealed record TestPayrollPolicyCalculationQuery(string PolicyCode, PolicyTestCalculateRequest Request) : IRequest<ApiResponse<PolicyTestCalculateResultDto>>;

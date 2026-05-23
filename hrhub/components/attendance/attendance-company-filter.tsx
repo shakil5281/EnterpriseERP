@@ -117,7 +117,7 @@ export function AttendanceCompanyFilter({
       .then(setDesignations);
   }, [companyEntityId, legacyDeptId, legacySectionId]);
 
-  const applyFilters = () => {
+  const applyFilters = React.useCallback(() => {
     if (!companyEntityId) return;
     const from = showDateRange ? startDate : date;
     const to = showDateRange ? endDate : date;
@@ -140,7 +140,31 @@ export function AttendanceCompanyFilter({
         designationId: legacyDesigId,
       },
     });
-  };
+  }, [
+    companyEntityId,
+    companies,
+    date,
+    departmentEntityId,
+    designationEntityId,
+    endDate,
+    legacyDeptId,
+    legacyDesigId,
+    legacySectionId,
+    onFilterChange,
+    searchTerm,
+    sectionEntityId,
+    showDate,
+    showDateRange,
+    startDate,
+  ]);
+
+  const applyFiltersRef = React.useRef(applyFilters);
+  applyFiltersRef.current = applyFilters;
+
+  React.useEffect(() => {
+    if (!companyEntityId) return;
+    applyFiltersRef.current();
+  }, [companyEntityId]);
 
   const clearFilters = () => {
     const today = format(new Date(), "yyyy-MM-dd");

@@ -89,9 +89,9 @@ func (s *RemoteService) Collect(ctx context.Context, req RemoteCollectRequest) (
 		pageSize = s.opts.MaxPageSize
 	}
 
-	to := timeutil.Now()
+	to := timeutil.WallClock(timeutil.Now())
 	if req.To != nil {
-		to = timeutil.InDhaka(*req.To)
+		to = timeutil.WallClock(*req.To)
 	}
 
 	from, err := s.resolveFrom(ctx, req)
@@ -189,7 +189,7 @@ func (s *RemoteService) Collect(ctx context.Context, req RemoteCollectRequest) (
 				LogFileID:    rec.LogFileID,
 				PunchNumber: rec.PunchNumber,
 				DeviceID:     rec.DeviceID,
-				PunchTime:    timeutil.InDhaka(rec.PunchTime),
+				PunchTime:    rec.PunchTime,
 				Source:       rec.Source,
 			}); pubErr != nil {
 				s.logger.Warn("publish PunchLogCollected failed", "punchId", rec.ID, "error", pubErr)
@@ -288,7 +288,7 @@ func (s *RemoteService) PreviewDetail(ctx context.Context, from, to time.Time) (
 
 func (s *RemoteService) resolveFrom(ctx context.Context, req RemoteCollectRequest) (time.Time, error) {
 	if req.From != nil {
-		return timeutil.InDhaka(*req.From), nil
+		return timeutil.WallClock(*req.From), nil
 	}
 	if req.UseWatermark {
 		if t, err := s.repo.WatermarkFromPunches(ctx, req.CompanyID, s.opts.Source); err != nil {

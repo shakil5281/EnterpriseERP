@@ -6,6 +6,7 @@ using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authorization;
 using AuthService.Api.Controllers;
 using AuthService.Api.Middleware;
+using EnterpriseERP.Platform.Host.Middleware;
 using AuthService.Application;
 using AuthService.Infrastructure;
 using AuthService.Infrastructure.Identity;
@@ -87,8 +88,10 @@ builder.Services.AddLeaveApplication();
 builder.Services.AddLeaveInfrastructure(builder.Configuration);
 builder.Services.AddShiftApplication();
 builder.Services.AddShiftInfrastructure(builder.Configuration);
+builder.Services.AddScoped<ShiftService.Application.Common.Interfaces.ILeaveCalendarProvider, EnterpriseERP.Platform.Host.Integration.LeaveCalendarProvider>();
 builder.Services.AddPayrollApplication();
 builder.Services.AddPayrollInfrastructure(builder.Configuration);
+builder.Services.AddScoped<PayrollService.Application.IEmployeeServiceClient, EnterpriseERP.Platform.Host.Integration.PayrollInProcessEmployeeClient>();
 builder.Services.AddNotificationInfrastructure(builder.Configuration);
 
 // Bootstrapping newly integrated ERP microservices
@@ -135,6 +138,7 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.DefaultIgnoreCondition =
             System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 
 builder.Services.AddEndpointsApiExplorer();
@@ -199,7 +203,7 @@ builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionAuthorizat
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy(PayrollPermissions.PayrollPolicyManage, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.GroupAdmin, PayrollRoles.CompanyAdmin));
+    options.AddPolicy(PayrollPermissions.PayrollPolicyManage, p => p.RequireRole(PayrollRoles.SuperAdmin));
     options.AddPolicy(PayrollPermissions.SalaryStructureManage, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.HRManager));
     options.AddPolicy(PayrollPermissions.EmployeeSalaryManage, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.HRManager));
     options.AddPolicy(PayrollPermissions.SalaryIncrementRequest, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.HRManager));
@@ -324,7 +328,7 @@ app.UseStaticFiles(new StaticFileOptions
 
 app.UseSerilogRequestLogging();
 app.UseMiddleware<CorrelationIdMiddleware>();
-app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseMiddleware<PlatformExceptionHandlingMiddleware>();
 app.UseCors("platform");
 app.UseRateLimiter();
 
@@ -468,6 +472,7 @@ await using (var scope = app.Services.CreateAsyncScope())
         }
 
         await shiftDb.Database.MigrateAsync();
+        await ShiftService.Application.Common.ShiftPolicyProvisioning.BackfillAllShiftsAsync(shiftDb);
         await payrollDb.Database.MigrateAsync();
         await notificationDb.Database.MigrateAsync();
 

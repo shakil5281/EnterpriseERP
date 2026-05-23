@@ -13,24 +13,22 @@ public sealed class PayrollQueryHandlers(IPayrollDbContext db, IEmployeeServiceC
     IRequestHandler<GetPayrollSummaryBreakdownQuery, ApiResponse<PayrollSummaryBreakdownDto>>,
     IRequestHandler<GeneratePayslipCommand, ApiResponse<PayslipDto>>
 {
-    public async Task<ApiResponse<IReadOnlyList<EmployeePayrollDto>>> Handle(GetEmployeePayrollQuery query, CancellationToken cancellationToken)
+    public async Task<ApiResponse<IReadOnlyList<EmployeePayrollDto>>> Handle(
+        GetEmployeePayrollQuery query,
+        CancellationToken cancellationToken)
     {
-        var period = db.PayrollPeriods.FirstOrDefault(x => x.Id == query.PayrollPeriodId);
-        if (period is null)
-        {
-            return ApiResponse<IReadOnlyList<EmployeePayrollDto>>.Fail("Payroll period not found.");
-        }
-
-        var employees = await employeeServiceClient.GetActiveEmployeesAsync(period.CompanyId, cancellationToken);
+        var employees = await employeeServiceClient.GetActiveEmployeesAsync(query.CompanyId, cancellationToken);
         var employeeMap = employees.ToDictionary(x => x.EmployeeId);
 
         var rows = db.EmployeePayrolls
-            .Where(x => x.PayrollPeriodId == query.PayrollPeriodId && (!query.EmployeeId.HasValue || x.EmployeeId == query.EmployeeId))
+            .Where(x => x.CompanyId == query.CompanyId && x.YearNo == query.YearNo && x.MonthNo == query.MonthNo &&
+                        (!query.EmployeeId.HasValue || x.EmployeeId == query.EmployeeId))
             .ToList()
             .Where(x =>
             {
                 employeeMap.TryGetValue(x.EmployeeId, out var employee);
-                if (!string.IsNullOrWhiteSpace(query.Status) && !string.Equals(x.Status, query.Status, StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrWhiteSpace(query.Status) &&
+                    !string.Equals(x.Status, query.Status, StringComparison.OrdinalIgnoreCase))
                 {
                     return false;
                 }
@@ -49,25 +47,22 @@ public sealed class PayrollQueryHandlers(IPayrollDbContext db, IEmployeeServiceC
         return ApiResponse<IReadOnlyList<EmployeePayrollDto>>.Ok(rows);
     }
 
-    public async Task<ApiResponse<IReadOnlyList<SalarySheetRowDto>>> Handle(GetSalarySheetQuery query, CancellationToken cancellationToken)
+    public async Task<ApiResponse<IReadOnlyList<SalarySheetRowDto>>> Handle(
+        GetSalarySheetQuery query,
+        CancellationToken cancellationToken)
     {
-        var period = db.PayrollPeriods.FirstOrDefault(x => x.Id == query.PayrollPeriodId);
-        if (period is null)
-        {
-            return ApiResponse<IReadOnlyList<SalarySheetRowDto>>.Fail("Payroll period not found.");
-        }
-
-        var employees = await employeeServiceClient.GetActiveEmployeesAsync(period.CompanyId, cancellationToken);
+        var employees = await employeeServiceClient.GetActiveEmployeesAsync(query.CompanyId, cancellationToken);
         var employeeMap = employees.ToDictionary(x => x.EmployeeId);
 
         var result = db.EmployeePayrolls
-            .Where(x => x.PayrollPeriodId == query.PayrollPeriodId)
+            .Where(x => x.CompanyId == query.CompanyId && x.YearNo == query.YearNo && x.MonthNo == query.MonthNo)
             .OrderBy(x => x.EmployeeId)
             .ToList()
             .Where(x =>
             {
                 employeeMap.TryGetValue(x.EmployeeId, out var employee);
-                if (!string.IsNullOrWhiteSpace(query.Status) && !string.Equals(x.Status, query.Status, StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrWhiteSpace(query.Status) &&
+                    !string.Equals(x.Status, query.Status, StringComparison.OrdinalIgnoreCase))
                 {
                     return false;
                 }
@@ -91,27 +86,27 @@ public sealed class PayrollQueryHandlers(IPayrollDbContext db, IEmployeeServiceC
     }
 
     public Task<ApiResponse<PayslipDto>> Handle(GetPayslipQuery query, CancellationToken cancellationToken) =>
-        GetPayslipAsync(query.PayrollPeriodId, query.EmployeeId, cancellationToken);
+        GetPayslipAsync(query.CompanyId, query.YearNo, query.MonthNo, query.EmployeeId, cancellationToken);
 
     public Task<ApiResponse<PayslipDto>> Handle(GeneratePayslipCommand command, CancellationToken cancellationToken) =>
-        GetPayslipAsync(command.PayrollPeriodId, command.EmployeeId, cancellationToken);
+        GetPayslipAsync(command.CompanyId, command.YearNo, command.MonthNo, command.EmployeeId, cancellationToken);
 
-    public async Task<ApiResponse<IReadOnlyList<BankSheetRowDto>>> Handle(GetBankSheetQuery query, CancellationToken cancellationToken)
+    public async Task<ApiResponse<IReadOnlyList<BankSheetRowDto>>> Handle(
+        GetBankSheetQuery query,
+        CancellationToken cancellationToken)
     {
-        var period = db.PayrollPeriods.FirstOrDefault(x => x.Id == query.PayrollPeriodId);
-        if (period is null)
-        {
-            return ApiResponse<IReadOnlyList<BankSheetRowDto>>.Fail("Payroll period not found.");
-        }
-
-        var employees = await employeeServiceClient.GetActiveEmployeesAsync(period.CompanyId, cancellationToken);
+        var employees = await employeeServiceClient.GetActiveEmployeesAsync(query.CompanyId, cancellationToken);
         var result = db.EmployeePayrolls
-            .Where(x => x.PayrollPeriodId == query.PayrollPeriodId)
+            .Where(x => x.CompanyId == query.CompanyId && x.YearNo == query.YearNo && x.MonthNo == query.MonthNo)
             .ToList()
             .Select(x =>
             {
                 var employee = employees.FirstOrDefault(e => e.EmployeeId == x.EmployeeId);
-                return new BankSheetRowDto(x.EmployeeId, employee?.BankAccountNo ?? string.Empty, employee?.BankName ?? string.Empty, x.NetSalary);
+                return new BankSheetRowDto(
+                    x.EmployeeId,
+                    employee?.BankAccountNo ?? string.Empty,
+                    employee?.BankName ?? string.Empty,
+                    x.NetSalary);
             })
             .ToList();
         return ApiResponse<IReadOnlyList<BankSheetRowDto>>.Ok(result);
@@ -119,28 +114,31 @@ public sealed class PayrollQueryHandlers(IPayrollDbContext db, IEmployeeServiceC
 
     public Task<ApiResponse<PayrollSummaryDto>> Handle(GetPayrollSummaryQuery query, CancellationToken cancellationToken)
     {
-        var period = db.PayrollPeriods.FirstOrDefault(x => x.Id == query.PayrollPeriodId);
-        if (period is null)
-        {
-            return Task.FromResult(ApiResponse<PayrollSummaryDto>.Fail("Payroll period not found."));
-        }
-
-        var rows = db.EmployeePayrolls.Where(x => x.PayrollPeriodId == query.PayrollPeriodId).ToList();
-        var summary = new PayrollSummaryDto(period.Id, rows.Count, rows.Sum(x => x.GrossSalary), rows.Sum(x => x.TotalEarnings), rows.Sum(x => x.TotalDeduction), rows.Sum(x => x.NetSalary), period.Status);
+        var rows = db.EmployeePayrolls
+            .Where(x => x.CompanyId == query.CompanyId && x.YearNo == query.YearNo && x.MonthNo == query.MonthNo)
+            .ToList();
+        var summary = new PayrollSummaryDto(
+            query.CompanyId,
+            query.YearNo,
+            query.MonthNo,
+            rows.Count,
+            rows.Sum(x => x.GrossSalary),
+            rows.Sum(x => x.TotalEarnings),
+            rows.Sum(x => x.TotalDeduction),
+            rows.Sum(x => x.NetSalary),
+            rows.Count > 0 ? "Processed" : "Open");
         return Task.FromResult(ApiResponse<PayrollSummaryDto>.Ok(summary));
     }
 
-    public async Task<ApiResponse<PayrollSummaryBreakdownDto>> Handle(GetPayrollSummaryBreakdownQuery query, CancellationToken cancellationToken)
+    public async Task<ApiResponse<PayrollSummaryBreakdownDto>> Handle(
+        GetPayrollSummaryBreakdownQuery query,
+        CancellationToken cancellationToken)
     {
-        var period = db.PayrollPeriods.FirstOrDefault(x => x.Id == query.PayrollPeriodId);
-        if (period is null)
-        {
-            return ApiResponse<PayrollSummaryBreakdownDto>.Fail("Payroll period not found.");
-        }
-
-        var employees = await employeeServiceClient.GetActiveEmployeesAsync(period.CompanyId, cancellationToken);
+        var employees = await employeeServiceClient.GetActiveEmployeesAsync(query.CompanyId, cancellationToken);
         var employeeMap = employees.ToDictionary(x => x.EmployeeId);
-        var payrollRows = db.EmployeePayrolls.Where(x => x.PayrollPeriodId == query.PayrollPeriodId).ToList();
+        var payrollRows = db.EmployeePayrolls
+            .Where(x => x.CompanyId == query.CompanyId && x.YearNo == query.YearNo && x.MonthNo == query.MonthNo)
+            .ToList();
         var joined = payrollRows
             .Select(p =>
             {
@@ -150,13 +148,15 @@ public sealed class PayrollQueryHandlers(IPayrollDbContext db, IEmployeeServiceC
             .ToList();
 
         var summary = new PayrollSummaryDto(
-            period.Id,
+            query.CompanyId,
+            query.YearNo,
+            query.MonthNo,
             payrollRows.Count,
             payrollRows.Sum(x => x.GrossSalary),
             payrollRows.Sum(x => x.TotalEarnings),
             payrollRows.Sum(x => x.TotalDeduction),
             payrollRows.Sum(x => x.NetSalary),
-            period.Status);
+            payrollRows.Count > 0 ? "Processed" : "Open");
 
         var breakdown = new PayrollSummaryBreakdownDto(
             summary,
@@ -168,17 +168,33 @@ public sealed class PayrollQueryHandlers(IPayrollDbContext db, IEmployeeServiceC
         return ApiResponse<PayrollSummaryBreakdownDto>.Ok(breakdown);
     }
 
-    private Task<ApiResponse<PayslipDto>> GetPayslipAsync(Guid periodId, Guid employeeId, CancellationToken cancellationToken)
+    private Task<ApiResponse<PayslipDto>> GetPayslipAsync(
+        Guid companyId,
+        int yearNo,
+        int monthNo,
+        Guid employeeId,
+        CancellationToken cancellationToken)
     {
-        var payroll = db.EmployeePayrolls.FirstOrDefault(x => x.PayrollPeriodId == periodId && x.EmployeeId == employeeId);
-        var period = db.PayrollPeriods.FirstOrDefault(x => x.Id == periodId);
-        if (payroll is null || period is null)
+        var payroll = db.EmployeePayrolls.FirstOrDefault(x =>
+            x.CompanyId == companyId && x.YearNo == yearNo && x.MonthNo == monthNo && x.EmployeeId == employeeId);
+        if (payroll is null)
         {
             return Task.FromResult(ApiResponse<PayslipDto>.Fail("Payslip not found."));
         }
 
-        var rows = db.EmployeePayrolls.Where(x => x.PayrollPeriodId == periodId).ToList();
-        var summary = new PayrollSummaryDto(periodId, rows.Count, rows.Sum(x => x.GrossSalary), rows.Sum(x => x.TotalEarnings), rows.Sum(x => x.TotalDeduction), rows.Sum(x => x.NetSalary), period.Status);
+        var rows = db.EmployeePayrolls
+            .Where(x => x.CompanyId == companyId && x.YearNo == yearNo && x.MonthNo == monthNo)
+            .ToList();
+        var summary = new PayrollSummaryDto(
+            companyId,
+            yearNo,
+            monthNo,
+            rows.Count,
+            rows.Sum(x => x.GrossSalary),
+            rows.Sum(x => x.TotalEarnings),
+            rows.Sum(x => x.TotalDeduction),
+            rows.Sum(x => x.NetSalary),
+            "Processed");
         return Task.FromResult(ApiResponse<PayslipDto>.Ok(new PayslipDto(ToPayrollDto(payroll), summary)));
     }
 

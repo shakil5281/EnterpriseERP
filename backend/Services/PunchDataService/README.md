@@ -16,7 +16,8 @@ Go (Gin) microservice for **collecting raw punch logs** from biometric devices, 
 - Language: Go (`net/http` + Gin)
 - Database: SQL Server (`PunchDataDB`)
 - Port: `5050`
-- Punch times: **Asia/Dhaka (GMT+6)** — naive CSV/device timestamps are interpreted as Dhaka local time
+- **PunchTime**: stored as **actual device/log wall-clock** (no timezone conversion on ingest)
+- **CreatedAt / audit fields**: **Asia/Dhaka (GMT+6)** via `timeutil.Now()`
 - Auth: HS256 JWT (Issuer `AuthService`, Audience `Erp.Platform`)
 - Gateway route prefix: `/api/v1/punch-data`
 
@@ -141,7 +142,11 @@ In/out times for attendance are inferred from punch times (first = in, last = ou
 
 ### Timestamps
 
-Accepted formats: RFC3339, `2006-01-02T15:04:05`, `2006-01-02 15:04:05`, `02/01/2006 15:04:05`, `01/02/2006 15:04:05`, `2006/01/02 15:04:05`, unix seconds, unix milliseconds.
+**PunchTime** (ingest): RFC3339, `2006-01-02T15:04:05`, `2006-01-02 15:04:05`, `02/01/2006 15:04:05`, `01/02/2006 15:04:05`, `2006/01/02 15:04:05`, unix seconds, unix milliseconds. Values are stored as the **wall-clock face value** from the log (not shifted to Dhaka).
+
+**CreatedAt** (audit): `Asia/Dhaka` (+06:00) when the row is saved in ERP.
+
+After changing punch time rules, **re-import** punches (see `docs/punch-data-reimport.md`).
 
 ## Configuration
 

@@ -14,6 +14,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using OtpNet;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace AuthService.Infrastructure.Services;
 
 public sealed class TwoFactorAuthenticatorService(AuthDbContext db, UserManager<AuthService.Infrastructure.Identity.AppUser> userManager, IDataProtectionProvider dataProtection) : ITwoFactorAuthenticatorService
@@ -98,7 +100,7 @@ public sealed class TwoFactorAuthenticatorService(AuthDbContext db, UserManager<
 		List<string> hashed = recovery.Select(HashRecoveryCode).ToList();
 		row.RecoveryCodesHash = JsonSerializer.Serialize(hashed);
 		row.IsEnabled = true;
-		row.EnabledAt = DateTimeOffset.UtcNow;
+		row.EnabledAt = BusinessTime.NowOffset;
 		AuthService.Infrastructure.Identity.AppUser? user = await userManager.FindByIdAsync(userId.ToString());
 		if (user != null)
 		{

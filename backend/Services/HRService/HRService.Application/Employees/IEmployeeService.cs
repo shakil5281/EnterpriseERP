@@ -35,16 +35,35 @@ public sealed record CreateEmployeeDto(
     string? Gender, DateTime? DateOfBirth, string? NationalId, string? BirthCertificateNo,
     string? Phone, string? Email, DateTime JoinDate, string EmploymentType,
     Guid? DepartmentId, Guid? SectionId, Guid? DesignationId, Guid? GradeId,
-    decimal BasicSalary, decimal HouseRent, decimal MedicalAllowance, decimal ConveyanceAllowance, decimal FoodAllowance);
+    decimal BasicSalary, decimal HouseRent, decimal MedicalAllowance, decimal ConveyanceAllowance, decimal FoodAllowance,
+    string? Religion = null, string? BloodGroup = null, Guid? GroupId = null,
+    string? FatherNameEn = null, string? FatherNameBn = null, string? MotherNameEn = null, string? MotherNameBn = null,
+    string? MaritalStatus = null, string? SpouseNameEn = null, string? SpouseNameBn = null,
+    string? SpouseOccupation = null, string? SpouseContact = null,
+    string? EducationLevel = null, string? Institution = null, string? FieldOfStudy = null, string? Skills = null,
+    string? Reference1Name = null, string? Reference1Relation = null, string? Reference1Phone = null, string? Reference1Address = null,
+    string? Reference2Name = null, string? Reference2Relation = null, string? Reference2Phone = null, string? Reference2Address = null,
+    bool IsOtEnabled = true, string? WorkLocation = null);
 
 public sealed record UpdateEmployeeDto(
     string FullName, string? BanglaName, string? Gender, DateTime? DateOfBirth,
     string? NationalId, string? BirthCertificateNo, string? Phone, string? Email,
-    DateTime JoinDate, string EmploymentType, string Status);
+    DateTime JoinDate, string EmploymentType, string Status,
+    string? Religion = null, string? BloodGroup = null,
+    string? FatherNameEn = null, string? FatherNameBn = null, string? MotherNameEn = null, string? MotherNameBn = null,
+    string? MaritalStatus = null, string? SpouseNameEn = null, string? SpouseNameBn = null,
+    string? SpouseOccupation = null, string? SpouseContact = null,
+    string? EducationLevel = null, string? Institution = null, string? FieldOfStudy = null, string? Skills = null,
+    string? Reference1Name = null, string? Reference1Relation = null, string? Reference1Phone = null, string? Reference1Address = null,
+    string? Reference2Name = null, string? Reference2Relation = null, string? Reference2Phone = null, string? Reference2Address = null,
+    bool IsOtEnabled = true,
+    decimal BasicSalary = 0, decimal HouseRent = 0, decimal MedicalAllowance = 0,
+    decimal ConveyanceAllowance = 0, decimal FoodAllowance = 0);
 
 public sealed record TransferEmployeeDto(
     Guid? DepartmentId, Guid? SectionId, Guid? DesignationId, Guid? GradeId,
-    Guid? SupervisorId, string? WorkLocation, string? Reason, DateTime EffectiveFrom);
+    Guid? SupervisorId, string? WorkLocation, string? Reason, DateTime EffectiveFrom,
+    Guid? GroupId = null);
 
 public sealed record ChangeStatusDto(string Status, DateTime EffectiveFrom, string? Remarks);
 

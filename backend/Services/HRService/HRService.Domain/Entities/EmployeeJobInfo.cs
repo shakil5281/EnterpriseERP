@@ -21,6 +21,9 @@ public sealed class EmployeeJobInfo
     public Guid? GradeId { get; set; }
     public Grade? Grade { get; set; }
 
+    /// <summary>Functional group from Company Service organogram (Staff, Worker, etc.).</summary>
+    public Guid? GroupId { get; set; }
+
     public Guid? SupervisorId { get; set; }
 
     public string? WorkLocation { get; set; }

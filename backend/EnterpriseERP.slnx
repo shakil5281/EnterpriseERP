@@ -105,6 +105,13 @@
     <Project Path="Services/PayrollService/PayrollService.Infrastructure/PayrollService.Infrastructure.csproj" />
     <Project Path="Services/PayrollService/PayrollService.Tests/PayrollService.Tests.csproj" />
   </Folder>
+  <Folder Name="/Services/AttendanceService/">
+    <Project Path="Services/AttendanceService/AttendanceService.Api/AttendanceService.Api.csproj" />
+    <Project Path="Services/AttendanceService/AttendanceService.Application/AttendanceService.Application.csproj" />
+    <Project Path="Services/AttendanceService/AttendanceService.Domain/AttendanceService.Domain.csproj" />
+    <Project Path="Services/AttendanceService/AttendanceService.Infrastructure/AttendanceService.Infrastructure.csproj" />
+    <Project Path="Services/AttendanceService/AttendanceService.Tests/AttendanceService.Tests.csproj" />
+  </Folder>
   <Folder Name="/Services/ShiftService/">
     <Project Path="Services/ShiftService/ShiftService.Api/ShiftService.Api.csproj" />
     <Project Path="Services/ShiftService/ShiftService.Application/ShiftService.Application.csproj" />

@@ -25,7 +25,7 @@ services:
       ConnectionStrings__AuthDb: "Server=sql,1433;Database=AuthServiceDB;User Id=sa;Password=123580;TrustServerCertificate=True;MultipleActiveResultSets=true"
       Jwt__Issuer: "AuthService"
       Jwt__Audience: "Erp.Platform"
-      Jwt__AccessTokenMinutes: "15"
+      Jwt__AccessTokenMinutes: "1440"
       Jwt__RefreshTokenDays: "7"
       Jwt__SigningKey: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
       Auth__AllowSelfRegistration: "true"

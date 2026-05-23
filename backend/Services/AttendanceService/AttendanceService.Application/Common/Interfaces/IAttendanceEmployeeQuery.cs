@@ -1,3 +1,5 @@
+using AttendanceService.Application.DTOs;
+
 namespace AttendanceService.Application.Common.Interfaces;
 
 public sealed record AttendanceEmployeeProfile(
@@ -28,5 +30,11 @@ public interface IAttendanceEmployeeQuery
 
     Task<HashSet<Guid>> GetEmployeeIdsMatchingFilterAsync(
         AttendanceEmployeeFilter filter,
+        CancellationToken cancellationToken = default);
+
+    Task<PagedJobCardRosterDto> GetPagedRosterAsync(
+        AttendanceEmployeeFilter filter,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 }

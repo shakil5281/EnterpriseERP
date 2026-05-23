@@ -1,10 +1,12 @@
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace FinishingService.Domain;
 
 public abstract class AuditableEntity
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid CompanyId { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
     public Guid? CreatedBy { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public Guid? UpdatedBy { get; set; }
@@ -209,5 +211,5 @@ public sealed class FinishingAuditLog
     public string Action { get; set; } = string.Empty;
     public Guid? UserId { get; set; }
     public string? Remarks { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
 }

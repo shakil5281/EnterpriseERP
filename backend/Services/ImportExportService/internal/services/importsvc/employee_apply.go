@@ -94,6 +94,7 @@ func (s *Service) applyEmployeeImport(job *models.ImportJob, companyID uuid.UUID
 			MedicalAllowance:    0,
 			ConveyanceAllowance: 0,
 			FoodAllowance:       0,
+			IsOtEnabled:         true,
 		}
 
 		if err := s.HR.CreateEmployee(ctx, bearer, req); err != nil {

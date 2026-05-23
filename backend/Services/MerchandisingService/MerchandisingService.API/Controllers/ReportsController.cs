@@ -5,6 +5,8 @@ using MerchandisingService.Domain;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace MerchandisingService.API.Controllers;
 
 [ApiController]
@@ -23,6 +25,6 @@ public sealed class ReportsController(IMediator mediator) : ControllerBase
             csv.AppendLine($"{order.Id},{order.OrderNo},{order.BuyerId},{order.StyleId},{order.OrderDate},{order.ShipmentDate},{order.TotalOrderQty},{order.UnitPrice},{order.TotalValue},{order.CurrencyCode},{order.OrderStatus}");
         }
 
-        return File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", $"merchandising-order-summary-{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
+        return File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", $"merchandising-order-summary-{BusinessTime.Now:yyyyMMddHHmmss}.csv");
     }
 }

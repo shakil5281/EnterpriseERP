@@ -2,6 +2,8 @@ using MediatR;
 using PayrollService.Contracts;
 using PayrollService.Domain.Entities;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace PayrollService.Application.Handlers;
 
 public sealed class SalaryAdvanceHandlers(IPayrollDbContext db, IIntegrationEventPublisher publisher) :
@@ -37,7 +39,7 @@ public sealed class SalaryAdvanceHandlers(IPayrollDbContext db, IIntegrationEven
         if (advance is null) return ApiResponse<SalaryAdvanceDto>.Fail("Salary advance not found.");
         advance.Status = "Approved";
         advance.ApprovedBy = command.ApprovedBy;
-        advance.ApprovedAt = DateTime.UtcNow;
+        advance.ApprovedAt = BusinessTime.Now;
         CreateInstallments(advance);
         await db.SaveChangesAsync(cancellationToken);
         await publisher.PublishAsync(new SalaryAdvanceApprovedEvent(advance.CompanyId, advance.EmployeeId, advance.Id, advance.AdvanceAmount), cancellationToken);
@@ -117,7 +119,7 @@ public sealed class AllowanceDeductionHandlers(IPayrollDbContext db) :
         if (bill is null) return ApiResponse<AllowanceBillDto>.Fail("Allowance bill not found.");
         bill.Status = "Approved";
         bill.ApprovedBy = command.ApprovedBy;
-        bill.ApprovedAt = DateTime.UtcNow;
+        bill.ApprovedAt = BusinessTime.Now;
         await db.SaveChangesAsync(cancellationToken);
         return ApiResponse<AllowanceBillDto>.Ok(bill.ToDto(), "Allowance bill approved.");
     }
@@ -194,7 +196,7 @@ public sealed class FinalSettlementHandlers(IPayrollDbContext db, IFinalSettleme
         if (settlement is null) return ApiResponse<FinalSettlementDto>.Fail("Final settlement not found.");
         settlement.Status = "Approved";
         settlement.ApprovedBy = command.ApprovedBy;
-        settlement.ApprovedAt = DateTime.UtcNow;
+        settlement.ApprovedAt = BusinessTime.Now;
         await db.SaveChangesAsync(cancellationToken);
         await publisher.PublishAsync(new FinalSettlementApprovedEvent(settlement.CompanyId, settlement.EmployeeId, settlement.Id, settlement.NetPayable), cancellationToken);
         return ApiResponse<FinalSettlementDto>.Ok(settlement.ToDto(), "Final settlement approved.");

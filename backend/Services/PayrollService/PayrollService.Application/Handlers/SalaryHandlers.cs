@@ -2,6 +2,8 @@ using MediatR;
 using PayrollService.Contracts;
 using PayrollService.Domain.Entities;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace PayrollService.Application.Handlers;
 
 public sealed class SalaryStructureHandlers(IPayrollDbContext db, IRedisCacheService cache) :
@@ -106,6 +108,7 @@ public sealed class EmployeeSalaryHandlers(IPayrollDbContext db, IRedisCacheServ
             CompanyId = r.CompanyId,
             EmployeeId = r.EmployeeId,
             SalaryStructureId = r.SalaryStructureId,
+            SalaryCalculationType = string.IsNullOrWhiteSpace(r.SalaryCalculationType) ? "Monthly" : r.SalaryCalculationType,
             GrossSalary = r.GrossSalary,
             BasicSalary = r.BasicSalary,
             HouseRent = r.HouseRent,
@@ -188,7 +191,7 @@ public sealed class SalaryIncrementHandlers(IPayrollDbContext db, ISalaryIncreme
 
         increment.Status = "Rejected";
         increment.ApprovedBy = command.RejectedBy;
-        increment.ApprovedAt = DateTime.UtcNow;
+        increment.ApprovedAt = BusinessTime.Now;
         await db.SaveChangesAsync(cancellationToken);
         return ApiResponse<SalaryIncrementDto>.Ok(increment.ToDto(), "Salary increment rejected.");
     }

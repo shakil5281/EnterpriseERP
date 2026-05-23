@@ -15,5 +15,5 @@ public sealed class AttendancePunch
     public SourceType SourceType { get; set; }
     public Guid? RawPunchLogId { get; set; }
     public Guid? DeviceId { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
 }

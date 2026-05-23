@@ -2,6 +2,8 @@ using CuttingService.Application;
 using CuttingService.Domain;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace CuttingService.Infrastructure.Persistence;
 
 public sealed class CuttingDbContext(DbContextOptions<CuttingDbContext> options) : DbContext(options), ICuttingDbContext
@@ -35,10 +37,10 @@ public sealed class CuttingDbContext(DbContextOptions<CuttingDbContext> options)
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        foreach (var entry in ChangeTracker.Entries<AuditableEntity>().Where(x => x.State is EntityState.Added or EntityState.Modified))
+        foreach (var entry in ChangeTracker.Entries<CuttingService.Domain.AuditableEntity>().Where(x => x.State is EntityState.Added or EntityState.Modified))
         {
-            if (entry.State == EntityState.Added) entry.Entity.CreatedAt = DateTime.UtcNow;
-            if (entry.State == EntityState.Modified) entry.Entity.UpdatedAt = DateTime.UtcNow;
+            if (entry.State == EntityState.Added) entry.Entity.CreatedAt = BusinessTime.Now;
+            if (entry.State == EntityState.Modified) entry.Entity.UpdatedAt = BusinessTime.Now;
         }
         return base.SaveChangesAsync(cancellationToken);
     }
@@ -149,7 +151,7 @@ public sealed class CuttingDbContext(DbContextOptions<CuttingDbContext> options)
         Seed(modelBuilder);
     }
 
-    private static void ConfigureAuditable<TEntity>(ModelBuilder modelBuilder) where TEntity : AuditableEntity
+    private static void ConfigureAuditable<TEntity>(ModelBuilder modelBuilder) where TEntity : CuttingService.Domain.AuditableEntity
     {
         modelBuilder.Entity<TEntity>(e =>
         {

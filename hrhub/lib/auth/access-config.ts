@@ -8,6 +8,7 @@ export type RouteRule = {
 /** Single source of truth for route RBAC (proxy, RouteAccessGuard, sidebar). */
 export const routeRules: RouteRule[] = [
   { path: "/management/administrator", permissions: ["auth.users.read"], superAdminOnly: false },
+  { path: "/management/administrator/payroll-policies", superAdminOnly: true },
   { path: "/management/human-resource", permissions: ["hr.employees.read"], roles: ["HR", "Management", "HR Officer"] },
   { path: "/management/attendance", permissions: ["attendance.read"], roles: ["HR", "Management", "HR Officer"] },
   { path: "/management/leave", permissions: ["leave.read"], roles: ["HR", "Management", "HR Officer"] },

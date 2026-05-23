@@ -4,6 +4,8 @@ using MerchandisingService.Contracts;
 using MerchandisingService.Domain;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace MerchandisingService.Application.Handlers;
 
 public sealed class CatalogCommandHandlers(
@@ -57,7 +59,7 @@ public sealed class CatalogCommandHandlers(
         buyer.Phone = command.Request.Phone;
         buyer.Address = command.Request.Address;
         buyer.IsActive = command.Request.IsActive;
-        buyer.UpdatedAt = DateTime.UtcNow;
+        buyer.UpdatedAt = BusinessTime.Now;
         await uow.SaveChangesAsync(cancellationToken);
         await cache.RemoveAsync(CacheKeys.Buyers(buyer.CompanyId), cancellationToken);
         return mapper.Map<BuyerDto>(buyer);
@@ -67,7 +69,7 @@ public sealed class CatalogCommandHandlers(
     {
         var buyer = await uow.Buyers.GetByIdAsync(command.Id, cancellationToken) ?? throw new KeyNotFoundException("Buyer not found.");
         buyer.IsActive = command.IsActive;
-        buyer.UpdatedAt = DateTime.UtcNow;
+        buyer.UpdatedAt = BusinessTime.Now;
         await uow.SaveChangesAsync(cancellationToken);
         await cache.RemoveAsync(CacheKeys.Buyers(buyer.CompanyId), cancellationToken);
         return mapper.Map<BuyerDto>(buyer);
@@ -145,7 +147,7 @@ public sealed class CatalogCommandHandlers(
         style.StyleName = command.Request.StyleName;
         style.Description = command.Request.Description;
         style.FabricDescription = command.Request.FabricDescription;
-        style.UpdatedAt = DateTime.UtcNow;
+        style.UpdatedAt = BusinessTime.Now;
         await uow.SaveChangesAsync(cancellationToken);
         await cache.RemoveAsync(CacheKeys.Styles(style.CompanyId, style.BuyerId), cancellationToken);
         return mapper.Map<StyleDto>(style);
@@ -224,7 +226,7 @@ public sealed class OrderCommandHandlers(
         order.UnitPrice = command.Request.UnitPrice;
         order.TotalValue = command.Request.TotalOrderQty * command.Request.UnitPrice;
         order.CurrencyCode = command.Request.CurrencyCode;
-        order.UpdatedAt = DateTime.UtcNow;
+        order.UpdatedAt = BusinessTime.Now;
         await uow.SaveChangesAsync(cancellationToken);
         await cache.RemoveAsync(CacheKeys.OrderDetails(order.Id), cancellationToken);
         return mapper.Map<OrderDto>(order);
@@ -251,7 +253,7 @@ public sealed class OrderCommandHandlers(
 
         var previous = order.OrderStatus;
         order.OrderStatus = OrderStatuses.Confirmed;
-        order.UpdatedAt = DateTime.UtcNow;
+        order.UpdatedAt = BusinessTime.Now;
         db.Add(new OrderStatusHistory { CompanyId = order.CompanyId, OrderId = order.Id, FromStatus = previous, ToStatus = order.OrderStatus, Reason = "Order confirmed." });
         await uow.SaveChangesAsync(cancellationToken);
         await cache.RemoveAsync(CacheKeys.OrderDetails(order.Id), cancellationToken);
@@ -269,7 +271,7 @@ public sealed class OrderCommandHandlers(
 
         var previous = order.OrderStatus;
         order.OrderStatus = OrderStatuses.Cancelled;
-        order.UpdatedAt = DateTime.UtcNow;
+        order.UpdatedAt = BusinessTime.Now;
         db.Add(new OrderStatusHistory { CompanyId = order.CompanyId, OrderId = order.Id, FromStatus = previous, ToStatus = order.OrderStatus, Reason = "Order cancelled." });
         await uow.SaveChangesAsync(cancellationToken);
         await cache.RemoveAsync(CacheKeys.OrderDetails(order.Id), cancellationToken);
@@ -314,7 +316,7 @@ public sealed class OrderCommandHandlers(
         po.UnitPrice = command.Request.UnitPrice;
         po.TotalValue = po.OrderQty * po.UnitPrice;
         po.Status = command.Request.Status;
-        po.UpdatedAt = DateTime.UtcNow;
+        po.UpdatedAt = BusinessTime.Now;
         await uow.SaveChangesAsync(cancellationToken);
         await cache.RemoveAsync(CacheKeys.OrderDetails(po.OrderId), cancellationToken);
         return mapper.Map<BuyerPurchaseOrderDto>(po);
@@ -361,7 +363,7 @@ public sealed class OrderCommandHandlers(
         breakdown.ColorName = command.Request.ColorName.Trim();
         breakdown.SizeName = command.Request.SizeName.Trim();
         breakdown.Quantity = command.Request.Quantity;
-        breakdown.UpdatedAt = DateTime.UtcNow;
+        breakdown.UpdatedAt = BusinessTime.Now;
         await uow.SaveChangesAsync(cancellationToken);
         await cache.RemoveAsync(CacheKeys.OrderDetails(order.Id), cancellationToken);
         return mapper.Map<ColorSizeBreakdownDto>(breakdown);
@@ -414,7 +416,7 @@ public sealed class OrderCommandHandlers(
         item.Consumption = command.Request.Consumption;
         item.WastagePercent = command.Request.WastagePercent;
         item.UnitPrice = command.Request.UnitPrice;
-        item.UpdatedAt = DateTime.UtcNow;
+        item.UpdatedAt = BusinessTime.Now;
         bomCalculator.Calculate(item, order.TotalOrderQty);
         await uow.SaveChangesAsync(cancellationToken);
         await cache.RemoveAsync(CacheKeys.BomItems(order.Id), cancellationToken);
@@ -471,7 +473,7 @@ public sealed class OrderCommandHandlers(
         var order = await uow.Orders.GetByIdAsync(command.OrderId, cancellationToken) ?? throw new KeyNotFoundException("Order not found.");
         var costing = await uow.Costings.Query().FirstOrDefaultAsync(x => x.OrderId == order.Id, cancellationToken) ?? throw new KeyNotFoundException("Costing not found.");
         ApplyCosting(costing, command.Request);
-        costing.UpdatedAt = DateTime.UtcNow;
+        costing.UpdatedAt = BusinessTime.Now;
         costingCalculator.Calculate(costing);
         await uow.SaveChangesAsync(cancellationToken);
         await cache.RemoveAsync(CacheKeys.Costing(order.Id), cancellationToken);
@@ -539,8 +541,8 @@ public sealed class SampleShipmentCommandHandlers(
     {
         var sample = await uow.Samples.GetByIdAsync(command.Id, cancellationToken) ?? throw new KeyNotFoundException("Sample not found.");
         sample.Status = SampleStatuses.Approved;
-        sample.ApprovalDate = DateOnly.FromDateTime(DateTime.UtcNow);
-        sample.UpdatedAt = DateTime.UtcNow;
+        sample.ApprovalDate = DateOnly.FromDateTime(BusinessTime.Now);
+        sample.UpdatedAt = BusinessTime.Now;
         await uow.SaveChangesAsync(cancellationToken);
         await publisher.PublishAsync(new SampleApproved(sample.CompanyId, sample.Id, sample.StyleId), cancellationToken);
         return mapper.Map<SampleDto>(sample);
@@ -550,7 +552,7 @@ public sealed class SampleShipmentCommandHandlers(
     {
         var sample = await uow.Samples.GetByIdAsync(command.Id, cancellationToken) ?? throw new KeyNotFoundException("Sample not found.");
         sample.Status = SampleStatuses.Rejected;
-        sample.UpdatedAt = DateTime.UtcNow;
+        sample.UpdatedAt = BusinessTime.Now;
         await uow.SaveChangesAsync(cancellationToken);
         return mapper.Map<SampleDto>(sample);
     }
@@ -588,7 +590,7 @@ public sealed class SampleShipmentCommandHandlers(
         plan.ShipmentMode = command.Request.ShipmentMode;
         plan.Destination = command.Request.Destination;
         plan.Status = command.Request.Status;
-        plan.UpdatedAt = DateTime.UtcNow;
+        plan.UpdatedAt = BusinessTime.Now;
         await uow.SaveChangesAsync(cancellationToken);
         return mapper.Map<ShipmentPlanDto>(plan);
     }

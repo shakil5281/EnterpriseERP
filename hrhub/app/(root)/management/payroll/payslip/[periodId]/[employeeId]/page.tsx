@@ -21,7 +21,7 @@ export default function PayslipDetailPage() {
   React.useEffect(() => {
     if (periodId && employeeId) {
       payrollService
-        .getPayslip(periodId, employeeId)
+        .getLegacyPayslip(periodId, employeeId)
         .then(setData)
         .catch(() => toast.error("Failed to load payslip"))
         .finally(() => setIsLoading(false))

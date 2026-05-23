@@ -1,68 +1,6 @@
+using PayrollService.Domain.Enums;
+
 namespace PayrollService.Contracts;
-
-public sealed record PayrollPolicyDto(
-    Guid Id,
-    Guid CompanyId,
-    string PolicyName,
-    string SalaryCalculationType,
-    string MonthDayCalculationType,
-    int? FixedMonthDays,
-    bool UseAttendanceForSalary,
-    bool UseApprovedAttendanceOnly,
-    bool AllowOvertime,
-    string? OvertimeCalculationType,
-    decimal OvertimeMultiplier,
-    decimal OvertimeDivisor,
-    bool AllowLateDeduction,
-    string? LateDeductionType,
-    bool AllowAbsentDeduction,
-    bool AllowTiffinBill,
-    bool AllowNightBill,
-    bool AllowAttendanceBonus,
-    bool AllowFestivalBonus,
-    bool AllowEarnLeaveEncashment,
-    bool IsActive);
-
-public sealed record CreatePayrollPolicyRequest(
-    Guid CompanyId,
-    string PolicyName,
-    string SalaryCalculationType,
-    string MonthDayCalculationType,
-    int? FixedMonthDays,
-    bool UseAttendanceForSalary = true,
-    bool UseApprovedAttendanceOnly = true,
-    bool AllowOvertime = true,
-    string? OvertimeCalculationType = "BasicSalaryBased",
-    decimal OvertimeMultiplier = 2,
-    decimal OvertimeDivisor = 208,
-    bool AllowLateDeduction = false,
-    string? LateDeductionType = null,
-    bool AllowAbsentDeduction = true,
-    bool AllowTiffinBill = false,
-    bool AllowNightBill = false,
-    bool AllowAttendanceBonus = false,
-    bool AllowFestivalBonus = false,
-    bool AllowEarnLeaveEncashment = false);
-
-public sealed record UpdatePayrollPolicyRequest(
-    string PolicyName,
-    string SalaryCalculationType,
-    string MonthDayCalculationType,
-    int? FixedMonthDays,
-    bool UseAttendanceForSalary,
-    bool UseApprovedAttendanceOnly,
-    bool AllowOvertime,
-    string? OvertimeCalculationType,
-    decimal OvertimeMultiplier,
-    decimal OvertimeDivisor,
-    bool AllowLateDeduction,
-    string? LateDeductionType,
-    bool AllowAbsentDeduction,
-    bool AllowTiffinBill,
-    bool AllowNightBill,
-    bool AllowAttendanceBonus,
-    bool AllowFestivalBonus,
-    bool AllowEarnLeaveEncashment);
 
 public sealed record SalaryStructureDto(Guid Id, Guid CompanyId, string StructureCode, string StructureName, Guid? GradeId, bool IsActive, IReadOnlyList<SalaryStructureComponentDto> Components);
 
@@ -98,6 +36,7 @@ public sealed record EmployeeSalaryDto(
     Guid CompanyId,
     Guid EmployeeId,
     Guid? SalaryStructureId,
+    string SalaryCalculationType,
     decimal GrossSalary,
     decimal BasicSalary,
     decimal HouseRent,
@@ -119,7 +58,8 @@ public sealed record EmployeeSalaryRequest(
     decimal ConveyanceAllowance,
     decimal FoodAllowance,
     DateOnly EffectiveFrom,
-    Guid? CreatedBy);
+    Guid? CreatedBy,
+    string SalaryCalculationType = "Monthly");
 
 public sealed record SalaryIncrementDto(Guid Id, Guid CompanyId, Guid EmployeeId, decimal OldGrossSalary, decimal NewGrossSalary, decimal IncrementAmount, decimal IncrementPercentage, DateOnly EffectiveFrom, string Status);
 
@@ -134,19 +74,84 @@ public sealed record SalaryIncrementRequest(
     string Reason,
     Guid RequestedBy);
 
-public sealed record PayrollPeriodDto(Guid Id, Guid CompanyId, int YearNo, int MonthNo, DateOnly StartDate, DateOnly EndDate, string Status, bool IsAttendanceLocked, bool IsPayrollLocked);
+public sealed record ProcessPayrollRequest(
+    Guid CompanyId,
+    int YearNo,
+    int MonthNo,
+    Guid? ProcessedBy,
+    bool ForceReprocess = false);
 
-public sealed record CreatePayrollPeriodRequest(Guid CompanyId, int YearNo, int MonthNo, DateOnly StartDate, DateOnly EndDate);
+public sealed record PayrollPolicyTemplateDto(
+    Guid Id,
+    string PolicyCode,
+    string PolicyName,
+    int Version,
+    string ComplianceMode,
+    string OtBase,
+    decimal OtDivisor,
+    decimal OtMultiplier,
+    string AbsentBase,
+    string AbsentDayDivisor,
+    string MonthDayCalculationType,
+    bool RequireAttendanceApproval,
+    string Summary);
 
-public sealed record ProcessPayrollRequest(Guid CompanyId, int YearNo, int MonthNo, Guid? ProcessedBy, bool ForceReprocess = false);
+public sealed record CompanyPayrollPolicyAssignmentDto(
+    Guid Id,
+    Guid CompanyId,
+    Guid PolicyTemplateId,
+    string PolicyCode,
+    string PolicyName,
+    int PolicyVersion,
+    decimal? FixedOvertimeRate,
+    DateOnly EffectiveFrom,
+    bool IsActive,
+    DateTime AssignedAt);
+
+public sealed record AssignCompanyPayrollPolicyRequest(
+    Guid CompanyId,
+    string PolicyCode,
+    DateOnly EffectiveFrom,
+    Guid? AssignedBy,
+    decimal? FixedOvertimeRate = null);
+
+public sealed record CompanyPayrollPolicySummaryDto(
+    Guid CompanyId,
+    string PolicyCode,
+    string PolicyName,
+    int Version,
+    decimal? FixedOvertimeRate,
+    DateOnly? EffectiveFrom);
+
+public sealed record PolicyTestCalculateRequest(
+    decimal GrossSalary,
+    decimal OvertimeHours,
+    decimal AbsentDays,
+    int YearNo,
+    int MonthNo,
+    decimal? FixedOvertimeRate = null);
+
+public sealed record PolicyTestCalculateResultDto(
+    decimal BasicSalary,
+    decimal HouseRent,
+    decimal MedicalAllowance,
+    decimal FoodAllowance,
+    decimal ConveyanceAllowance,
+    decimal OvertimeRate,
+    decimal OvertimeAmount,
+    decimal AbsentDeduction,
+    decimal NetSalary);
 
 public sealed record EmployeePayrollDto(
     Guid Id,
     Guid CompanyId,
-    Guid PayrollPeriodId,
+    int YearNo,
+    int MonthNo,
     Guid PayrollRunId,
     Guid EmployeeId,
+    string ProcessingMode,
     string SalaryCalculationType,
+    string? OvertimeCalculationType,
     decimal GrossSalary,
     decimal BasicSalary,
     decimal TotalDays,
@@ -193,7 +198,16 @@ public sealed record SalarySheetRowDto(
     decimal NetSalary,
     string Status);
 
-public sealed record PayrollSummaryDto(Guid PayrollPeriodId, int TotalEmployees, decimal GrossSalary, decimal TotalEarnings, decimal TotalDeduction, decimal NetSalary, string Status);
+public sealed record PayrollSummaryDto(
+    Guid CompanyId,
+    int YearNo,
+    int MonthNo,
+    int TotalEmployees,
+    decimal GrossSalary,
+    decimal TotalEarnings,
+    decimal TotalDeduction,
+    decimal NetSalary,
+    string Status);
 
 public sealed record SummaryGroupDto(
     string Name,
@@ -239,6 +253,8 @@ public sealed record CreateDeductionRequest(Guid CompanyId, Guid EmployeeId, str
 
 public sealed record FinalSettlementDto(Guid Id, Guid CompanyId, Guid EmployeeId, DateOnly SettlementDate, DateOnly LastWorkingDate, decimal NetPayable, string Status);
 
+public sealed record ApprovalRequest(Guid UserId, string? Remarks);
+
 public sealed record FinalSettlementRequest(
     Guid CompanyId,
     Guid EmployeeId,
@@ -250,14 +266,6 @@ public sealed record FinalSettlementRequest(
     decimal GratuityAmount,
     decimal AdvanceDeduction,
     decimal OtherDeduction);
-
-public sealed record PayrollLockCheckDto(Guid? PayrollPeriodId, bool IsLocked, string? Status);
-
-public sealed record ApprovalRequest(Guid UserId, string? Remarks);
-
-public sealed record LockPayrollRequest(Guid LockedBy, string? Remarks);
-
-public sealed record UnlockPayrollRequest(Guid UnlockedBy, string UnlockReason);
 
 public sealed record BatchSalaryAdvanceRequest(
     Guid CompanyId,

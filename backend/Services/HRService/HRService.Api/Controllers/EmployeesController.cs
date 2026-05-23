@@ -49,6 +49,7 @@ public sealed class EmployeesController(
     }
 
     [HttpGet("transfers")]
+    [Authorize(Policy = "Permission:hr.employees.read")]
     public async Task<ActionResult<ApiResponse<PagedResult<EmployeeTransferDto>>>> ListTransfers(
         [FromQuery] EmployeeTransferListQuery query,
         CancellationToken cancellationToken)
@@ -57,7 +58,56 @@ public sealed class EmployeesController(
         return Ok(ApiResponse<PagedResult<EmployeeTransferDto>>.Ok(data, HttpContext.TraceIdentifier));
     }
 
-    [HttpGet("{id}")]
+    [HttpPut("addresses/{addressId:guid}")]
+    public async Task<ActionResult<ApiResponse<string>>> UpdateAddress(Guid addressId, [FromBody] EmployeeAddressDto dto)
+    {
+        await employeeService.UpdateAddressAsync(addressId, dto);
+        return Ok(ApiResponse<string>.Ok("Address updated", HttpContext.TraceIdentifier));
+    }
+
+    [HttpDelete("addresses/{addressId:guid}")]
+    public async Task<ActionResult<ApiResponse<string>>> DeleteAddress(Guid addressId)
+    {
+        await employeeService.DeleteAddressAsync(addressId);
+        return Ok(ApiResponse<string>.Ok("Address deleted", HttpContext.TraceIdentifier));
+    }
+
+    [HttpPut("bank-accounts/{accountId:guid}")]
+    public async Task<ActionResult<ApiResponse<string>>> UpdateBankAccount(Guid accountId, [FromBody] EmployeeBankAccountDto dto)
+    {
+        await employeeService.UpdateBankAccountAsync(accountId, dto);
+        return Ok(ApiResponse<string>.Ok("Bank account updated", HttpContext.TraceIdentifier));
+    }
+
+    [HttpDelete("bank-accounts/{accountId:guid}")]
+    public async Task<ActionResult<ApiResponse<string>>> DeleteBankAccount(Guid accountId)
+    {
+        await employeeService.DeleteBankAccountAsync(accountId);
+        return Ok(ApiResponse<string>.Ok("Bank account deleted", HttpContext.TraceIdentifier));
+    }
+
+    [HttpPut("emergency-contacts/{contactId:guid}")]
+    public async Task<ActionResult<ApiResponse<string>>> UpdateEmergencyContact(Guid contactId, [FromBody] EmergencyContactDto dto)
+    {
+        await employeeService.UpdateEmergencyContactAsync(contactId, dto);
+        return Ok(ApiResponse<string>.Ok("Emergency contact updated", HttpContext.TraceIdentifier));
+    }
+
+    [HttpDelete("emergency-contacts/{contactId:guid}")]
+    public async Task<ActionResult<ApiResponse<string>>> DeleteEmergencyContact(Guid contactId)
+    {
+        await employeeService.DeleteEmergencyContactAsync(contactId);
+        return Ok(ApiResponse<string>.Ok("Emergency contact deleted", HttpContext.TraceIdentifier));
+    }
+
+    [HttpDelete("documents/{documentId:guid}")]
+    public async Task<ActionResult<ApiResponse<string>>> DeleteDocument(Guid documentId)
+    {
+        await employeeService.DeleteDocumentAsync(documentId);
+        return Ok(ApiResponse<string>.Ok("Document deleted", HttpContext.TraceIdentifier));
+    }
+
+    [HttpGet("{id:guid}")]
     [Authorize(Policy = "Permission:hr.employees.read")]
     public async Task<ActionResult<ApiResponse<EmployeeDetailsDto>>> Get(
         Guid id,
@@ -79,7 +129,8 @@ public sealed class EmployeesController(
         return Ok(ApiResponse<EmployeeDetailsDto>.Ok(data, HttpContext.TraceIdentifier));
     }
 
-    [HttpGet("{id}/status-history")]
+    [HttpGet("{id:guid}/status-history")]
+    [Authorize(Policy = "Permission:hr.employees.read")]
     public async Task<ActionResult<ApiResponse<IReadOnlyList<EmployeeStatusHistoryDto>>>> StatusHistory(
         Guid id,
         CancellationToken cancellationToken)
@@ -88,7 +139,8 @@ public sealed class EmployeesController(
         return Ok(ApiResponse<IReadOnlyList<EmployeeStatusHistoryDto>>.Ok(data, HttpContext.TraceIdentifier));
     }
 
-    [HttpGet("{id}/transfers")]
+    [HttpGet("{id:guid}/transfers")]
+    [Authorize(Policy = "Permission:hr.employees.read")]
     public async Task<ActionResult<ApiResponse<IReadOnlyList<EmployeeTransferDto>>>> EmployeeTransfers(
         Guid id,
         CancellationToken cancellationToken)
@@ -106,7 +158,7 @@ public sealed class EmployeesController(
         return CreatedAtAction(nameof(Get), new { id }, ApiResponse<Guid>.Ok(id, HttpContext.TraceIdentifier));
     }
 
-    [HttpPut("{id}")]
+    [HttpPut("{id:guid}")]
     public async Task<ActionResult<ApiResponse<string>>> Update(
         Guid id,
         [FromBody] UpdateEmployeeDto dto,
@@ -116,7 +168,7 @@ public sealed class EmployeesController(
         return Ok(ApiResponse<string>.Ok("Employee updated successfully", HttpContext.TraceIdentifier));
     }
 
-    [HttpDelete("{id}")]
+    [HttpDelete("{id:guid}")]
     public async Task<ActionResult<ApiResponse<string>>> Delete(
         Guid id,
         CancellationToken cancellationToken)
@@ -127,7 +179,7 @@ public sealed class EmployeesController(
 
     // Advanced Operations
 
-    [HttpPost("{id}/transfer")]
+    [HttpPost("{id:guid}/transfer")]
     public async Task<ActionResult<ApiResponse<string>>> Transfer(
         Guid id,
         [FromBody] TransferEmployeeDto dto,
@@ -137,7 +189,7 @@ public sealed class EmployeesController(
         return Ok(ApiResponse<string>.Ok("Employee transfer processed", HttpContext.TraceIdentifier));
     }
 
-    [HttpPost("{id}/status")]
+    [HttpPost("{id:guid}/status")]
     public async Task<ActionResult<ApiResponse<string>>> ChangeStatus(
         Guid id,
         [FromBody] ChangeStatusDto dto,
@@ -147,7 +199,7 @@ public sealed class EmployeesController(
         return Ok(ApiResponse<string>.Ok($"Employee status changed to {dto.Status}", HttpContext.TraceIdentifier));
     }
 
-    [HttpPost("{id}/salary")]
+    [HttpPost("{id:guid}/salary")]
     public async Task<ActionResult<ApiResponse<string>>> UpdateSalary(
         Guid id,
         [FromBody] UpdateSalaryDto dto,
@@ -159,80 +211,31 @@ public sealed class EmployeesController(
 
     // Sub-Resources (Addresses, Bank, Contacts, Docs)
 
-    [HttpPost("{id}/addresses")]
+    [HttpPost("{id:guid}/addresses")]
     public async Task<ActionResult<ApiResponse<string>>> AddAddress(Guid id, [FromBody] EmployeeAddressDto dto)
     {
         await employeeService.AddAddressAsync(id, dto);
         return Ok(ApiResponse<string>.Ok("Address added", HttpContext.TraceIdentifier));
     }
 
-    [HttpPut("addresses/{addressId}")]
-    public async Task<ActionResult<ApiResponse<string>>> UpdateAddress(Guid addressId, [FromBody] EmployeeAddressDto dto)
-    {
-        await employeeService.UpdateAddressAsync(addressId, dto);
-        return Ok(ApiResponse<string>.Ok("Address updated", HttpContext.TraceIdentifier));
-    }
-
-    [HttpDelete("addresses/{addressId}")]
-    public async Task<ActionResult<ApiResponse<string>>> DeleteAddress(Guid addressId)
-    {
-        await employeeService.DeleteAddressAsync(addressId);
-        return Ok(ApiResponse<string>.Ok("Address deleted", HttpContext.TraceIdentifier));
-    }
-
-    [HttpPost("{id}/bank-accounts")]
+    [HttpPost("{id:guid}/bank-accounts")]
     public async Task<ActionResult<ApiResponse<string>>> AddBankAccount(Guid id, [FromBody] EmployeeBankAccountDto dto)
     {
         await employeeService.AddBankAccountAsync(id, dto);
         return Ok(ApiResponse<string>.Ok("Bank account added", HttpContext.TraceIdentifier));
     }
 
-    [HttpPut("bank-accounts/{accountId}")]
-    public async Task<ActionResult<ApiResponse<string>>> UpdateBankAccount(Guid accountId, [FromBody] EmployeeBankAccountDto dto)
-    {
-        await employeeService.UpdateBankAccountAsync(accountId, dto);
-        return Ok(ApiResponse<string>.Ok("Bank account updated", HttpContext.TraceIdentifier));
-    }
-
-    [HttpDelete("bank-accounts/{accountId}")]
-    public async Task<ActionResult<ApiResponse<string>>> DeleteBankAccount(Guid accountId)
-    {
-        await employeeService.DeleteBankAccountAsync(accountId);
-        return Ok(ApiResponse<string>.Ok("Bank account deleted", HttpContext.TraceIdentifier));
-    }
-
-    [HttpPost("{id}/emergency-contacts")]
+    [HttpPost("{id:guid}/emergency-contacts")]
     public async Task<ActionResult<ApiResponse<string>>> AddEmergencyContact(Guid id, [FromBody] EmergencyContactDto dto)
     {
         await employeeService.AddEmergencyContactAsync(id, dto);
         return Ok(ApiResponse<string>.Ok("Emergency contact added", HttpContext.TraceIdentifier));
     }
 
-    [HttpPut("emergency-contacts/{contactId}")]
-    public async Task<ActionResult<ApiResponse<string>>> UpdateEmergencyContact(Guid contactId, [FromBody] EmergencyContactDto dto)
-    {
-        await employeeService.UpdateEmergencyContactAsync(contactId, dto);
-        return Ok(ApiResponse<string>.Ok("Emergency contact updated", HttpContext.TraceIdentifier));
-    }
-
-    [HttpDelete("emergency-contacts/{contactId}")]
-    public async Task<ActionResult<ApiResponse<string>>> DeleteEmergencyContact(Guid contactId)
-    {
-        await employeeService.DeleteEmergencyContactAsync(contactId);
-        return Ok(ApiResponse<string>.Ok("Emergency contact deleted", HttpContext.TraceIdentifier));
-    }
-
-    [HttpPost("{id}/documents")]
+    [HttpPost("{id:guid}/documents")]
     public async Task<ActionResult<ApiResponse<string>>> AddDocument(Guid id, [FromBody] EmployeeDocumentDto dto)
     {
         await employeeService.AddDocumentAsync(id, dto);
         return Ok(ApiResponse<string>.Ok("Document added", HttpContext.TraceIdentifier));
-    }
-
-    [HttpDelete("documents/{documentId}")]
-    public async Task<ActionResult<ApiResponse<string>>> DeleteDocument(Guid documentId)
-    {
-        await employeeService.DeleteDocumentAsync(documentId);
-        return Ok(ApiResponse<string>.Ok("Document deleted", HttpContext.TraceIdentifier));
     }
 }

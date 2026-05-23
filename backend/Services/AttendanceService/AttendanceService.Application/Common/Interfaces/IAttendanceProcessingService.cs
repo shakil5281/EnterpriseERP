@@ -5,5 +5,9 @@ namespace AttendanceService.Application.Common.Interfaces;
 
 public interface IAttendanceProcessingService
 {
-    DailyAttendance Process(DailyAttendance record, IReadOnlyList<AttendancePunchInput> punches, ShiftDto shift);
+    DailyAttendance Process(
+        DailyAttendance record,
+        IReadOnlyList<AttendancePunchInput> punches,
+        ShiftEvaluationDto evaluation,
+        bool isOtEnabled = true);
 }

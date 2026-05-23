@@ -1,18 +1,21 @@
 "use client"
 
 import * as React from "react"
-import { IconSettings, IconLoader, IconCheck, IconPlayerPlay } from "@tabler/icons-react"
+import Link from "next/link"
+import { IconCheck, IconPlayerPlay, IconRefresh, IconShield } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { NativeSelect } from "@/components/ui/native-select"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { payrollService } from "@/lib/services/payroll"
-import { organogramService } from "@/lib/services/organogram"
+import type { CompanyPayrollPolicySummaryDto } from "@/lib/services/payroll-types"
+import { payrollMonthKey } from "@/lib/payroll-utils"
 import { companyService, type Company } from "@/lib/services/company"
-import { companyGuidFromSelection } from "@/lib/payroll-utils"
 import { useAuth } from "@/components/providers/auth-provider"
+import { getHttpErrorMessage } from "@/lib/api-response"
 
 const MONTHS = [
     { label: "January", value: 1 },
@@ -26,44 +29,79 @@ const MONTHS = [
     { label: "September", value: 9 },
     { label: "October", value: 10 },
     { label: "November", value: 11 },
-    { label: "December", value: 12 }
+    { label: "December", value: 12 },
 ]
 
 export default function SalaryProcessPage() {
     const { user } = useAuth()
     const [year, setYear] = React.useState(new Date().getFullYear())
     const [month, setMonth] = React.useState(new Date().getMonth() + 1)
-    const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>("all")
+    const [selectedCompanyEntityId, setSelectedCompanyEntityId] = React.useState("")
     const [companies, setCompanies] = React.useState<Company[]>([])
-    const [departmentId, setDepartmentId] = React.useState("all")
-    const [departments, setDepartments] = React.useState<any[]>([])
+    const [companyPolicy, setCompanyPolicy] = React.useState<CompanyPayrollPolicySummaryDto | null>(null)
+    const [policyLoading, setPolicyLoading] = React.useState(false)
 
     const [status, setStatus] = React.useState<"idle" | "processing" | "success">("idle")
     const [progress, setProgress] = React.useState(0)
     const [message, setMessage] = React.useState("")
+    const [lastMonthKey, setLastMonthKey] = React.useState<string | null>(null)
+    const [showReprocess, setShowReprocess] = React.useState(false)
+    const [monthStatus, setMonthStatus] = React.useState<string | null>(null)
+    const [statusLoading, setStatusLoading] = React.useState(false)
 
     React.useEffect(() => {
-        companyService.getAll().then(setCompanies)
+        companyService.getAll().then((list) => {
+            setCompanies(list)
+            setSelectedCompanyEntityId((current) => current || list[0]?.entityId || "")
+        })
     }, [])
 
     React.useEffect(() => {
-        if (selectedCompanyId !== "all") {
-            organogramService.getDepartments({ companyId: parseInt(selectedCompanyId) }).then(setDepartments)
-        } else {
-            setDepartments([])
-            setDepartmentId("all")
+        if (!selectedCompanyEntityId) {
+            setMonthStatus(null)
+            setCompanyPolicy(null)
+            return
         }
-    }, [selectedCompanyId])
+        let cancelled = false
+        setStatusLoading(true)
+        setPolicyLoading(true)
+        Promise.all([
+            payrollService.getPayrollSummary(selectedCompanyEntityId, year, month),
+            payrollService.getCompanyPayrollPolicy(selectedCompanyEntityId),
+        ])
+            .then(([summary, policy]) => {
+                if (!cancelled) {
+                    setMonthStatus(summary.status)
+                    setShowReprocess(summary.status === "Processed")
+                    setCompanyPolicy(policy)
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setMonthStatus(null)
+                    setCompanyPolicy(null)
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setStatusLoading(false)
+                    setPolicyLoading(false)
+                }
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [selectedCompanyEntityId, year, month])
 
-    const handleProcess = async () => {
+    const runProcess = async (forceReprocess: boolean) => {
         setStatus("processing")
         setProgress(10)
-        setMessage("Initializing payroll engine...")
+        setMessage(forceReprocess ? "Reprocessing payroll..." : "Initializing payroll engine...")
+        setShowReprocess(false)
 
         try {
-            // Fake progress for UX
             const interval = setInterval(() => {
-                setProgress(p => {
+                setProgress((p) => {
                     if (p >= 90) {
                         clearInterval(interval)
                         return 90
@@ -72,27 +110,49 @@ export default function SalaryProcessPage() {
                 })
             }, 100)
 
-            const companyGuid = selectedCompanyId === "all" ? undefined : companyGuidFromSelection(companies, selectedCompanyId)
+            const companyGuid = selectedCompanyEntityId
             if (!companyGuid) {
                 toast.error("Select a company to process payroll")
                 setStatus("idle")
                 return
             }
-            const res = await payrollService.processSalary({
-                year,
-                month,
-                companyGuid,
-                processedBy: user?.id,
-            })
+
+            if (!companyPolicy) {
+                toast.error("Salary policy not assigned. Contact Super Admin.")
+                setStatus("idle")
+                return
+            }
+
+            setLastMonthKey(payrollMonthKey(companyGuid, year, month))
+
+            const body = {
+                companyId: companyGuid,
+                yearNo: year,
+                monthNo: month,
+                processedBy: user?.id ?? null,
+                forceReprocess,
+            }
+
+            if (forceReprocess) {
+                await payrollService.reprocessPayroll(body)
+            } else {
+                await payrollService.processPayroll(body)
+            }
 
             clearInterval(interval)
             setProgress(100)
             setStatus("success")
-            setMessage(res.message || "Payroll processed successfully")
-            toast.success("Payroll processed successfully")
-        } catch (error: any) {
+            setMessage("Payroll processed successfully")
+            toast.success(forceReprocess ? "Payroll reprocessed" : "Payroll processed successfully")
+            setMonthStatus("Processed")
+            setShowReprocess(true)
+        } catch (error: unknown) {
             setStatus("idle")
-            toast.error(error.response?.data?.message || "Failed to process payroll")
+            const msg = getHttpErrorMessage(error, "Failed to process payroll")
+            toast.error(msg)
+            if (msg.toLowerCase().includes("already processed") || msg.toLowerCase().includes("reprocess")) {
+                setShowReprocess(true)
+            }
         }
     }
 
@@ -100,69 +160,116 @@ export default function SalaryProcessPage() {
         <div className="container max-w-2xl mx-auto py-10 animate-in fade-in duration-500">
             <div className="space-y-1 mb-8">
                 <h1 className="text-2xl font-bold tracking-tight">Salary Processing</h1>
-                <p className="text-muted-foreground text-sm">Execute payroll generation for the selected period</p>
+                <p className="text-muted-foreground text-sm">
+                    Run payroll for a company and month. Calculation rules come from the assigned company policy.
+                </p>
             </div>
 
             <Card>
                 <CardHeader>
                     <CardTitle className="text-lg">Process Configuration</CardTitle>
-                    <CardDescription>Select period and scope for salary calculation</CardDescription>
+                    <CardDescription>Company and month — policy is assigned by Super Admin</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                             <Label>Month</Label>
                             <NativeSelect value={month} onChange={(e) => setMonth(parseInt(e.target.value))}>
-                                {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                                {MONTHS.map((m) => (
+                                    <option key={m.value} value={m.value}>
+                                        {m.label}
+                                    </option>
+                                ))}
                             </NativeSelect>
                         </div>
                         <div className="space-y-2">
                             <Label>Year</Label>
                             <NativeSelect value={year} onChange={(e) => setYear(parseInt(e.target.value))}>
-                                <option value={2024}>2024</option>
-                                <option value={2025}>2025</option>
-                                <option value={2026}>2026</option>
-                                <option value={2027}>2027</option>
-                                <option value={2028}>2028</option>
+                                {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                                    <option key={y} value={y}>
+                                        {y}
+                                    </option>
+                                ))}
                             </NativeSelect>
                         </div>
                         <div className="space-y-2 md:col-span-2">
-                            <Label>Company Scope</Label>
-                            <NativeSelect value={selectedCompanyId} onChange={(e) => setSelectedCompanyId(e.target.value)}>
-                                <option value="all">Select Company</option>
-                                {companies.map(c => <option key={c.id} value={c.id}>{c.companyNameEn}</option>)}
-                            </NativeSelect>
-                        </div>
-                        <div className="space-y-2 md:col-span-2">
-                            <Label>Department Scope</Label>
-                            <NativeSelect value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} disabled={selectedCompanyId === "all"}>
-                                <option value="all">Entire Organization</option>
-                                {departments.map(d => <option key={d.id} value={d.id}>{d.nameEn}</option>)}
+                            <Label>Company</Label>
+                            <NativeSelect
+                                value={selectedCompanyEntityId}
+                                onChange={(e) => setSelectedCompanyEntityId(e.target.value)}
+                            >
+                                <option value="">Select company</option>
+                                {companies.map((c) => (
+                                    <option key={c.entityId} value={c.entityId}>
+                                        {c.companyNameEn}
+                                    </option>
+                                ))}
                             </NativeSelect>
                         </div>
                     </div>
 
-                    <div className="bg-muted/50 p-4 rounded-lg flex gap-4">
-                        <div className="h-10 w-10 flex-shrink-0 rounded-full bg-background border flex items-center justify-center text-muted-foreground">
-                            <IconSettings className="size-5" />
+                    {selectedCompanyEntityId && (
+                        <div className="rounded-lg border p-4 space-y-2">
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                                <IconShield className="size-4 text-primary" />
+                                Assigned payroll policy
+                            </div>
+                            {policyLoading ? (
+                                <p className="text-xs text-muted-foreground">Loading policy…</p>
+                            ) : companyPolicy ? (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Badge variant="secondary">{companyPolicy.policyName}</Badge>
+                                    <span className="text-xs font-mono text-muted-foreground">
+                                        {companyPolicy.policyCode} v{companyPolicy.version}
+                                    </span>
+                                    {companyPolicy.fixedOvertimeRate != null && (
+                                        <span className="text-xs text-muted-foreground">
+                                            Fixed OT: {companyPolicy.fixedOvertimeRate}/hr
+                                        </span>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-destructive">
+                                    No salary policy assigned for this company. Contact Super Admin to assign a policy
+                                    before processing.
+                                </p>
+                            )}
                         </div>
-                        <div className="space-y-1">
-                            <h4 className="text-sm font-semibold">Ready to Process</h4>
-                            <p className="text-xs text-muted-foreground">
-                                This will calculate salaries for <strong>{MONTHS.find(m => m.value === month)?.label} {year}</strong>. Existing draft calculations will be overwritten.
-                            </p>
+                    )}
+
+                    {selectedCompanyEntityId && (
+                        <div className="text-xs text-muted-foreground">
+                            {statusLoading
+                                ? "Checking payroll status…"
+                                : monthStatus === "Processed"
+                                  ? "Payroll already processed for this month. Use Reprocess to overwrite."
+                                  : "No payroll run for this month yet."}
                         </div>
-                    </div>
+                    )}
 
                     {status === "idle" && (
-                        <Button
-                            className="w-full gap-2"
-                            size="lg"
-                            onClick={handleProcess}
-                        >
-                            <IconPlayerPlay className="size-4" />
-                            Run Processing
-                        </Button>
+                        <div className="flex flex-col gap-2">
+                            <Button
+                                className="w-full gap-2"
+                                size="lg"
+                                onClick={() => runProcess(false)}
+                                disabled={!companyPolicy}
+                            >
+                                <IconPlayerPlay className="size-4" />
+                                Run Processing
+                            </Button>
+                            {showReprocess && (
+                                <Button
+                                    variant="outline"
+                                    className="w-full gap-2"
+                                    onClick={() => runProcess(true)}
+                                    disabled={!companyPolicy}
+                                >
+                                    <IconRefresh className="size-4" />
+                                    Reprocess (overwrite existing)
+                                </Button>
+                            )}
+                        </div>
                     )}
 
                     {status === "processing" && (
@@ -184,11 +291,19 @@ export default function SalaryProcessPage() {
                                 <h3 className="font-semibold text-lg">Processing Complete</h3>
                                 <p className="text-sm text-muted-foreground">{message}</p>
                             </div>
-                            <Button
-                                variant="outline"
-                                onClick={() => setStatus("idle")}
-                            >
-                                Process Another
+                            <div className="flex flex-wrap gap-2 justify-center">
+                                {lastMonthKey && (
+                                    <Button variant="outline" asChild>
+                                        <Link
+                                            href={`/management/payroll/salary-sheet?companyId=${encodeURIComponent(selectedCompanyEntityId)}&year=${year}&month=${month}`}
+                                        >
+                                            Salary sheet
+                                        </Link>
+                                    </Button>
+                                )}
+                            </div>
+                            <Button variant="ghost" onClick={() => setStatus("idle")}>
+                                Process another
                             </Button>
                         </div>
                     )}

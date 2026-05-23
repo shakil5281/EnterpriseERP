@@ -1,66 +1,47 @@
-# Apply pending EF Core migrations only (does NOT drop databases or delete data).
-# Usage: powershell -ExecutionPolicy Bypass -File backend\scripts\update-all-databases.ps1
+# Apply pending EF Core migrations (no drop).
+# Uses each service API startup project + Infrastructure project.
 
 $ErrorActionPreference = "Stop"
-$BackendRoot = Split-Path -Parent $PSScriptRoot
-$CentralConn = Join-Path $BackendRoot "Configuration\connectionstrings.json"
+$Backend = Split-Path -Parent $PSScriptRoot
 
-if (-not (Test-Path $CentralConn)) {
-    Write-Error "Missing $CentralConn"
-}
-
-$env:ERP_CONNECTIONSTRINGS = $CentralConn
-Write-Host "==> Using connection strings: $CentralConn"
-Write-Host "==> Applying EF Core migrations (update only - existing data is preserved)"
-Write-Host ""
-
-$services = @(
-    @{ Name = "Auth";         Api = "Services\AuthService\AuthService.Api";         Proj = "Services\AuthService\AuthService.Infrastructure";         Context = "AuthDbContext" },
-    @{ Name = "Company";      Api = "Services\CompanyService\CompanyService.Api";      Proj = "Services\CompanyService\CompanyService.Infrastructure";      Context = "CompanyDbContext" },
-    @{ Name = "HR";           Api = "Services\HRService\HRService.Api";           Proj = "Services\HRService\HRService.Infrastructure";           Context = "HrDbContext" },
-    @{ Name = "Attendance";   Api = "Services\AttendanceService\AttendanceService.Api";   Proj = "Services\AttendanceService\AttendanceService.Infrastructure";   Context = "AttendanceDbContext" },
-    @{ Name = "Leave";        Api = "Services\LeaveService\LeaveService.Api";        Proj = "Services\LeaveService\LeaveService.Infrastructure";        Context = "LeaveDbContext" },
-    @{ Name = "Shift";        Api = "Services\ShiftService\ShiftService.Api";        Proj = "Services\ShiftService\ShiftService.Infrastructure";        Context = "ShiftDbContext" },
-    @{ Name = "Payroll";      Api = "Services\PayrollService\PayrollService.Api";      Proj = "Services\PayrollService\PayrollService.Infrastructure";      Context = "PayrollDbContext" },
-    @{ Name = "Notification"; Api = "Services\NotificationService\NotificationService.Api"; Proj = "Services\NotificationService\NotificationService.Infrastructure"; Context = "NotificationDbContext" },
-    @{ Name = "Quality";      Api = "Services\QualityService\QualityService.API";      Proj = "Services\QualityService\QualityService.Infrastructure";      Context = "QualityDbContext" },
-    @{ Name = "Finishing";    Api = "Services\FinishingService\FinishingService.API";    Proj = "Services\FinishingService\FinishingService.Infrastructure";    Context = "FinishingDbContext" },
-    @{ Name = "Security";     Api = "Services\SecurityService\SecurityService.API";     Proj = "Services\SecurityService\SecurityService.Infrastructure";     Context = "SecurityDbContext" },
-    @{ Name = "Accounts";     Api = "Services\AccountsService\AccountsService.API";     Proj = "Services\AccountsService\AccountsService.Infrastructure";     Context = "AccountsDbContext" },
-    @{ Name = "Cutting";      Api = "Services\CuttingService\CuttingService.API";      Proj = "Services\CuttingService\CuttingService.Infrastructure";      Context = "CuttingDbContext" },
-    @{ Name = "Merchandising"; Api = "Services\MerchandisingService\MerchandisingService.API"; Proj = "Services\MerchandisingService\MerchandisingService.Infrastructure"; Context = "MerchandisingDbContext" }
+$EfServices = @(
+    @{ Name = "Auth";        Api = "Services\AuthService\AuthService.Api";        Project = "Services\AuthService\AuthService.Infrastructure";        Context = "AuthDbContext" },
+    @{ Name = "Company";     Api = "Services\CompanyService\CompanyService.Api";     Project = "Services\CompanyService\CompanyService.Infrastructure";     Context = "CompanyDbContext" },
+    @{ Name = "HR";          Api = "Services\HRService\HRService.Api";               Project = "Services\HRService\HRService.Infrastructure";               Context = "HrDbContext" },
+    @{ Name = "Attendance";  Api = "Services\AttendanceService\AttendanceService.Api"; Project = "Services\AttendanceService\AttendanceService.Infrastructure"; Context = "AttendanceDbContext" },
+    @{ Name = "Leave";       Api = "Services\LeaveService\LeaveService.Api";         Project = "Services\LeaveService\LeaveService.Infrastructure";         Context = "LeaveDbContext" },
+    @{ Name = "Shift";       Api = "Services\ShiftService\ShiftService.Api";         Project = "Services\ShiftService\ShiftService.Infrastructure";         Context = "ShiftDbContext" },
+    @{ Name = "Payroll";     Api = "Services\PayrollService\PayrollService.Api";     Project = "Services\PayrollService\PayrollService.Infrastructure";     Context = "PayrollDbContext" },
+    @{ Name = "Notification"; Api = "Services\NotificationService\NotificationService.Api"; Project = "Services\NotificationService\NotificationService.Infrastructure"; Context = "NotificationDbContext" },
+    @{ Name = "Quality";     Api = "Services\QualityService\QualityService.API";     Project = "Services\QualityService\QualityService.Infrastructure";     Context = "QualityDbContext" },
+    @{ Name = "Finishing";   Api = "Services\FinishingService\FinishingService.API";   Project = "Services\FinishingService\FinishingService.Infrastructure";   Context = "FinishingDbContext" },
+    @{ Name = "Security";    Api = "Services\SecurityService\SecurityService.API";    Project = "Services\SecurityService\SecurityService.Infrastructure";    Context = "SecurityDbContext" },
+    @{ Name = "Accounts";    Api = "Services\AccountsService\AccountsService.API";    Project = "Services\AccountsService\AccountsService.Infrastructure";    Context = "AccountsDbContext" },
+    @{ Name = "Cutting";     Api = "Services\CuttingService\CuttingService.API";     Project = "Services\CuttingService\CuttingService.Infrastructure";     Context = "CuttingDbContext" },
+    @{ Name = "Merchandising"; Api = "Services\MerchandisingService\MerchandisingService.API"; Project = "Services\MerchandisingService\MerchandisingService.Infrastructure"; Context = "MerchandisingDbContext" }
 )
 
-Set-Location $BackendRoot
-$failed = @()
+function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 
-foreach ($svc in $services) {
-    $apiPath = Join-Path $BackendRoot $svc.Api
-    $projPath = Join-Path $BackendRoot $svc.Proj
-    $projFile = Get-ChildItem -Path $projPath -Filter "*.csproj" -File | Select-Object -First 1
-
-    if (-not $projFile) {
-        Write-Warning "Skip $($svc.Name): project not found under $projPath"
+Write-Step "Applying EF Core migrations"
+foreach ($svc in $EfServices) {
+    $apiPath = Join-Path $Backend $svc.Api
+    $projPath = Join-Path $Backend $svc.Project
+    $projFile = Get-ChildItem -Path $projPath -Filter "*.csproj" | Select-Object -First 1
+    $apiFile = Get-ChildItem -Path $apiPath -Filter "*.csproj" | Select-Object -First 1
+    if (-not $projFile -or -not $apiFile) {
+        Write-Warning "Skip $($svc.Name): project not found"
         continue
     }
-
-    Write-Host "  $($svc.Name) ($($svc.Context))..."
+    Write-Host "  $($svc.Name) ($($svc.Context))..." -ForegroundColor Yellow
     Push-Location $apiPath
     try {
         dotnet ef database update --project $projFile.FullName --context $svc.Context
-        if ($LASTEXITCODE -ne 0) { $failed += $svc.Name }
-    } catch {
-        $failed += $svc.Name
-        Write-Warning "  $($svc.Name) failed: $_"
-    } finally {
+        if ($LASTEXITCODE -ne 0) { throw "dotnet ef failed for $($svc.Name)" }
+    }
+    finally {
         Pop-Location
     }
 }
 
-Write-Host ""
-if ($failed.Count -gt 0) {
-    Write-Warning "Some services reported errors: $($failed -join ', '). Platform.Host startup will retry MigrateAsync for core DBs."
-} else {
-    Write-Host "==> All EF migrations applied successfully."
-}
-Write-Host "==> Done. No database was dropped; only pending schema changes were applied."
+Write-Step "Done. PunchData/ImportExport schema updates on service start (GORM AutoMigrate)."

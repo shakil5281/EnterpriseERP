@@ -190,6 +190,7 @@ func main() {
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	logger.Info("PunchDataService ready", "address", cfg.Server.Address, "hint", "Ctrl+C to stop")
 	<-stop
 
 	logger.Info("shutting down")

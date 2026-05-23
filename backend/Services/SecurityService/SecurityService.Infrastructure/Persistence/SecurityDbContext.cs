@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using SecurityService.Application;
 using SecurityService.Domain;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace SecurityService.Infrastructure.Persistence;
 
 public sealed class SecurityDbContext(DbContextOptions<SecurityDbContext> options) : DbContext(options), ISecurityDbContext
@@ -259,17 +261,17 @@ public sealed class SecurityDbContext(DbContextOptions<SecurityDbContext> option
         {
             if (entry.State == EntityState.Added)
             {
-                entry.Entity.CreatedAt = DateTime.UtcNow;
+                entry.Entity.CreatedAt = BusinessTime.Now;
             }
             else if (entry.State == EntityState.Modified)
             {
-                entry.Entity.UpdatedAt = DateTime.UtcNow;
+                entry.Entity.UpdatedAt = BusinessTime.Now;
             }
             else if (entry.State == EntityState.Deleted)
             {
                 entry.State = EntityState.Modified;
                 entry.Entity.IsDeleted = true;
-                entry.Entity.UpdatedAt = DateTime.UtcNow;
+                entry.Entity.UpdatedAt = BusinessTime.Now;
             }
         }
 

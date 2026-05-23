@@ -26,6 +26,7 @@ import { DataTable } from "@/components/data-table"
 import { cn } from "@/lib/utils"
 import { BillDto, BillResponseDto } from "@/lib/services/bill"
 import { organogramService } from "@/lib/services/organogram"
+import { useCompanyContext } from "@/components/providers/company-context"
 import { DateRange } from "react-day-picker"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -41,6 +42,7 @@ interface BillReportPageProps {
 }
 
 export function BillReportPage({ title, service }: BillReportPageProps) {
+    const { activeCompanyId } = useCompanyContext()
     const [data, setData] = React.useState<BillDto[]>([])
     const [summary, setSummary] = React.useState<any>(null)
     const [isLoading, setIsLoading] = React.useState(true)
@@ -69,14 +71,32 @@ export function BillReportPage({ title, service }: BillReportPageProps) {
     }
 
     const fetchData = React.useCallback(async () => {
+        if (!activeCompanyId) {
+            setData([])
+            setSummary(null)
+            setIsLoading(false)
+            return
+        }
         setIsLoading(true)
         try {
-            const params: any = {}
-            if (selectedDate) {
-                params.fromDate = format(selectedDate, "yyyy-MM-dd")
-                params.toDate = format(selectedDate, "yyyy-MM-dd")
+            const dept = departments.find((d) => String(d.id) === departmentId)
+            const params: {
+                companyId: string
+                fromDate: string
+                toDate: string
+                departmentId?: string
+                searchTerm?: string
+                employeeType?: string
+            } = {
+                companyId: activeCompanyId,
+                fromDate: format(selectedDate ?? new Date(), "yyyy-MM-dd"),
+                toDate: format(selectedDate ?? new Date(), "yyyy-MM-dd"),
             }
-            if (departmentId !== "all") params.departmentId = parseInt(departmentId)
+            if (departmentId !== "all" && dept) {
+                const fullDept = await organogramService.getDepartments({ companyId: activeCompanyId })
+                const match = fullDept.find((d) => d.id === dept.id)
+                if (match?.entityId) params.departmentId = match.entityId
+            }
             if (searchTerm.trim()) params.searchTerm = searchTerm
             if (employeeType !== "all") params.employeeType = employeeType
 
@@ -88,27 +108,41 @@ export function BillReportPage({ title, service }: BillReportPageProps) {
         } finally {
             setIsLoading(false)
         }
-    }, [selectedDate, departmentId, searchTerm, employeeType, service, title])
+    }, [selectedDate, departmentId, searchTerm, employeeType, service, title, activeCompanyId, departments])
 
     React.useEffect(() => {
+        if (!activeCompanyId) return
         const timeoutId = setTimeout(() => {
             fetchData()
         }, 500)
         return () => clearTimeout(timeoutId)
-    }, [fetchData])
+    }, [fetchData, activeCompanyId])
 
     const handleProcess = async () => {
         if (!selectedDate) {
             toast.error("Please select a date")
             return
         }
+        if (!activeCompanyId) {
+            toast.error("Select a company first")
+            return
+        }
 
         setIsProcessing(true)
         try {
+            const dept = departments.find((d) => String(d.id) === departmentId)
+            let departmentGuid: string | undefined
+            if (departmentId !== "all" && dept) {
+                const fullDept = await organogramService.getDepartments({ companyId: activeCompanyId })
+                departmentGuid = fullDept.find((d) => d.id === dept.id)?.entityId
+            }
             await service.process({
+                companyId: activeCompanyId,
                 fromDate: format(selectedDate, "yyyy-MM-dd"),
                 toDate: format(selectedDate, "yyyy-MM-dd"),
-                departmentId: departmentId !== "all" ? parseInt(departmentId) : null,
+                departmentId: departmentGuid,
+                employeeType: employeeType !== "all" ? employeeType : undefined,
+                searchTerm: searchTerm.trim() || undefined,
             })
             toast.success(`${title} processed successfully`)
             fetchData()
@@ -122,15 +156,24 @@ export function BillReportPage({ title, service }: BillReportPageProps) {
     const handleExport = async () => {
         setIsExporting(true)
         try {
-            const params: any = {}
-            if (selectedDate) {
-                params.fromDate = format(selectedDate, "yyyy-MM-dd")
-                params.toDate = format(selectedDate, "yyyy-MM-dd")
+            if (!activeCompanyId) {
+                toast.error("Select a company first")
+                return
             }
-            if (departmentId !== "all") params.departmentId = parseInt(departmentId)
-            if (searchTerm.trim()) params.searchTerm = searchTerm
-
-            await service.export(params)
+            const dept = departments.find((d) => String(d.id) === departmentId)
+            let departmentGuid: string | undefined
+            if (departmentId !== "all" && dept) {
+                const fullDept = await organogramService.getDepartments({ companyId: activeCompanyId })
+                departmentGuid = fullDept.find((d) => d.id === dept.id)?.entityId
+            }
+            await service.export({
+                companyId: activeCompanyId,
+                fromDate: format(selectedDate ?? new Date(), "yyyy-MM-dd"),
+                toDate: format(selectedDate ?? new Date(), "yyyy-MM-dd"),
+                departmentId: departmentGuid,
+                employeeType: employeeType !== "all" ? employeeType : undefined,
+                searchTerm: searchTerm.trim() || undefined,
+            })
             toast.success("Excel exported successfully")
         } catch (error) {
             toast.error("Export failed")

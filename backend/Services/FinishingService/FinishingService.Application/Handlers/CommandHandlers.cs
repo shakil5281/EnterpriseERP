@@ -4,6 +4,8 @@ using FinishingService.Domain;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace FinishingService.Application.Handlers;
 
 public sealed class FinishingCommandHandlers(
@@ -11,7 +13,6 @@ public sealed class FinishingCommandHandlers(
     IFinishingDbContext db,
     IMapper mapper,
     IFinishingBalanceService balances,
-    IMerchandisingServiceClient merchandising,
     IProductionServiceClient production,
     IInventoryServiceClient inventory,
     IShipmentServiceClient shipment,
@@ -92,7 +93,7 @@ public sealed class FinishingCommandHandlers(
             throw new InvalidOperationException("Only Draft receives can be confirmed.");
 
         receive.Status = FinishingReceiveStatuses.Confirmed;
-        receive.ConfirmedAt = DateTime.UtcNow;
+        receive.ConfirmedAt = BusinessTime.Now;
         receive.ConfirmedBy = command.ConfirmedBy;
 
         db.Add(new FinishingAuditLog
@@ -124,7 +125,7 @@ public sealed class FinishingCommandHandlers(
             return mapper.Map<FinishingReceiveDto>(receive);
 
         receive.Status = FinishingReceiveStatuses.Cancelled;
-        receive.UpdatedAt = DateTime.UtcNow;
+        receive.UpdatedAt = BusinessTime.Now;
         receive.UpdatedBy = command.CancelledBy;
 
         db.Add(new FinishingAuditLog
@@ -179,7 +180,7 @@ public sealed class FinishingCommandHandlers(
             throw new InvalidOperationException("Only Draft batches can be started.");
 
         batch.Status = FinishingBatchStatuses.Running;
-        batch.StartedAt = DateTime.UtcNow;
+        batch.StartedAt = BusinessTime.Now;
         batch.UpdatedBy = command.StartedBy;
 
         db.Add(new FinishingAuditLog
@@ -206,7 +207,7 @@ public sealed class FinishingCommandHandlers(
             throw new InvalidOperationException("Only Running batches can be completed.");
 
         batch.Status = FinishingBatchStatuses.Completed;
-        batch.CompletedAt = DateTime.UtcNow;
+        batch.CompletedAt = BusinessTime.Now;
         batch.UpdatedBy = command.CompletedBy;
 
         db.Add(new FinishingAuditLog
@@ -234,7 +235,7 @@ public sealed class FinishingCommandHandlers(
         EnsureBatchNotCompleted(batch);
 
         batch.Status = FinishingBatchStatuses.Cancelled;
-        batch.UpdatedAt = DateTime.UtcNow;
+        batch.UpdatedAt = BusinessTime.Now;
         batch.UpdatedBy = command.CancelledBy;
 
         db.Add(new FinishingAuditLog
@@ -495,7 +496,7 @@ public sealed class FinishingCommandHandlers(
             throw new InvalidOperationException("Only Open cartons can be closed.");
 
         carton.Status = CartonPackingStatuses.Closed;
-        carton.ClosedAt = DateTime.UtcNow;
+        carton.ClosedAt = BusinessTime.Now;
         carton.UpdatedBy = command.ClosedBy;
 
         db.Add(new FinishingAuditLog
@@ -527,7 +528,7 @@ public sealed class FinishingCommandHandlers(
             throw new InvalidOperationException("Transferred cartons cannot be cancelled.");
 
         carton.Status = CartonPackingStatuses.Cancelled;
-        carton.UpdatedAt = DateTime.UtcNow;
+        carton.UpdatedAt = BusinessTime.Now;
         carton.UpdatedBy = command.CancelledBy;
 
         db.Add(new FinishingAuditLog
@@ -604,7 +605,7 @@ public sealed class FinishingCommandHandlers(
             throw new InvalidOperationException("Only Draft transfers can be confirmed.");
 
         transfer.Status = FinishedGoodsTransferStatuses.Confirmed;
-        transfer.ConfirmedAt = DateTime.UtcNow;
+        transfer.ConfirmedAt = BusinessTime.Now;
         transfer.ConfirmedBy = command.ConfirmedBy;
 
         db.Add(new FinishingAuditLog
@@ -624,7 +625,7 @@ public sealed class FinishingCommandHandlers(
             foreach (var carton in cartons)
             {
                 carton.Status = CartonPackingStatuses.Transferred;
-                carton.UpdatedAt = DateTime.UtcNow;
+                carton.UpdatedAt = BusinessTime.Now;
             }
         }
 
@@ -656,7 +657,7 @@ public sealed class FinishingCommandHandlers(
             throw new InvalidOperationException("Confirmed transfers cannot be cancelled.");
 
         transfer.Status = FinishedGoodsTransferStatuses.Cancelled;
-        transfer.UpdatedAt = DateTime.UtcNow;
+        transfer.UpdatedAt = BusinessTime.Now;
         transfer.UpdatedBy = command.CancelledBy;
 
         db.Add(new FinishingAuditLog

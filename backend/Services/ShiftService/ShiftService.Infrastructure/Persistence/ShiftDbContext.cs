@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ShiftService.Domain.Entities;
+using ShiftService.Domain.Enums;
 using ShiftService.Application.Common.Interfaces;
 
 namespace ShiftService.Infrastructure.Persistence;
@@ -21,10 +22,12 @@ public sealed class ShiftDbContext(DbContextOptions<ShiftDbContext> options) : D
         {
             b.ToTable("Shifts");
             b.HasKey(x => x.Id);
-            b.Property(x => x.ShiftCode).HasMaxLength(50).IsRequired();
             b.Property(x => x.ShiftName).HasMaxLength(150).IsRequired();
             b.Property(x => x.ShiftType).HasMaxLength(50).IsRequired();
-            b.HasIndex(x => new { x.CompanyId, x.ShiftCode }).IsUnique();
+            b.Property(x => x.ShiftCategory).HasConversion<int>();
+            b.Property(x => x.PunchWindowBeforeMinutes).HasDefaultValue(60);
+            b.Property(x => x.WeeklyOffDayOfWeek);
+            b.HasIndex(x => new { x.CompanyId, x.ShiftName }).IsUnique();
         });
 
         modelBuilder.Entity<ShiftRule>(b =>
@@ -39,6 +42,7 @@ public sealed class ShiftDbContext(DbContextOptions<ShiftDbContext> options) : D
             b.ToTable("ShiftBreaks");
             b.HasKey(x => x.Id);
             b.Property(x => x.BreakName).HasMaxLength(100).IsRequired();
+            b.Property(x => x.BreakType).HasConversion<int>();
             b.HasOne(x => x.Shift).WithMany(s => s.Breaks).HasForeignKey(x => x.ShiftId);
         });
 
@@ -74,10 +78,10 @@ public sealed class ShiftDbContext(DbContextOptions<ShiftDbContext> options) : D
         var dyeingId = Guid.Parse("33333333-3333-3333-3333-333333333333");
 
         modelBuilder.Entity<Shift>().HasData(
-            new Shift { Id = Guid.Parse("f1a2b3c4-d5e6-4a7b-8c9d-0e1f2a3b4c5d"), CompanyId = unityId, ShiftCode = "UNITY_GENERAL", ShiftName = "Unity General Duty", ShiftType = "GeneralDuty", StartTime = new TimeSpan(8, 0, 0), EndTime = new TimeSpan(17, 0, 0), IsGeneralDuty = true, IsCrossDay = false, IsDefault = true },
-            new Shift { Id = Guid.Parse("a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"), CompanyId = ekusheId, ShiftCode = "EKUSHE_GENERAL", ShiftName = "Ekushe General Duty", ShiftType = "GeneralDuty", StartTime = new TimeSpan(8, 0, 0), EndTime = new TimeSpan(17, 0, 0), IsGeneralDuty = true, IsCrossDay = false, IsDefault = true },
-            new Shift { Id = Guid.Parse("b1c2d3e4-f5a6-4a7b-8c9d-0e1f2a3b4c5d"), CompanyId = dyeingId, ShiftCode = "DYEING_DAY", ShiftName = "Dyeing Day Shift", ShiftType = "Day", StartTime = new TimeSpan(8, 0, 0), EndTime = new TimeSpan(20, 0, 0), IsCrossDay = false },
-            new Shift { Id = Guid.Parse("c1d2e3f4-a5b6-4a7b-8c9d-0e1f2a3b4c5d"), CompanyId = dyeingId, ShiftCode = "DYEING_NIGHT", ShiftName = "Dyeing Night Shift", ShiftType = "Night", StartTime = new TimeSpan(20, 0, 0), EndTime = new TimeSpan(8, 0, 0), IsCrossDay = true }
+            new Shift { Id = Guid.Parse("f1a2b3c4-d5e6-4a7b-8c9d-0e1f2a3b4c5d"), CompanyId = unityId, ShiftName = "Unity General Duty", ShiftType = "GeneralDuty", ShiftCategory = ShiftCategory.GeneralDuty, PunchWindowBeforeMinutes = 60, StartTime = new TimeSpan(8, 0, 0), EndTime = new TimeSpan(17, 0, 0), IsGeneralDuty = true, IsCrossDay = false, IsDefault = true },
+            new Shift { Id = Guid.Parse("a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"), CompanyId = ekusheId, ShiftName = "Ekushe General Duty", ShiftType = "GeneralDuty", ShiftCategory = ShiftCategory.GeneralDuty, PunchWindowBeforeMinutes = 60, StartTime = new TimeSpan(8, 0, 0), EndTime = new TimeSpan(17, 0, 0), IsGeneralDuty = true, IsCrossDay = false, IsDefault = true },
+            new Shift { Id = Guid.Parse("b1c2d3e4-f5a6-4a7b-8c9d-0e1f2a3b4c5d"), CompanyId = dyeingId, ShiftName = "Dyeing Day Shift", ShiftType = "Day", ShiftCategory = ShiftCategory.Day, PunchWindowBeforeMinutes = 60, StartTime = new TimeSpan(8, 0, 0), EndTime = new TimeSpan(20, 0, 0), IsCrossDay = false },
+            new Shift { Id = Guid.Parse("c1d2e3f4-a5b6-4a7b-8c9d-0e1f2a3b4c5d"), CompanyId = dyeingId, ShiftName = "Dyeing Night Shift", ShiftType = "Night", ShiftCategory = ShiftCategory.Night, PunchWindowBeforeMinutes = 60, StartTime = new TimeSpan(20, 0, 0), EndTime = new TimeSpan(8, 0, 0), IsCrossDay = true }
         );
     }
 }

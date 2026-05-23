@@ -12,7 +12,11 @@ public enum AttendanceStatus
     WeeklyOffPresent,
     Leave,
     LeaveWithoutPay,
-    ManualPresent
+    ManualPresent,
+    /// <summary>Weekly off / weekend rest day with no attendance.</summary>
+    WeeklyOff,
+    /// <summary>Holiday rest day with no attendance.</summary>
+    Holiday
 }
 
 public enum DayType

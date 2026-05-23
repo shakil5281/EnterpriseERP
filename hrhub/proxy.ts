@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { canAccessRoute, findMatchingRouteRule } from '@/lib/auth/access-config'
+import { getRedirectUrlForUser } from '@/lib/role-redirect'
 
 const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/unauthorized']
 
@@ -38,7 +39,16 @@ export function proxy(request: NextRequest) {
     if (token && isPublicPath) {
         const payload = parseJwtPayload(token)
         if (payload) {
-            return NextResponse.redirect(new URL('/', request.url))
+            const roles = extractRoles(payload)
+            const returnUrl = request.nextUrl.searchParams.get('returnUrl')
+            const target =
+                returnUrl &&
+                returnUrl.startsWith('/') &&
+                !returnUrl.startsWith('//') &&
+                !returnUrl.startsWith('/login')
+                    ? returnUrl
+                    : getRedirectUrlForUser(roles)
+            return NextResponse.redirect(new URL(target, request.url))
         }
         const response = NextResponse.next()
         response.cookies.delete('token')

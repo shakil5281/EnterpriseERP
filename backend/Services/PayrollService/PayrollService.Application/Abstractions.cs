@@ -5,12 +5,10 @@ namespace PayrollService.Application;
 
 public interface IPayrollDbContext
 {
-    IQueryable<PayrollPolicy> PayrollPolicies { get; }
     IQueryable<SalaryStructure> SalaryStructures { get; }
     IQueryable<SalaryStructureComponent> SalaryStructureComponents { get; }
     IQueryable<EmployeeSalary> EmployeeSalaries { get; }
     IQueryable<SalaryIncrementRequestEntity> SalaryIncrementRequests { get; }
-    IQueryable<PayrollPeriod> PayrollPeriods { get; }
     IQueryable<PayrollRun> PayrollRuns { get; }
     IQueryable<EmployeePayroll> EmployeePayrolls { get; }
     IQueryable<PayrollEarning> PayrollEarnings { get; }
@@ -18,10 +16,10 @@ public interface IPayrollDbContext
     IQueryable<SalaryAdvance> SalaryAdvances { get; }
     IQueryable<SalaryAdvanceInstallment> SalaryAdvanceInstallments { get; }
     IQueryable<AllowanceBill> AllowanceBills { get; }
-    IQueryable<PayrollApproval> PayrollApprovals { get; }
-    IQueryable<PayrollLock> PayrollLocks { get; }
     IQueryable<FinalSettlement> FinalSettlements { get; }
     IQueryable<PayrollDeductionEntry> PayrollDeductionEntries { get; }
+    IQueryable<PayrollPolicyTemplate> PayrollPolicyTemplates { get; }
+    IQueryable<CompanyPayrollPolicyAssignment> CompanyPayrollPolicyAssignments { get; }
     IQueryable<PayrollAuditLog> PayrollAuditLogs { get; }
 
     void Add<TEntity>(TEntity entity) where TEntity : class;
@@ -47,6 +45,12 @@ public interface IEmployeeServiceClient
     Task<EmployeeSnapshot?> GetEmployeeByIdAsync(Guid companyId, Guid employeeId, CancellationToken cancellationToken = default);
     Task<DateOnly?> GetEmployeeJoinDateAsync(Guid companyId, Guid employeeId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<EmployeeSnapshot>> GetResignedEmployeesAsync(Guid companyId, int year, int month, CancellationToken cancellationToken = default);
+    Task<EmployeeSalary?> TryResolveHrSalaryAsync(
+        Guid companyId,
+        Guid employeeId,
+        DateOnly periodStart,
+        DateOnly periodEnd,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IAttendanceServiceClient
@@ -111,20 +115,36 @@ public sealed record AttendanceSummary(
 
 public sealed record CompanySnapshot(Guid CompanyId, string CompanyCode, string CompanyName);
 
+public interface IPolicyResolver
+{
+    Task<ResolvedPayrollPolicy?> TryResolveAsync(Guid companyId, DateOnly processDate, CancellationToken cancellationToken = default);
+    Task<ResolvedPayrollPolicy> ResolveRequiredAsync(Guid companyId, DateOnly processDate, CancellationToken cancellationToken = default);
+}
+
+public interface ISalaryStructureCalculator
+{
+    SalaryStructureResult Calculate(decimal grossSalary, PayrollPolicyTemplate template);
+}
+
 public interface IOvertimeCalculationService
 {
-    (decimal RatePerHour, decimal Amount) Calculate(PayrollPolicy policy, EmployeeSalary salary, decimal overtimeHours, decimal fixedRate = 0);
+    (decimal RatePerHour, decimal Amount) Calculate(PayrollCalculationSettings settings, EmployeeSalary salary, decimal overtimeHours, decimal fixedRate = 0);
 }
 
 public interface IBonusCalculationService
 {
-    decimal CalculateAttendanceBonus(PayrollPolicy policy, AttendanceSummary attendance, decimal configuredAmount, decimal allowedLateLimit);
+    decimal CalculateAttendanceBonus(PayrollCalculationSettings settings, AttendanceSummary attendance, decimal configuredAmount, decimal allowedLateLimit);
     decimal CalculateFestivalBonus(decimal grossSalary, DateOnly joinDate, DateOnly bonusDate);
 }
 
 public interface IPayrollCalculationService
 {
-    PayrollCalculationResult Calculate(PayrollPolicy policy, EmployeeSalary salary, AttendanceSummary attendance, PayrollCalculationInputs inputs);
+    PayrollCalculationResult Calculate(
+        PayrollCalculationSettings settings,
+        EmployeeSalary salary,
+        AttendanceSummary attendance,
+        PayrollCalculationInputs inputs,
+        string? salaryCalculationTypeOverride = null);
 }
 
 public interface ISalaryAdvanceService

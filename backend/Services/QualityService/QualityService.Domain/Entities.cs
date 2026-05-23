@@ -1,10 +1,12 @@
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace QualityService.Domain;
 
 public abstract class AuditableEntity
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid CompanyId { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
     public Guid? CreatedBy { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public Guid? UpdatedBy { get; set; }
@@ -140,5 +142,5 @@ public sealed class QualityAuditLog
     public string? OldValue { get; set; }
     public string? NewValue { get; set; }
     public Guid? ActionBy { get; set; }
-    public DateTime ActionAt { get; set; } = DateTime.UtcNow;
+    public DateTime ActionAt { get; set; } = BusinessTime.Now;
 }

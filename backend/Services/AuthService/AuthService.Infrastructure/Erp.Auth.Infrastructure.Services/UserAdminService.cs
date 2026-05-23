@@ -13,6 +13,8 @@ using AuthService.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace AuthService.Infrastructure.Services;
 
 public sealed class UserAdminService(AuthDbContext db, UserManager<AppUser> userManager) : IUserAdminService
@@ -85,7 +87,7 @@ public sealed class UserAdminService(AuthDbContext db, UserManager<AppUser> user
 		}
 		user.Status = request.Status;
 		user.IsActive = request.IsActive;
-		user.UpdatedAt = DateTimeOffset.UtcNow;
+		user.UpdatedAt = BusinessTime.NowOffset;
 		IdentityResult result = await userManager.UpdateAsync(user);
 		if (!result.Succeeded)
 		{

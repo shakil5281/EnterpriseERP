@@ -12,6 +12,8 @@ using LeaveService.Contracts.WeeklyOffs;
 using LeaveService.Domain.Entities;
 using MediatR;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace LeaveService.Application.Features.Operational;
 
 public sealed record CreateLeavePolicyCommand(CreateLeavePolicyRequest Request) : IRequest<LeavePolicyDto>;
@@ -80,7 +82,7 @@ public sealed class CreateLeavePolicyCommandHandler(ILeaveUnitOfWork uow, IMappe
             ExcludeWeeklyOffFromLeaveDays = r.ExcludeWeeklyOffFromLeaveDays,
             ApprovalLevelCount = Math.Max(1, r.ApprovalLevelCount),
             IsActive = true,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = BusinessTime.Now,
         };
         uow.LeavePolicies.Add(entity);
         await audit.WriteAsync(r.CompanyId, null, "LeavePolicyCreated", nameof(LeavePolicy), entity.Id, null, cancellationToken);
@@ -108,7 +110,7 @@ public sealed class UpdateLeavePolicyCommandHandler(ILeaveUnitOfWork uow, IMappe
         entity.ExcludeWeeklyOffFromLeaveDays = r.ExcludeWeeklyOffFromLeaveDays;
         entity.ApprovalLevelCount = Math.Max(1, r.ApprovalLevelCount);
         entity.IsActive = r.IsActive;
-        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = BusinessTime.Now;
         await audit.WriteAsync(entity.CompanyId, null, "LeavePolicyUpdated", nameof(LeavePolicy), entity.Id, null, cancellationToken);
         await uow.SaveChangesAsync(cancellationToken);
         await cache.RemoveByPrefixAsync($"leavePolicies:{entity.CompanyId}", cancellationToken);
@@ -163,7 +165,7 @@ public sealed class GenerateYearlyBalancesCommandHandler(ILeaveUnitOfWork uow, I
                     EncashDays = 0,
                     CarryForwardDays = 0,
                     BalanceDays = p.YearlyEntitlement,
-                    UpdatedAt = DateTime.UtcNow,
+                    UpdatedAt = BusinessTime.Now,
                 });
                 count++;
             }
@@ -193,7 +195,7 @@ public sealed class AccrueMonthlyBalancesCommandHandler(ILeaveUnitOfWork uow, IL
 
             b.AccruedDays += p.MonthlyAccrual;
             b.BalanceDays += p.MonthlyAccrual;
-            b.UpdatedAt = DateTime.UtcNow;
+            b.UpdatedAt = BusinessTime.Now;
             count++;
         }
 
@@ -221,7 +223,7 @@ public sealed class AdjustLeaveBalanceCommandHandler(ILeaveUnitOfWork uow, IMapp
         var b = await uow.EmployeeLeaveBalances.GetAsync(r.CompanyId, r.EmployeeId, r.LeaveTypeId, r.YearNo, cancellationToken)
                 ?? throw new LeaveBusinessException("Balance row not found.");
         b.BalanceDays += r.AdjustmentDays;
-        b.UpdatedAt = DateTime.UtcNow;
+        b.UpdatedAt = BusinessTime.Now;
         uow.LeaveTransactions.Add(new LeaveTransaction
         {
             Id = Guid.NewGuid(),
@@ -229,7 +231,7 @@ public sealed class AdjustLeaveBalanceCommandHandler(ILeaveUnitOfWork uow, IMapp
             EmployeeId = r.EmployeeId,
             LeaveTypeId = r.LeaveTypeId,
             LeaveApplicationId = null,
-            TransactionDate = DateTime.UtcNow,
+            TransactionDate = BusinessTime.Now,
             TransactionType = "Adjustment",
             Days = r.AdjustmentDays,
             YearNo = r.YearNo,
@@ -261,7 +263,7 @@ public sealed class CreateHolidayCommandHandler(ILeaveUnitOfWork uow, IMapper ma
             HolidayType = r.HolidayType,
             IsPaid = r.IsPaid,
             IsActive = r.IsActive,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = BusinessTime.Now,
         };
         uow.Holidays.Add(h);
         await audit.WriteAsync(r.CompanyId, null, "HolidayCreated", nameof(Holiday), h.Id, null, cancellationToken);
@@ -321,7 +323,19 @@ public sealed class CreateWeeklyOffCommandHandler(ILeaveUnitOfWork uow, IMapper 
     public async Task<WeeklyOffDto> Handle(CreateWeeklyOffCommand request, CancellationToken cancellationToken)
     {
         var r = request.Request;
-        var w = new WeeklyOffRule { Id = Guid.NewGuid(), CompanyId = r.CompanyId, DayOfWeekName = r.DayOfWeekName.Trim(), IsActive = true };
+        var day = r.DayOfWeekName?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(day))
+        {
+            throw new LeaveBusinessException("Day of week is required.");
+        }
+
+        var existing = await uow.WeeklyOffRules.ListByCompanyAsync(r.CompanyId, cancellationToken);
+        if (existing.Any(x => x.DayOfWeekName.Equals(day, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new LeaveBusinessException($"Weekly off for {day} is already assigned.");
+        }
+
+        var w = new WeeklyOffRule { Id = Guid.NewGuid(), CompanyId = r.CompanyId, DayOfWeekName = day, IsActive = true };
         uow.WeeklyOffRules.Add(w);
         await audit.WriteAsync(r.CompanyId, null, "WeeklyOffCreated", nameof(WeeklyOffRule), w.Id, null, cancellationToken);
         await uow.SaveChangesAsync(cancellationToken);
@@ -381,7 +395,7 @@ public sealed class GenerateEarnLeaveCommandHandler(ILeaveUnitOfWork uow, IAtten
 
         balance.AccruedDays += earned;
         balance.BalanceDays += earned;
-        balance.UpdatedAt = DateTime.UtcNow;
+        balance.UpdatedAt = BusinessTime.Now;
         await audit.WriteAsync(r.CompanyId, null, "EarnLeaveGenerated", "EarnLeave", balance.Id, $"Earned={earned}", cancellationToken);
         await uow.SaveChangesAsync(cancellationToken);
         await bus.PublishJsonAsync(EventTypes.EarnLeaveGenerated, new { eventName = "EarnLeaveGenerated", companyId = r.CompanyId, employeeId = r.EmployeeId, leaveTypeId = r.LeaveTypeId, earned }, cancellationToken);
@@ -423,7 +437,7 @@ public sealed class CreateLeaveEncashmentCommandHandler(ILeaveUnitOfWork uow, IM
             TotalAmount = r.EncashDays * r.RatePerDay,
             Status = "Pending",
             RequestedBy = r.RequestedBy,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = BusinessTime.Now,
         };
         uow.LeaveEncashments.Add(e);
         await audit.WriteAsync(r.CompanyId, r.RequestedBy, "LeaveEncashmentCreated", nameof(LeaveEncashment), e.Id, null, cancellationToken);
@@ -460,10 +474,10 @@ public sealed class ApproveLeaveEncashmentCommandHandler(ILeaveUnitOfWork uow, I
 
         b.BalanceDays -= e.EncashDays;
         b.EncashDays += e.EncashDays;
-        b.UpdatedAt = DateTime.UtcNow;
+        b.UpdatedAt = BusinessTime.Now;
         e.Status = "Approved";
         e.ApprovedBy = request.ApprovedBy;
-        e.ApprovedAt = DateTime.UtcNow;
+        e.ApprovedAt = BusinessTime.Now;
         uow.LeaveTransactions.Add(new LeaveTransaction
         {
             Id = Guid.NewGuid(),
@@ -471,7 +485,7 @@ public sealed class ApproveLeaveEncashmentCommandHandler(ILeaveUnitOfWork uow, I
             EmployeeId = e.EmployeeId,
             LeaveTypeId = e.LeaveTypeId,
             LeaveApplicationId = null,
-            TransactionDate = DateTime.UtcNow,
+            TransactionDate = BusinessTime.Now,
             TransactionType = "Encash",
             Days = e.EncashDays,
             YearNo = e.YearNo,

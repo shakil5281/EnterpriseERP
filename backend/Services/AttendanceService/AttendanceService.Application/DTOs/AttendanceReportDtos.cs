@@ -101,6 +101,20 @@ public sealed record JobCardReportDto(
     string FromDate,
     string ToDate);
 
+public sealed record JobCardRosterItemDto(
+    int EmployeeCard,
+    string EmployeeId,
+    string EmployeeName,
+    string Department,
+    string Section,
+    string Designation);
+
+public sealed record PagedJobCardRosterDto(
+    IReadOnlyList<JobCardRosterItemDto> Items,
+    int Page,
+    int PageSize,
+    int TotalCount);
+
 public sealed record MissingEntryRowDto(
     int Id,
     int EmployeeCard,
@@ -178,6 +192,10 @@ public sealed record ProcessRangeResult(
     int PresentCount,
     int AbsentCount,
     int LateCount,
+    int CreatedCount,
+    int UpdatedCount,
+    int SkippedLockedCount,
+    Guid BatchId,
     IReadOnlyList<ProcessRangeDayError> Errors);
 
 public sealed record ProcessRangeDayError(string Date, string Message);

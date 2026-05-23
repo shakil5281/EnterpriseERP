@@ -32,7 +32,7 @@ import { type DateRange } from "react-day-picker"
 
 export default function ManpowerSummaryPage() {
     const [summary, setSummary] = React.useState<ManpowerSummary | null>(null)
-    const [isLoading, setIsLoading] = React.useState(true)
+    const [isLoading, setIsLoading] = React.useState(false)
 
     // Filter states
     const [departmentId, setDepartmentId] = React.useState<string>("all")
@@ -81,14 +81,16 @@ export default function ManpowerSummaryPage() {
     React.useEffect(() => {
         const loadRefs = async () => {
             try {
-                const [depts, flrs, comps] = await Promise.all([
-                    organogramService.getDepartments(),
+                const [flrs, comps] = await Promise.all([
                     organogramService.getFloors(),
-                    companyService.getAll()
+                    companyService.getAll(),
                 ])
-                setDepartments(depts)
                 setFloors(flrs)
                 setCompanies(comps)
+                if (comps.length > 0 && selectedCompanyId === "all") {
+                    setSelectedCompanyId(String(comps[0].id))
+                    setCompanyName(comps[0].companyNameEn)
+                }
             } catch (error) {
                 console.error("Failed to load reference data", error)
             }
@@ -116,10 +118,21 @@ export default function ManpowerSummaryPage() {
     }, [sectionId])
 
     React.useEffect(() => {
-        fetchSummary()
-        // Initial load only; further loads use Apply Filters.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+        if (selectedCompanyId === "all") {
+            setDepartments([])
+            return
+        }
+        organogramService
+            .getDepartments({ companyId: parseInt(selectedCompanyId, 10) })
+            .then(setDepartments)
+            .catch(() => setDepartments([]))
+    }, [selectedCompanyId])
+
+    React.useEffect(() => {
+        if (selectedCompanyId !== "all") {
+            fetchSummary()
+        }
+    }, [selectedCompanyId, fetchSummary])
 
     const departmentColumns: ColumnDef<SummaryItem>[] = [
         {
@@ -185,15 +198,6 @@ export default function ManpowerSummaryPage() {
             cell: ({ row }) => <span className="text-muted-foreground text-xs">{row.getValue("percentage")}%</span>,
         },
     ]
-
-    if (isLoading && !summary) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-                <IconLoader className="size-10 animate-spin text-primary" />
-                <p className="text-muted-foreground animate-pulse">Analyzing workforce data...</p>
-            </div>
-        )
-    }
 
     const chartDataBase = [
         { value: 10 }, { value: 25 }, { value: 15 }, { value: 35 },

@@ -19,6 +19,11 @@ public sealed class ShiftRule
     public int MinimumOvertimeMinutes { get; set; }
     public int MaximumOvertimeMinutes { get; set; }
 
+    public int LunchBreakMinutes { get; set; } = 60;
+    public bool DeductLunchFromWorking { get; set; } = true;
+    public bool HolidayWorkAllAsOvertime { get; set; } = true;
+    public bool WeeklyOffWorkAllAsOvertime { get; set; } = true;
+
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }

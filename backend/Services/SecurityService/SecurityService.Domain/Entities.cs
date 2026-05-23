@@ -1,10 +1,12 @@
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace SecurityService.Domain;
 
 public abstract class CompanyEntity
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid CompanyId { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
     public Guid? CreatedBy { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public Guid? UpdatedBy { get; set; }
@@ -37,7 +39,7 @@ public sealed class VisitorEntry : CompanyEntity
     public Guid VisitorId { get; set; }
     public string EntryNo { get; set; } = string.Empty;
     public DateOnly VisitDate { get; set; }
-    public DateTime InTime { get; set; } = DateTime.UtcNow;
+    public DateTime InTime { get; set; } = BusinessTime.Now;
     public DateTime? OutTime { get; set; }
     public string Purpose { get; set; } = string.Empty;
     public Guid? PersonToMeetEmployeeId { get; set; }
@@ -80,7 +82,7 @@ public sealed class VehicleEntry : CompanyEntity
     public Guid VehicleId { get; set; }
     public string EntryNo { get; set; } = string.Empty;
     public DateOnly EntryDate { get; set; }
-    public DateTime InTime { get; set; } = DateTime.UtcNow;
+    public DateTime InTime { get; set; } = BusinessTime.Now;
     public DateTime? OutTime { get; set; }
     public string? Purpose { get; set; }
     public string? DriverName { get; set; }
@@ -198,7 +200,7 @@ public sealed class SecurityCheckLog : CompanyEntity
     public Guid GateId { get; set; }
     public string ReferenceType { get; set; } = string.Empty;
     public Guid ReferenceId { get; set; }
-    public DateTime CheckTime { get; set; } = DateTime.UtcNow;
+    public DateTime CheckTime { get; set; } = BusinessTime.Now;
     public Guid? CheckedBy { get; set; }
     public string CheckResult { get; set; } = CheckResults.Passed;
     public string? Remarks { get; set; }
@@ -214,7 +216,7 @@ public sealed class GateActionLog
     public Guid ReferenceId { get; set; }
     public string ActionName { get; set; } = string.Empty;
     public Guid? ActorUserId { get; set; }
-    public DateTime ActionAt { get; set; } = DateTime.UtcNow;
+    public DateTime ActionAt { get; set; } = BusinessTime.Now;
     public string? Remarks { get; set; }
 }
 

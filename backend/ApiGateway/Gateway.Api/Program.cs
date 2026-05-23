@@ -94,19 +94,18 @@ app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseCors("gateway");
 app.UseRateLimiter();
 
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Docker"))
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "Gateway API");
-        
-        // Aggregated Microservice Endpoints
+
+        // Aggregated .NET services (Platform.Host or individual microservices)
         c.SwaggerEndpoint("/api/v1/auth/swagger/v1/swagger.json", "Auth Service");
         c.SwaggerEndpoint("/api/v1/companies/swagger/v1/swagger.json", "Company Service");
         c.SwaggerEndpoint("/api/v1/hr/swagger/v1/swagger.json", "HR Service");
-        c.SwaggerEndpoint("/api/v1/punch-data/swagger/v1/swagger.json", "Punch Data Service");
-        c.SwaggerEndpoint("/api/v1/shift/swagger/v1/swagger.json", "Shift Service");
+        c.SwaggerEndpoint("/api/v1/shifts/swagger/v1/swagger.json", "Shift Service");
         c.SwaggerEndpoint("/api/v1/attendance/swagger/v1/swagger.json", "Attendance Service");
         c.SwaggerEndpoint("/api/v1/leave/swagger/v1/swagger.json", "Leave Service");
         c.SwaggerEndpoint("/api/v1/payroll/swagger/v1/swagger.json", "Payroll Service");
@@ -120,6 +119,10 @@ if (app.Environment.IsDevelopment())
         c.SwaggerEndpoint("/api/v1/notification/swagger/v1/swagger.json", "Notification Service");
         c.SwaggerEndpoint("/api/v1/audit/swagger/v1/swagger.json", "Audit Service");
         c.SwaggerEndpoint("/api/v1/filestorage/swagger/v1/swagger.json", "File Storage Service");
+
+        // Go services expose OpenAPI at doc.json (not v1/swagger.json)
+        c.SwaggerEndpoint("/api/v1/punch-data/swagger/doc.json", "Punch Data Service");
+        c.SwaggerEndpoint("/api/v1/import-export/swagger/doc.json", "Import Export Service");
     });
 }
 

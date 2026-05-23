@@ -3,6 +3,8 @@ using CompanyService.Domain.Entities;
 using CompanyService.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace CompanyService.Infrastructure.Services;
 
 public sealed class CompanyService(
@@ -59,7 +61,7 @@ public sealed class CompanyService(
             Industry = dto.Industry,
             FoundedYear = dto.FoundedYear,
             Status = string.IsNullOrWhiteSpace(dto.Status) ? "Active" : dto.Status,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = BusinessTime.Now
         };
 
         db.Companies.Add(company);
@@ -77,7 +79,7 @@ public sealed class CompanyService(
 
         if (logo != null || authorizeSignature != null)
         {
-            company.UpdatedAt = DateTime.UtcNow;
+            company.UpdatedAt = BusinessTime.Now;
             await db.SaveChangesAsync(cancellationToken);
         }
 
@@ -120,7 +122,7 @@ public sealed class CompanyService(
             company.AuthorizeSignatureUrl = await fileStorage.SaveSignatureAsync(company.Id, authorizeSignature, cancellationToken);
         }
 
-        company.UpdatedAt = DateTime.UtcNow;
+        company.UpdatedAt = BusinessTime.Now;
         await db.SaveChangesAsync(cancellationToken);
     }
 

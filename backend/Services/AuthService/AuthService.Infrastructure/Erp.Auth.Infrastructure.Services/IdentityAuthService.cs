@@ -24,6 +24,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace AuthService.Infrastructure.Services;
 
 public sealed class IdentityAuthService(
@@ -156,7 +158,7 @@ public sealed class IdentityAuthService(
 			IsActive = true,
 			Status = UserStatus.Active,
 			LockoutEnabled = true,
-			CreatedAt = DateTimeOffset.UtcNow
+			CreatedAt = BusinessTime.NowOffset
 		};
 		IdentityResult result = await userManager.CreateAsync(user, request.Password);
 		if (!result.Succeeded)
@@ -202,7 +204,7 @@ public sealed class IdentityAuthService(
 				}
 				else
 				{
-					existing.RevokedAt = DateTimeOffset.UtcNow;
+					existing.RevokedAt = BusinessTime.NowOffset;
 					existing.IsRevoked = true;
 					existing.RevokedReason = "rotated";
 					List<string> roles = (await userManager.GetRolesAsync(user)).OrderBy((string x) => x).ToList();
@@ -241,7 +243,7 @@ public sealed class IdentityAuthService(
 	public async Task<bool> RevokeAllRefreshTokensAsync(Guid userId, CancellationToken cancellationToken = default(CancellationToken))
 	{
 		List<RefreshToken> tokens = await db.RefreshTokens.Where((RefreshToken x) => x.UserId == userId && x.RevokedAt == null && !x.IsRevoked).ToListAsync(cancellationToken);
-		DateTimeOffset now = DateTimeOffset.UtcNow;
+		DateTimeOffset now = BusinessTime.NowOffset;
 		foreach (RefreshToken token in tokens)
 		{
 			token.RevokedAt = now;
@@ -332,7 +334,7 @@ public sealed class IdentityAuthService(
 
 	private async Task<(LoginResponse? Response, IReadOnlyList<string> Errors)> FinalizeSuccessfulLoginAsync(AppUser user, AuthRequestContext? context, CancellationToken cancellationToken)
 	{
-		user.LastLoginAt = DateTimeOffset.UtcNow;
+		user.LastLoginAt = BusinessTime.NowOffset;
 		await userManager.UpdateAsync(user);
 		await AppendLoginHistoryAsync(user.Id, context, isSuccess: true, null, cancellationToken);
 		await UpsertDeviceAsync(user.Id, context, cancellationToken);
@@ -386,7 +388,7 @@ public sealed class IdentityAuthService(
 			OperatingSystem = os,
 			IsSuccess = isSuccess,
 			FailureReason = failureReason,
-			LoginAt = DateTimeOffset.UtcNow
+			LoginAt = BusinessTime.NowOffset
 		});
 		await Task.CompletedTask;
 	}
@@ -400,7 +402,7 @@ public sealed class IdentityAuthService(
 		string fp = context.DeviceFingerprint.Trim();
 		UserDevice? device = await db.UserDevices.FirstOrDefaultAsync((UserDevice x) => x.UserId == userId && x.DeviceFingerprint == fp, cancellationToken);
 		(string? deviceName, string? _, string? _) = UserAgentBrowserParser.Parse(context.UserAgent);
-		DateTimeOffset now = DateTimeOffset.UtcNow;
+		DateTimeOffset now = BusinessTime.NowOffset;
 		if (device == null)
 		{
 			db.UserDevices.Add(new UserDevice
@@ -469,7 +471,7 @@ public sealed class IdentityAuthService(
 			TokenHash = refreshHash,
 			FamilyId = family,
 			ExpiresAt = DateTimeOffset.UtcNow.AddDays(refreshDays),
-			CreatedAt = DateTimeOffset.UtcNow,
+			CreatedAt = BusinessTime.NowOffset,
 			IpAddress = context?.IpAddress,
 			MacAddress = context?.MacAddress,
 			DeviceFingerprint = context?.DeviceFingerprint

@@ -134,7 +134,7 @@ func ToPunchRecords(logFileID uuid.UUID, companyID int, source string, rows []Re
 			CompanyID:   companyID,
 			PunchNumber: punchNumber,
 			DeviceID:    device,
-			PunchTime:   timeutil.InDhaka(row.CheckTime),
+			PunchTime:   timeutil.WallClock(row.CheckTime),
 			Source:      source,
 			CreatedAt:   now,
 		})

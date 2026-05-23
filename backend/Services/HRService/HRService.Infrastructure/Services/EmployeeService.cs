@@ -3,6 +3,8 @@ using HRService.Domain.Entities;
 using HRService.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace HRService.Infrastructure.Services;
 
 public sealed class EmployeeService(HrDbContext db) : IEmployeeService
@@ -39,7 +41,7 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
                     CompanyId = companyId,
                     Name = name,
                     Code = code,
-                    CreatedAt = DateTimeOffset.UtcNow
+                    CreatedAt = BusinessTime.NowOffset
                 });
                 await db.SaveChangesAsync(cancellationToken);
             }
@@ -66,7 +68,7 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
                 var defaultGrade = await db.Grades.FirstOrDefaultAsync(cancellationToken);
                 if (defaultGrade == null)
                 {
-                    defaultGrade = new Grade { Id = Guid.NewGuid(), Name = "G1", CreatedAt = DateTimeOffset.UtcNow };
+                    defaultGrade = new Grade { Id = Guid.NewGuid(), Name = "G1", CreatedAt = BusinessTime.NowOffset };
                     db.Grades.Add(defaultGrade);
                     await db.SaveChangesAsync(cancellationToken);
                 }
@@ -76,7 +78,7 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
                     Id = designationId.Value,
                     GradeId = defaultGrade.Id,
                     Name = name,
-                    CreatedAt = DateTimeOffset.UtcNow
+                    CreatedAt = BusinessTime.NowOffset
                 });
                 await db.SaveChangesAsync(cancellationToken);
             }
@@ -119,6 +121,8 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
             FullName = dto.FullName,
             BanglaName = dto.BanglaName,
             Gender = dto.Gender,
+            Religion = dto.Religion,
+            BloodGroup = dto.BloodGroup,
             DateOfBirth = dto.DateOfBirth,
             NationalId = dto.NationalId,
             BirthCertificateNo = dto.BirthCertificateNo,
@@ -127,7 +131,29 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
             JoinDate = dto.JoinDate,
             EmploymentType = dto.EmploymentType,
             Status = "Active", // Initial status is Active
-            CreatedAt = DateTime.UtcNow,
+            IsOtEnabled = dto.IsOtEnabled,
+            FatherNameEn = dto.FatherNameEn,
+            FatherNameBn = dto.FatherNameBn,
+            MotherNameEn = dto.MotherNameEn,
+            MotherNameBn = dto.MotherNameBn,
+            MaritalStatus = dto.MaritalStatus,
+            SpouseNameEn = dto.SpouseNameEn,
+            SpouseNameBn = dto.SpouseNameBn,
+            SpouseOccupation = dto.SpouseOccupation,
+            SpouseContact = dto.SpouseContact,
+            EducationLevel = dto.EducationLevel,
+            Institution = dto.Institution,
+            FieldOfStudy = dto.FieldOfStudy,
+            Skills = dto.Skills,
+            Reference1Name = dto.Reference1Name,
+            Reference1Relation = dto.Reference1Relation,
+            Reference1Phone = dto.Reference1Phone,
+            Reference1Address = dto.Reference1Address,
+            Reference2Name = dto.Reference2Name,
+            Reference2Relation = dto.Reference2Relation,
+            Reference2Phone = dto.Reference2Phone,
+            Reference2Address = dto.Reference2Address,
+            CreatedAt = BusinessTime.Now,
             IsDeleted = false
         };
 
@@ -140,6 +166,8 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
             SectionId = dto.SectionId,
             DesignationId = dto.DesignationId,
             GradeId = dto.GradeId,
+            GroupId = dto.GroupId,
+            WorkLocation = dto.WorkLocation,
             EffectiveFrom = dto.JoinDate,
             IsCurrent = true
         });
@@ -172,6 +200,8 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
         employee.FullName = dto.FullName;
         employee.BanglaName = dto.BanglaName;
         employee.Gender = dto.Gender;
+        employee.Religion = dto.Religion;
+        employee.BloodGroup = dto.BloodGroup;
         employee.DateOfBirth = dto.DateOfBirth;
         employee.NationalId = dto.NationalId;
         employee.BirthCertificateNo = dto.BirthCertificateNo;
@@ -180,9 +210,42 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
         employee.JoinDate = dto.JoinDate;
         employee.EmploymentType = dto.EmploymentType;
         employee.Status = dto.Status;
-        employee.UpdatedAt = DateTime.UtcNow;
+        employee.IsOtEnabled = dto.IsOtEnabled;
+        employee.FatherNameEn = dto.FatherNameEn;
+        employee.FatherNameBn = dto.FatherNameBn;
+        employee.MotherNameEn = dto.MotherNameEn;
+        employee.MotherNameBn = dto.MotherNameBn;
+        employee.MaritalStatus = dto.MaritalStatus;
+        employee.SpouseNameEn = dto.SpouseNameEn;
+        employee.SpouseNameBn = dto.SpouseNameBn;
+        employee.SpouseOccupation = dto.SpouseOccupation;
+        employee.SpouseContact = dto.SpouseContact;
+        employee.EducationLevel = dto.EducationLevel;
+        employee.Institution = dto.Institution;
+        employee.FieldOfStudy = dto.FieldOfStudy;
+        employee.Skills = dto.Skills;
+        employee.Reference1Name = dto.Reference1Name;
+        employee.Reference1Relation = dto.Reference1Relation;
+        employee.Reference1Phone = dto.Reference1Phone;
+        employee.Reference1Address = dto.Reference1Address;
+        employee.Reference2Name = dto.Reference2Name;
+        employee.Reference2Relation = dto.Reference2Relation;
+        employee.Reference2Phone = dto.Reference2Phone;
+        employee.Reference2Address = dto.Reference2Address;
+        employee.UpdatedAt = BusinessTime.Now;
 
         await db.SaveChangesAsync(cancellationToken);
+
+        await ApplyCurrentSalaryAsync(
+            employee.CompanyId,
+            employee.Id,
+            dto.BasicSalary,
+            dto.HouseRent,
+            dto.MedicalAllowance,
+            dto.ConveyanceAllowance,
+            dto.FoodAllowance,
+            dto.JoinDate,
+            cancellationToken);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -191,7 +254,7 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
         if (employee == null) return;
 
         employee.IsDeleted = true;
-        employee.DeletedAt = DateTimeOffset.UtcNow;
+        employee.DeletedAt = BusinessTime.NowOffset;
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -202,14 +265,43 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
 
         await EnsureDepartmentAndDesignationExistAsync(dto.DepartmentId, dto.DesignationId, employee.CompanyId, cancellationToken);
 
+        var currentJob = employee.JobInfos.FirstOrDefault(j => j.IsCurrent);
+        if (currentJob != null &&
+            currentJob.DepartmentId == dto.DepartmentId &&
+            currentJob.SectionId == dto.SectionId &&
+            currentJob.DesignationId == dto.DesignationId &&
+            currentJob.GradeId == dto.GradeId &&
+            currentJob.GroupId == dto.GroupId &&
+            currentJob.SupervisorId == dto.SupervisorId &&
+            string.Equals(
+                NormalizeWorkLocation(currentJob.WorkLocation),
+                NormalizeWorkLocation(dto.WorkLocation),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (currentJob != null &&
+            currentJob.DepartmentId == dto.DepartmentId &&
+            currentJob.SectionId == dto.SectionId &&
+            currentJob.DesignationId == dto.DesignationId &&
+            currentJob.GradeId == dto.GradeId &&
+            currentJob.GroupId == dto.GroupId &&
+            currentJob.SupervisorId == dto.SupervisorId &&
+            !string.IsNullOrWhiteSpace(dto.WorkLocation))
+        {
+            currentJob.WorkLocation = dto.WorkLocation.Trim();
+            await db.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
         // Business Rule: Current job info only one record
-        // Mark all existing job infos as not current
         var existingJobs = employee.JobInfos.Where(j => j.IsCurrent).ToList();
         var fromDepartmentId = existingJobs.Select(j => j.DepartmentId).FirstOrDefault();
         foreach (var job in existingJobs)
         {
             job.IsCurrent = false;
-            job.EffectiveTo = dto.EffectiveFrom.AddDays(-1);
+            job.EffectiveTo = dto.EffectiveFrom.Date.AddDays(-1);
         }
 
         db.EmployeeTransfers.Add(new EmployeeTransfer
@@ -220,7 +312,7 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
             ToDepartmentId = dto.DepartmentId,
             EffectiveDate = dto.EffectiveFrom,
             Reason = dto.Reason,
-            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedAt = BusinessTime.NowOffset,
         });
 
         employee.JobInfos.Add(new EmployeeJobInfo
@@ -232,6 +324,7 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
             SectionId = dto.SectionId,
             DesignationId = dto.DesignationId,
             GradeId = dto.GradeId,
+            GroupId = dto.GroupId,
             SupervisorId = dto.SupervisorId,
             WorkLocation = dto.WorkLocation,
             EffectiveFrom = dto.EffectiveFrom,
@@ -241,6 +334,9 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    private static string? NormalizeWorkLocation(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
     public async Task ChangeStatusAsync(Guid id, ChangeStatusDto dto, CancellationToken cancellationToken = default)
     {
         var employee = await db.Employees.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
@@ -248,7 +344,7 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
 
         // Business Rule: Employee delete করা উচিত না; status change করা উচিত।
         employee.Status = dto.Status;
-        employee.UpdatedAt = DateTime.UtcNow;
+        employee.UpdatedAt = BusinessTime.Now;
 
         db.EmployeeStatusHistories.Add(new EmployeeStatusHistory
         {
@@ -257,7 +353,7 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
             Status = dto.Status,
             EffectiveFrom = dto.EffectiveFrom,
             Remarks = dto.Remarks,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = BusinessTime.NowOffset
         });
 
         await db.SaveChangesAsync(cancellationToken);
@@ -265,19 +361,45 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
 
     public async Task UpdateSalaryAsync(Guid id, UpdateSalaryDto dto, CancellationToken cancellationToken = default)
     {
-        var employee = await db.Employees.Include(e => e.SalaryInfos).FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        var employee = await db.Employees.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
         if (employee == null) return;
 
-        // Business Rule: Current salary only one record
-        // Business Rule: Salary change হলে old salary close হবে, new salary effective হবে।
-        var existingSalaries = employee.SalaryInfos.Where(s => s.IsCurrent).ToList();
-        foreach (var salary in existingSalaries)
+        await NormalizeDuplicateCurrentSalariesAsync(id, cancellationToken);
+
+        var grossSalary = dto.BasicSalary + dto.HouseRent + dto.MedicalAllowance + dto.ConveyanceAllowance + dto.FoodAllowance;
+        var currentSalary = await db.EmployeeSalaryInfos
+            .Where(s => s.EmployeeId == id && s.IsCurrent)
+            .OrderByDescending(s => s.EffectiveFrom)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (currentSalary != null &&
+            currentSalary.BasicSalary == dto.BasicSalary &&
+            currentSalary.HouseRent == dto.HouseRent &&
+            currentSalary.MedicalAllowance == dto.MedicalAllowance &&
+            currentSalary.ConveyanceAllowance == dto.ConveyanceAllowance &&
+            currentSalary.FoodAllowance == dto.FoodAllowance &&
+            currentSalary.GrossSalary == grossSalary)
         {
-            salary.IsCurrent = false;
-            salary.EffectiveTo = dto.EffectiveFrom.AddDays(-1);
+            return;
         }
 
-        employee.SalaryInfos.Add(new EmployeeSalaryInfo
+        if (currentSalary != null)
+        {
+            await db.EmployeeSalaryInfos
+                .Where(s => s.Id == currentSalary.Id)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(s => s.BasicSalary, dto.BasicSalary)
+                    .SetProperty(s => s.HouseRent, dto.HouseRent)
+                    .SetProperty(s => s.MedicalAllowance, dto.MedicalAllowance)
+                    .SetProperty(s => s.ConveyanceAllowance, dto.ConveyanceAllowance)
+                    .SetProperty(s => s.FoodAllowance, dto.FoodAllowance)
+                    .SetProperty(s => s.GrossSalary, grossSalary),
+                    cancellationToken);
+            return;
+        }
+
+        db.EmployeeSalaryInfos.Add(new EmployeeSalaryInfo
         {
             Id = Guid.NewGuid(),
             CompanyId = employee.CompanyId,
@@ -287,10 +409,96 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
             MedicalAllowance = dto.MedicalAllowance,
             ConveyanceAllowance = dto.ConveyanceAllowance,
             FoodAllowance = dto.FoodAllowance,
-            GrossSalary = dto.BasicSalary + dto.HouseRent + dto.MedicalAllowance + dto.ConveyanceAllowance + dto.FoodAllowance,
+            GrossSalary = grossSalary,
             EffectiveFrom = dto.EffectiveFrom,
             IsCurrent = true
         });
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task ApplyCurrentSalaryAsync(
+        Guid companyId,
+        Guid employeeId,
+        decimal basicSalary,
+        decimal houseRent,
+        decimal medicalAllowance,
+        decimal conveyanceAllowance,
+        decimal foodAllowance,
+        DateTime effectiveFrom,
+        CancellationToken cancellationToken)
+    {
+        await NormalizeDuplicateCurrentSalariesAsync(employeeId, cancellationToken);
+
+        var grossSalary = basicSalary + houseRent + medicalAllowance + conveyanceAllowance + foodAllowance;
+        var currentSalary = await db.EmployeeSalaryInfos
+            .AsNoTracking()
+            .Where(s => s.EmployeeId == employeeId && s.IsCurrent)
+            .OrderByDescending(s => s.EffectiveFrom)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (currentSalary != null &&
+            currentSalary.BasicSalary == basicSalary &&
+            currentSalary.HouseRent == houseRent &&
+            currentSalary.MedicalAllowance == medicalAllowance &&
+            currentSalary.ConveyanceAllowance == conveyanceAllowance &&
+            currentSalary.FoodAllowance == foodAllowance &&
+            currentSalary.GrossSalary == grossSalary)
+        {
+            return;
+        }
+
+        if (currentSalary != null)
+        {
+            await db.EmployeeSalaryInfos
+                .Where(s => s.Id == currentSalary.Id)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(s => s.BasicSalary, basicSalary)
+                    .SetProperty(s => s.HouseRent, houseRent)
+                    .SetProperty(s => s.MedicalAllowance, medicalAllowance)
+                    .SetProperty(s => s.ConveyanceAllowance, conveyanceAllowance)
+                    .SetProperty(s => s.FoodAllowance, foodAllowance)
+                    .SetProperty(s => s.GrossSalary, grossSalary),
+                    cancellationToken);
+            return;
+        }
+
+        db.EmployeeSalaryInfos.Add(new EmployeeSalaryInfo
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyId,
+            EmployeeId = employeeId,
+            BasicSalary = basicSalary,
+            HouseRent = houseRent,
+            MedicalAllowance = medicalAllowance,
+            ConveyanceAllowance = conveyanceAllowance,
+            FoodAllowance = foodAllowance,
+            GrossSalary = grossSalary,
+            EffectiveFrom = effectiveFrom,
+            IsCurrent = true
+        });
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task NormalizeDuplicateCurrentSalariesAsync(Guid employeeId, CancellationToken cancellationToken)
+    {
+        var currentRows = await db.EmployeeSalaryInfos
+            .Where(s => s.EmployeeId == employeeId && s.IsCurrent)
+            .OrderByDescending(s => s.EffectiveFrom)
+            .ToListAsync(cancellationToken);
+
+        if (currentRows.Count <= 1)
+        {
+            return;
+        }
+
+        var keep = currentRows[0];
+        foreach (var row in currentRows.Skip(1))
+        {
+            row.IsCurrent = false;
+            row.EffectiveTo = keep.EffectiveFrom.Date.AddDays(-1);
+        }
 
         await db.SaveChangesAsync(cancellationToken);
     }
@@ -453,8 +661,7 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
         var max = 0;
         foreach (var id in existing)
         {
-            if (id.Length >= 5 && id.StartsWith("EMP-", StringComparison.OrdinalIgnoreCase)
-                && int.TryParse(id[4..], out var n) && n > max)
+            if (EmployeeIdentityRules.TryParseAutoSequence(id, out var n) && n > max)
             {
                 max = n;
             }

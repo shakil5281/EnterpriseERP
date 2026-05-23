@@ -18,6 +18,7 @@ public sealed class HrReadDbContext(DbContextOptions<HrReadDbContext> options) :
             entity.Property(x => x.PunchNumber).HasColumnName("PunchNumber");
             entity.Property(x => x.EmployeeID).HasColumnName("EmployeeID").HasMaxLength(32);
             entity.Property(x => x.FullName).HasColumnName("FullName").HasMaxLength(256);
+            entity.Property(x => x.IsOtEnabled).HasColumnName("IsOtEnabled").HasDefaultValue(true);
         });
 
         modelBuilder.Entity<HrEmployeeJobInfoEntity>(entity =>

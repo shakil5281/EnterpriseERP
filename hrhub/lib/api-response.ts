@@ -12,23 +12,39 @@ export function unwrapApiData<T>(body: unknown): T {
   if (!envelope || typeof envelope !== "object") {
     throw new Error("Invalid API response");
   }
-  if (typeof envelope.success !== "boolean") {
+  const raw = body as Record<string, unknown>;
+  const success =
+    typeof envelope.success === "boolean"
+      ? envelope.success
+      : typeof raw.Success === "boolean"
+        ? raw.Success
+        : undefined;
+  const data =
+    envelope.data !== undefined
+      ? envelope.data
+      : (raw.Data as T | undefined);
+
+  if (success === undefined) {
     return body as T;
   }
-  if (!envelope.success) {
+  if (!success) {
+    const errors =
+      envelope.errors ??
+      (raw.Errors as Array<{ code?: string; message?: string } | string> | undefined);
     const msg =
-      envelope.errors
+      errors
         ?.map((e) => (typeof e === "string" ? e : e.message))
         .filter(Boolean)
         .join("; ") ||
       envelope.message ||
+      (typeof raw.Message === "string" ? raw.Message : undefined) ||
       "Request failed";
     throw new Error(msg);
   }
-  if (envelope.data === undefined || envelope.data === null) {
+  if (data === undefined || data === null) {
     return undefined as T;
   }
-  return envelope.data;
+  return data;
 }
 
 export function firstApiErrorMessage(body: unknown): string | undefined {

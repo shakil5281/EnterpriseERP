@@ -26,10 +26,7 @@ export function AccountPicker({
   const [accounts, setAccounts] = useState<ChartOfAccountDto[]>([]);
 
   useEffect(() => {
-    if (!companyId) {
-      setAccounts([]);
-      return;
-    }
+    if (!companyId) return;
     accountsService
       .getChartOfAccounts(companyId)
       .then((list) => {
@@ -40,6 +37,8 @@ export function AccountPicker({
       })
       .catch(() => setAccounts([]));
   }, [companyId, cashOnly, bankOnly]);
+
+  const displayAccounts = companyId ? accounts : [];
 
   return (
     <div className="space-y-1">
@@ -53,7 +52,7 @@ export function AccountPicker({
         <NativeSelectOption value="" disabled>
           Select account…
         </NativeSelectOption>
-        {accounts.map((a) => (
+        {displayAccounts.map((a) => (
           <NativeSelectOption key={a.id} value={a.id}>
             {a.accountCode} — {a.accountName}
           </NativeSelectOption>

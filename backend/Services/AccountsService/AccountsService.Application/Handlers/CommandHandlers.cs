@@ -4,6 +4,8 @@ using AutoMapper;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace AccountsService.Application.Handlers;
 
 public sealed class MasterDataCommandHandlers(IUnitOfWork uow, IAccountsDbContext db, IMapper mapper, IRedisCacheService cache) :
@@ -85,8 +87,8 @@ public sealed class MasterDataCommandHandlers(IUnitOfWork uow, IAccountsDbContex
         var fiscalYear = await uow.FiscalYears.GetByIdAsync(command.Id, cancellationToken) ?? throw new KeyNotFoundException("Fiscal year not found.");
         fiscalYear.IsClosed = true;
         fiscalYear.ClosedBy = command.ClosedBy;
-        fiscalYear.ClosedAt = DateTime.UtcNow;
-        await db.AccountingPeriods.Where(x => x.FiscalYearId == fiscalYear.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.IsClosed, true).SetProperty(x => x.ClosedBy, command.ClosedBy).SetProperty(x => x.ClosedAt, DateTime.UtcNow), cancellationToken);
+        fiscalYear.ClosedAt = BusinessTime.Now;
+        await db.AccountingPeriods.Where(x => x.FiscalYearId == fiscalYear.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.IsClosed, true).SetProperty(x => x.ClosedBy, command.ClosedBy).SetProperty(x => x.ClosedAt, BusinessTime.Now), cancellationToken);
         await uow.SaveChangesAsync(cancellationToken);
         return mapper.Map<FiscalYearDto>(fiscalYear);
     }
@@ -119,7 +121,7 @@ public sealed class VoucherCommandHandlers(IUnitOfWork uow, IAccountsDbContext d
         EnsureEditable(voucher);
         voucher.Status = VoucherStatuses.Submitted;
         voucher.SubmittedBy = command.SubmittedBy;
-        voucher.SubmittedAt = DateTime.UtcNow;
+        voucher.SubmittedAt = BusinessTime.Now;
         db.Add(new AccountsAuditLog { CompanyId = voucher.CompanyId, EntityName = nameof(Voucher), EntityId = voucher.Id, Action = "Submitted", UserId = command.SubmittedBy });
         await uow.SaveChangesAsync(cancellationToken);
         return mapper.Map<VoucherDto>(voucher);
@@ -131,7 +133,7 @@ public sealed class VoucherCommandHandlers(IUnitOfWork uow, IAccountsDbContext d
         if (voucher.Status == VoucherStatuses.Posted) throw new InvalidOperationException("Posted voucher cannot be approved again.");
         voucher.Status = VoucherStatuses.Approved;
         voucher.ApprovedBy = command.ApprovedBy;
-        voucher.ApprovedAt = DateTime.UtcNow;
+        voucher.ApprovedAt = BusinessTime.Now;
         db.Add(new AccountsAuditLog { CompanyId = voucher.CompanyId, EntityName = nameof(Voucher), EntityId = voucher.Id, Action = "Approved", UserId = command.ApprovedBy });
         await uow.SaveChangesAsync(cancellationToken);
         return mapper.Map<VoucherDto>(voucher);
@@ -151,7 +153,7 @@ public sealed class VoucherCommandHandlers(IUnitOfWork uow, IAccountsDbContext d
         if (voucher.Status == VoucherStatuses.Posted) throw new InvalidOperationException("Posted voucher cannot be cancelled.");
         voucher.Status = VoucherStatuses.Cancelled;
         voucher.CancelledBy = command.CancelledBy;
-        voucher.CancelledAt = DateTime.UtcNow;
+        voucher.CancelledAt = BusinessTime.Now;
         db.Add(new AccountsAuditLog { CompanyId = voucher.CompanyId, EntityName = nameof(Voucher), EntityId = voucher.Id, Action = "Cancelled", UserId = command.CancelledBy });
         await uow.SaveChangesAsync(cancellationToken);
         return mapper.Map<VoucherDto>(voucher);
@@ -292,7 +294,7 @@ public sealed class WorkflowCommandHandlers(
         var expense = await uow.DailyExpenses.GetByIdAsync(command.Id, cancellationToken) ?? throw new KeyNotFoundException("Daily expense not found.");
         expense.Status = WorkflowStatuses.Approved;
         expense.ApprovedBy = command.ApprovedBy;
-        expense.ApprovedAt = DateTime.UtcNow;
+        expense.ApprovedAt = BusinessTime.Now;
         db.Add(new AccountsAuditLog { CompanyId = expense.CompanyId, EntityName = nameof(DailyExpense), EntityId = expense.Id, Action = "Approved", UserId = command.ApprovedBy });
         await uow.SaveChangesAsync(cancellationToken);
         return mapper.Map<DailyExpenseDto>(expense);
@@ -340,7 +342,7 @@ public sealed class WorkflowCommandHandlers(
         request.Status = WorkflowStatuses.Approved;
         request.ApprovedAmount = command.Request.ApprovedAmount;
         request.ApprovedBy = command.Request.ApprovedBy;
-        request.ApprovedAt = DateTime.UtcNow;
+        request.ApprovedAt = BusinessTime.Now;
         await uow.SaveChangesAsync(cancellationToken);
         await publisher.PublishAsync(new MoneyRequestApproved(request.CompanyId, request.Id, request.ApprovedAmount), cancellationToken);
         return mapper.Map<MoneyRequestDto>(request);
@@ -361,7 +363,7 @@ public sealed class WorkflowCommandHandlers(
         var cash = await DefaultAccountAsync(request.CompanyId, "1100", cancellationToken);
         var expense = await DefaultAccountAsync(request.CompanyId, "5300", cancellationToken);
         var amount = request.ApprovedAmount > 0 ? request.ApprovedAmount : request.RequestedAmount;
-        var voucher = posting.BuildVoucher(request.CompanyId, $"MRP-{request.RequestNo}", DateOnly.FromDateTime(DateTime.UtcNow), VoucherTypes.Payment, request.RequestNo, request.Purpose, request.RequestedBy,
+        var voucher = posting.BuildVoucher(request.CompanyId, $"MRP-{request.RequestNo}", DateOnly.FromDateTime(BusinessTime.Now), VoucherTypes.Payment, request.RequestNo, request.Purpose, request.RequestedBy,
             new VoucherLineDraft(expense.Id, null, amount, 0, request.Purpose),
             new VoucherLineDraft(cash.Id, null, 0, amount, "Cash paid"));
         await uow.Vouchers.AddAsync(voucher, cancellationToken);
@@ -370,7 +372,7 @@ public sealed class WorkflowCommandHandlers(
         await posting.PostAsync(voucher, command.PaidBy, cancellationToken);
         request.PaidAmount = amount;
         request.PaidBy = command.PaidBy;
-        request.PaidAt = DateTime.UtcNow;
+        request.PaidAt = BusinessTime.Now;
         request.Status = WorkflowStatuses.Paid;
         await uow.SaveChangesAsync(cancellationToken);
         return mapper.Map<MoneyRequestDto>(request);
@@ -390,7 +392,7 @@ public sealed class WorkflowCommandHandlers(
         var advance = await uow.AdvancePayments.GetByIdAsync(command.Id, cancellationToken) ?? throw new KeyNotFoundException("Advance payment not found.");
         advance.Status = WorkflowStatuses.Approved;
         advance.ApprovedBy = command.ApprovedBy;
-        advance.ApprovedAt = DateTime.UtcNow;
+        advance.ApprovedAt = BusinessTime.Now;
         await uow.SaveChangesAsync(cancellationToken);
         return mapper.Map<AdvancePaymentDto>(advance);
     }
@@ -427,7 +429,7 @@ public sealed class WorkflowCommandHandlers(
         var advance = await uow.AdvanceSalaryPayments.GetByIdAsync(command.Id, cancellationToken) ?? throw new KeyNotFoundException("Advance salary payment not found.");
         advance.Status = WorkflowStatuses.Approved;
         advance.ApprovedBy = command.ApprovedBy;
-        advance.ApprovedAt = DateTime.UtcNow;
+        advance.ApprovedAt = BusinessTime.Now;
         await uow.SaveChangesAsync(cancellationToken);
         return mapper.Map<AdvanceSalaryPaymentDto>(advance);
     }
@@ -464,7 +466,7 @@ public sealed class WorkflowCommandHandlers(
         var transfer = await uow.CompanyMoneyTransfers.GetByIdAsync(command.Id, cancellationToken) ?? throw new KeyNotFoundException("Company money transfer not found.");
         transfer.Status = WorkflowStatuses.Approved;
         transfer.ApprovedBy = command.ApprovedBy;
-        transfer.ApprovedAt = DateTime.UtcNow;
+        transfer.ApprovedAt = BusinessTime.Now;
         await uow.SaveChangesAsync(cancellationToken);
         return mapper.Map<CompanyMoneyTransferDto>(transfer);
     }

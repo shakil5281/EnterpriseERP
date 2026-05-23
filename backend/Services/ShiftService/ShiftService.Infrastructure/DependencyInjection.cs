@@ -26,6 +26,7 @@ public static class DependencyInjection
 
         services.AddScoped<IShiftDbContext>(provider => provider.GetRequiredService<ShiftDbContext>());
         services.AddScoped<IShiftSelectionService, ShiftSelectionService>();
+        services.AddScoped<IShiftEvaluationService, ShiftEvaluationService>();
 
         return services;
     }

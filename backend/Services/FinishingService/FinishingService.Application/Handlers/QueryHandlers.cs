@@ -4,11 +4,12 @@ using FinishingService.Domain;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace FinishingService.Application.Handlers;
 
 public sealed class FinishingQueryHandlers(
     IFinishingDbContext db,
-    IUnitOfWork uow,
     IMapper mapper,
     IRedisCacheService cache) :
     IRequestHandler<GetFinishingReceivesQuery, IReadOnlyList<FinishingReceiveDto>>,
@@ -305,7 +306,7 @@ public sealed class FinishingQueryHandlers(
             x.CompanyId,
             x.OrderId,
             null,
-            DateOnly.FromDateTime(x.UpdatedAt ?? DateTime.UtcNow),
+            DateOnly.FromDateTime(x.UpdatedAt ?? BusinessTime.Now),
             x.ColorName,
             x.SizeName,
             x.BalanceQty,

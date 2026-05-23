@@ -3,6 +3,8 @@ using CompanyService.Domain.Entities;
 using CompanyService.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace CompanyService.Infrastructure.Services;
 
 public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
@@ -20,7 +22,7 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
 
     public async Task<Guid> CreateDepartmentAsync(DepartmentDto dto)
     {
-        var dept = new Department { Id = Guid.NewGuid(), CompanyId = dto.CompanyId, NameEn = dto.NameEn, NameBn = dto.NameBn, CreatedAt = DateTime.UtcNow };
+        var dept = new Department { Id = Guid.NewGuid(), CompanyId = dto.CompanyId, NameEn = dto.NameEn, NameBn = dto.NameBn, CreatedAt = BusinessTime.Now };
         db.Departments.Add(dept);
         await db.SaveChangesAsync();
         return dept.Id;
@@ -33,7 +35,7 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
 
         dept.NameEn = dto.NameEn;
         dept.NameBn = dto.NameBn;
-        dept.UpdatedAt = DateTime.UtcNow;
+        dept.UpdatedAt = BusinessTime.Now;
 
         await db.SaveChangesAsync();
     }
@@ -71,7 +73,7 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
 
     public async Task<Guid> CreateSectionAsync(SectionDto dto)
     {
-        var sec = new Section { Id = Guid.NewGuid(), DepartmentId = dto.DepartmentId, NameEn = dto.NameEn, NameBn = dto.NameBn, CreatedAt = DateTime.UtcNow };
+        var sec = new Section { Id = Guid.NewGuid(), DepartmentId = dto.DepartmentId, NameEn = dto.NameEn, NameBn = dto.NameBn, CreatedAt = BusinessTime.Now };
         db.Sections.Add(sec);
         await db.SaveChangesAsync();
         return sec.Id;
@@ -84,7 +86,7 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
 
         sec.NameEn = dto.NameEn;
         sec.NameBn = dto.NameBn;
-        sec.UpdatedAt = DateTime.UtcNow;
+        sec.UpdatedAt = BusinessTime.Now;
 
         await db.SaveChangesAsync();
     }
@@ -106,7 +108,7 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
 
     public async Task<Guid> CreateDesignationAsync(DesignationDto dto)
     {
-        var des = new Designation { Id = Guid.NewGuid(), SectionId = dto.SectionId, NameEn = dto.NameEn, NameBn = dto.NameBn, CreatedAt = DateTime.UtcNow };
+        var des = new Designation { Id = Guid.NewGuid(), SectionId = dto.SectionId, NameEn = dto.NameEn, NameBn = dto.NameBn, CreatedAt = BusinessTime.Now };
         db.Designations.Add(des);
         await db.SaveChangesAsync();
         return des.Id;
@@ -119,7 +121,7 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
 
         des.NameEn = dto.NameEn;
         des.NameBn = dto.NameBn;
-        des.UpdatedAt = DateTime.UtcNow;
+        des.UpdatedAt = BusinessTime.Now;
 
         await db.SaveChangesAsync();
     }
@@ -141,7 +143,7 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
 
     public async Task<Guid> CreateLineAsync(LineDto dto)
     {
-        var line = new Line { Id = Guid.NewGuid(), SectionId = dto.SectionId, NameEn = dto.NameEn, NameBn = dto.NameBn, CreatedAt = DateTime.UtcNow };
+        var line = new Line { Id = Guid.NewGuid(), SectionId = dto.SectionId, NameEn = dto.NameEn, NameBn = dto.NameBn, CreatedAt = BusinessTime.Now };
         db.Lines.Add(line);
         await db.SaveChangesAsync();
         return line.Id;
@@ -154,7 +156,7 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
 
         line.NameEn = dto.NameEn;
         line.NameBn = dto.NameBn;
-        line.UpdatedAt = DateTime.UtcNow;
+        line.UpdatedAt = BusinessTime.Now;
 
         await db.SaveChangesAsync();
     }
@@ -189,7 +191,7 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
             CompanyId = dto.CompanyId,
             NameEn = dto.NameEn,
             NameBn = dto.NameBn,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = BusinessTime.Now,
         };
         db.Groups.Add(group);
         await db.SaveChangesAsync();
@@ -203,7 +205,7 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
 
         group.NameEn = dto.NameEn;
         group.NameBn = dto.NameBn;
-        group.UpdatedAt = DateTime.UtcNow;
+        group.UpdatedAt = BusinessTime.Now;
         await db.SaveChangesAsync();
     }
 
@@ -237,7 +239,7 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
             CompanyId = dto.CompanyId,
             NameEn = dto.NameEn,
             NameBn = dto.NameBn,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = BusinessTime.Now,
         };
         db.Floors.Add(floor);
         await db.SaveChangesAsync();
@@ -251,7 +253,7 @@ public sealed class OrganogramService(CompanyDbContext db) : IOrganogramService
 
         floor.NameEn = dto.NameEn;
         floor.NameBn = dto.NameBn;
-        floor.UpdatedAt = DateTime.UtcNow;
+        floor.UpdatedAt = BusinessTime.Now;
         await db.SaveChangesAsync();
     }
 

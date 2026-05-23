@@ -1,6 +1,8 @@
 using LeaveService.Application.Common.Interfaces;
 using LeaveService.Domain.Entities;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace LeaveService.Infrastructure.Services;
 
 public sealed class LeaveDayCalculatorService(ILeaveUnitOfWork uow) : ILeaveDayCalculator
@@ -68,7 +70,7 @@ public sealed class LeaveBalanceService(ILeaveUnitOfWork uow) : ILeaveBalanceSer
         var b = await uow.EmployeeLeaveBalances.GetAsync(companyId, employeeId, leaveTypeId, yearNo, cancellationToken)
                 ?? throw new InvalidOperationException("Employee leave balance row not found.");
         b.PendingDays += days;
-        b.UpdatedAt = DateTime.UtcNow;
+        b.UpdatedAt = BusinessTime.Now;
     }
 
     public async Task FinalizeApprovalAsync(Guid companyId, Guid employeeId, Guid leaveTypeId, int yearNo, decimal days, CancellationToken cancellationToken = default)
@@ -78,7 +80,7 @@ public sealed class LeaveBalanceService(ILeaveUnitOfWork uow) : ILeaveBalanceSer
         b.PendingDays -= days;
         b.UsedDays += days;
         b.BalanceDays -= days;
-        b.UpdatedAt = DateTime.UtcNow;
+        b.UpdatedAt = BusinessTime.Now;
     }
 
     public async Task ReleasePendingAsync(Guid companyId, Guid employeeId, Guid leaveTypeId, int yearNo, decimal days, CancellationToken cancellationToken = default)
@@ -86,7 +88,7 @@ public sealed class LeaveBalanceService(ILeaveUnitOfWork uow) : ILeaveBalanceSer
         var b = await uow.EmployeeLeaveBalances.GetAsync(companyId, employeeId, leaveTypeId, yearNo, cancellationToken)
                 ?? throw new InvalidOperationException("Employee leave balance row not found.");
         b.PendingDays -= days;
-        b.UpdatedAt = DateTime.UtcNow;
+        b.UpdatedAt = BusinessTime.Now;
     }
 
     public async Task RestoreApprovedAsync(Guid companyId, Guid employeeId, Guid leaveTypeId, int yearNo, decimal days, CancellationToken cancellationToken = default)
@@ -95,7 +97,7 @@ public sealed class LeaveBalanceService(ILeaveUnitOfWork uow) : ILeaveBalanceSer
                 ?? throw new InvalidOperationException("Employee leave balance row not found.");
         b.UsedDays -= days;
         b.BalanceDays += days;
-        b.UpdatedAt = DateTime.UtcNow;
+        b.UpdatedAt = BusinessTime.Now;
     }
 
     public async Task RecordDirectApprovalAsync(Guid companyId, Guid employeeId, Guid leaveTypeId, int yearNo, decimal days, CancellationToken cancellationToken = default)
@@ -104,7 +106,7 @@ public sealed class LeaveBalanceService(ILeaveUnitOfWork uow) : ILeaveBalanceSer
                 ?? throw new InvalidOperationException("Employee leave balance row not found.");
         b.UsedDays += days;
         b.BalanceDays -= days;
-        b.UpdatedAt = DateTime.UtcNow;
+        b.UpdatedAt = BusinessTime.Now;
     }
 }
 
@@ -121,7 +123,7 @@ public sealed class LeaveAuditService(ILeaveUnitOfWork uow) : ILeaveAuditService
             EntityType = entityType,
             EntityId = entityId,
             Details = details,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = BusinessTime.Now,
         });
         return Task.CompletedTask;
     }

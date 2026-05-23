@@ -1,10 +1,12 @@
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace AccountsService.Domain;
 
 public abstract class AuditableEntity
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid CompanyId { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
     public Guid? CreatedBy { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public Guid? UpdatedBy { get; set; }
@@ -104,7 +106,7 @@ public sealed class GeneralLedgerEntry
     public decimal CreditAmount { get; set; }
     public decimal BalanceAmount { get; set; }
     public string? ReferenceNo { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
 }
 
 public sealed class BankAccount : AuditableEntity
@@ -277,5 +279,5 @@ public sealed class AccountsAuditLog
     public string Action { get; set; } = string.Empty;
     public string? Remarks { get; set; }
     public Guid? UserId { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = BusinessTime.Now;
 }

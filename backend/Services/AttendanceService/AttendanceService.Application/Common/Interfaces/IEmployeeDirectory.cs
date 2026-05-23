@@ -1,6 +1,6 @@
 namespace AttendanceService.Application.Common.Interfaces;
 
-public sealed record EmployeeDirectoryEntry(Guid Id, int PunchNumber, string EmployeeID);
+public sealed record EmployeeDirectoryEntry(Guid Id, int PunchNumber, string EmployeeID, bool IsOtEnabled = true);
 
 public interface IEmployeeDirectory
 {

@@ -3,6 +3,8 @@ using CuttingService.Contracts;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace CuttingService.Application.Handlers;
 
 public sealed class QueryHandlers(IUnitOfWork uow, ICuttingDbContext db, IMapper mapper, IRedisCacheService cache) :
@@ -146,7 +148,7 @@ public sealed class QueryHandlers(IUnitOfWork uow, ICuttingDbContext db, IMapper
             var balances = await rows.OrderBy(x => x.OrderId).ThenBy(x => x.ColorName).ThenBy(x => x.SizeName).ToListAsync(ct);
             var label = type.Contains("summary") ? "Order Wise Cutting Summary" : "Cutting Balance";
             return balances
-                .Select(x => new CuttingReportRowDto(label, x.CompanyId, x.OrderId, null, DateOnly.FromDateTime(x.UpdatedAt ?? DateTime.UtcNow), x.ColorName, x.SizeName, x.BalanceQty, 0, $"Order:{x.OrderQty}; Plan:{x.PlanQty}; Cut:{x.CutQty}; Transferred:{x.TransferredQty}"))
+                .Select(x => new CuttingReportRowDto(label, x.CompanyId, x.OrderId, null, DateOnly.FromDateTime(x.UpdatedAt ?? BusinessTime.Now), x.ColorName, x.SizeName, x.BalanceQty, 0, $"Order:{x.OrderQty}; Plan:{x.PlanQty}; Cut:{x.CutQty}; Transferred:{x.TransferredQty}"))
                 .ToList();
         }
 

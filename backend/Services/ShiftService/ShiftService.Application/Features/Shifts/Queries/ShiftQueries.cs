@@ -9,6 +9,12 @@ public record GetShiftByIdQuery(Guid Id) : IRequest<ShiftDto?>;
 public record GetCurrentEmployeeShiftQuery(Guid EmployeeId, Guid CompanyId) : IRequest<EmployeeShiftAssignmentDto?>;
 public record GetEmployeeShiftHistoryQuery(Guid EmployeeId, Guid CompanyId) : IRequest<IEnumerable<EmployeeShiftAssignmentDto>>;
 public record GetTemporaryShiftByDateQuery(Guid EmployeeId, Guid CompanyId, DateTime Date) : IRequest<TemporaryShiftAssignmentDto?>;
+public record GetTemporaryShiftByIdQuery(Guid Id) : IRequest<TemporaryShiftAssignmentDto?>;
+public record ListTemporaryShiftsQuery(
+    Guid CompanyId,
+    DateTime? FromDate,
+    DateTime? ToDate,
+    Guid? EmployeeId = null) : IRequest<IEnumerable<TemporaryShiftAssignmentDto>>;
 public record GetShiftCalendarQuery(Guid CompanyId, DateTime FromDate, DateTime ToDate) : IRequest<IEnumerable<ShiftCalendarDto>>;
 
 public class ShiftQueryHandlers(IShiftDbContext db) :
@@ -16,15 +22,16 @@ public class ShiftQueryHandlers(IShiftDbContext db) :
     IRequestHandler<GetCurrentEmployeeShiftQuery, EmployeeShiftAssignmentDto?>,
     IRequestHandler<GetEmployeeShiftHistoryQuery, IEnumerable<EmployeeShiftAssignmentDto>>,
     IRequestHandler<GetTemporaryShiftByDateQuery, TemporaryShiftAssignmentDto?>,
+    IRequestHandler<GetTemporaryShiftByIdQuery, TemporaryShiftAssignmentDto?>,
+    IRequestHandler<ListTemporaryShiftsQuery, IEnumerable<TemporaryShiftAssignmentDto>>,
     IRequestHandler<GetShiftCalendarQuery, IEnumerable<ShiftCalendarDto>>
 {
     public async Task<ShiftDto?> Handle(GetShiftByIdQuery request, CancellationToken cancellationToken)
     {
-        return await db.Shifts
+        var shift = await db.Shifts
             .AsNoTracking()
-            .Where(s => s.Id == request.Id)
-            .Select(s => new ShiftDto(s.Id, s.CompanyId, s.ShiftCode, s.ShiftName, s.ShiftType, s.StartTime, s.EndTime, s.IsCrossDay, s.IsGeneralDuty, s.IsDefault, s.IsActive))
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(s => s.Id == request.Id, cancellationToken);
+        return shift is null ? null : ShiftDtoMapping.ToDto(shift);
     }
 
     public async Task<EmployeeShiftAssignmentDto?> Handle(GetCurrentEmployeeShiftQuery request, CancellationToken cancellationToken)
@@ -54,8 +61,49 @@ public class ShiftQueryHandlers(IShiftDbContext db) :
             .AsNoTracking()
             .Include(a => a.Shift)
             .Where(a => a.EmployeeId == request.EmployeeId && a.CompanyId == request.CompanyId && a.ShiftDate.Date == request.Date.Date)
-            .Select(a => new TemporaryShiftAssignmentDto(a.Id, a.EmployeeId, a.ShiftId, a.Shift!.ShiftName, a.ShiftDate, a.Reason))
+            .Select(a => new TemporaryShiftAssignmentDto(a.Id, a.EmployeeId, a.ShiftId, a.Shift!.ShiftName, a.ShiftDate, a.Reason, a.CompanyId))
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<TemporaryShiftAssignmentDto?> Handle(GetTemporaryShiftByIdQuery request, CancellationToken cancellationToken)
+    {
+        return await db.TemporaryShiftAssignments
+            .AsNoTracking()
+            .Include(a => a.Shift)
+            .Where(a => a.Id == request.Id)
+            .Select(a => new TemporaryShiftAssignmentDto(a.Id, a.EmployeeId, a.ShiftId, a.Shift!.ShiftName, a.ShiftDate, a.Reason, a.CompanyId))
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<IEnumerable<TemporaryShiftAssignmentDto>> Handle(ListTemporaryShiftsQuery request, CancellationToken cancellationToken)
+    {
+        var query = db.TemporaryShiftAssignments
+            .AsNoTracking()
+            .Include(a => a.Shift)
+            .Where(a => a.CompanyId == request.CompanyId);
+
+        if (request.EmployeeId.HasValue && request.EmployeeId.Value != Guid.Empty)
+        {
+            query = query.Where(a => a.EmployeeId == request.EmployeeId.Value);
+        }
+
+        if (request.FromDate.HasValue)
+        {
+            var from = request.FromDate.Value.Date;
+            query = query.Where(a => a.ShiftDate >= from);
+        }
+
+        if (request.ToDate.HasValue)
+        {
+            var to = request.ToDate.Value.Date;
+            query = query.Where(a => a.ShiftDate <= to);
+        }
+
+        return await query
+            .OrderBy(a => a.ShiftDate)
+            .ThenBy(a => a.EmployeeId)
+            .Select(a => new TemporaryShiftAssignmentDto(a.Id, a.EmployeeId, a.ShiftId, a.Shift!.ShiftName, a.ShiftDate, a.Reason, a.CompanyId))
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<IEnumerable<ShiftCalendarDto>> Handle(GetShiftCalendarQuery request, CancellationToken cancellationToken)

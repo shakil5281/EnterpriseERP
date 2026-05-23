@@ -11,6 +11,8 @@ using AuthService.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace AuthService.Infrastructure.Services;
 
 public sealed class RoleAdminService(AuthDbContext db, RoleManager<AppRole> roleManager) : IRoleAdminService
@@ -60,7 +62,7 @@ public sealed class RoleAdminService(AuthDbContext db, RoleManager<AppRole> role
 			Id = Guid.NewGuid(),
 			Name = name,
 			NormalizedName = name.ToUpperInvariant(),
-			CreatedAt = DateTimeOffset.UtcNow
+			CreatedAt = BusinessTime.NowOffset
 		};
 		IdentityResult result = await roleManager.CreateAsync(role);
 		if (!result.Succeeded)
@@ -93,7 +95,7 @@ public sealed class RoleAdminService(AuthDbContext db, RoleManager<AppRole> role
 		}
 		List<RolePermission> existing = await db.RolePermissions.Where((RolePermission x) => x.RoleId == roleId).ToListAsync(cancellationToken);
 		db.RolePermissions.RemoveRange(existing);
-		DateTimeOffset now = DateTimeOffset.UtcNow;
+		DateTimeOffset now = BusinessTime.NowOffset;
 		foreach (Guid pid in permissionIds)
 		{
 			db.RolePermissions.Add(new RolePermission

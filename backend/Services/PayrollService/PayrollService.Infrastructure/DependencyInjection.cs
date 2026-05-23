@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +15,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddPayrollInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddHttpContextAccessor();
         var connectionString =
             configuration.GetConnectionString("PayrollDb")
             ?? configuration.GetConnectionString("DefaultConnection");
@@ -28,12 +30,31 @@ public static class DependencyInjection
         services.AddScoped<IIntegrationEventPublisher, RabbitMqIntegrationEventPublisher>();
         services.AddScoped<ISalaryAdvanceService, SalaryAdvanceService>();
         services.AddScoped<ISalaryIncrementService, SalaryIncrementService>();
+        services.AddScoped<IFinalSettlementService, FinalSettlementService>();
 
-        services.AddHttpClient<IEmployeeServiceClient, EmployeeServiceClient>("Payroll.IEmployeeServiceClient", c => c.BaseAddress = new Uri(configuration["Services:EmployeeService"] ?? configuration["Services:HR"] ?? "http://localhost:5000"));
-        services.AddHttpClient<IAttendanceServiceClient, AttendanceServiceClient>("Payroll.IAttendanceServiceClient", c => c.BaseAddress = new Uri(configuration["Services:AttendanceService"] ?? "http://localhost:5102"));
-        services.AddHttpClient<ILeaveServiceClient, LeaveServiceClient>("Payroll.ILeaveServiceClient", c => c.BaseAddress = new Uri(configuration["Services:LeaveService"] ?? "http://localhost:5103"));
-        services.AddHttpClient<ICompanyServiceClient, CompanyServiceClient>("Payroll.ICompanyServiceClient", c => c.BaseAddress = new Uri(configuration["Services:CompanyService"] ?? "http://localhost:5104"));
-        services.AddHttpClient<INotificationServiceClient, NotificationServiceClient>("Payroll.INotificationServiceClient", c => c.BaseAddress = new Uri(configuration["Services:NotificationService"] ?? "http://localhost:5105"));
+        void ConfigureServiceClient(HttpClient c, string? configuredUrl, string fallbackUrl) =>
+            c.BaseAddress = new Uri(configuredUrl ?? fallbackUrl);
+
+        services.AddTransient<ForwardAuthorizationHandler>();
+        var useInProcessEmployeeClient = configuration.GetValue("Payroll:UseInProcessEmployeeClient", false);
+        if (!useInProcessEmployeeClient)
+        {
+            services.AddHttpClient<IEmployeeServiceClient, EmployeeServiceClient>("Payroll.IEmployeeServiceClient", c =>
+                    ConfigureServiceClient(c, configuration["Services:EmployeeService"] ?? configuration["Services:HR"], "http://localhost:5000"))
+                .AddHttpMessageHandler<ForwardAuthorizationHandler>();
+        }
+        services.AddHttpClient<IAttendanceServiceClient, AttendanceServiceClient>("Payroll.IAttendanceServiceClient", c =>
+                ConfigureServiceClient(c, configuration["Services:AttendanceService"], "http://localhost:5000"))
+            .AddHttpMessageHandler<ForwardAuthorizationHandler>();
+        services.AddHttpClient<ILeaveServiceClient, LeaveServiceClient>("Payroll.ILeaveServiceClient", c =>
+                ConfigureServiceClient(c, configuration["Services:LeaveService"], "http://localhost:5000"))
+            .AddHttpMessageHandler<ForwardAuthorizationHandler>();
+        services.AddHttpClient<ICompanyServiceClient, CompanyServiceClient>("Payroll.ICompanyServiceClient", c =>
+                ConfigureServiceClient(c, configuration["Services:CompanyService"], "http://localhost:5000"))
+            .AddHttpMessageHandler<ForwardAuthorizationHandler>();
+        services.AddHttpClient<INotificationServiceClient, NotificationServiceClient>("Payroll.INotificationServiceClient", c =>
+                ConfigureServiceClient(c, configuration["Services:NotificationService"], "http://localhost:5000"))
+            .AddHttpMessageHandler<ForwardAuthorizationHandler>();
 
         services.AddHostedService<RabbitMqConsumerHostedService>();
 

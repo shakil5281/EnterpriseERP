@@ -21,7 +21,7 @@ var punchTimeLayouts = []string{
 	"2006/01/02 15:04:05",
 }
 
-// Location returns Asia/Dhaka (GMT+6), with a fixed offset fallback.
+// Location returns Asia/Dhaka (GMT+6) for audit timestamps only.
 func Location() *time.Location {
 	loc, err := time.LoadLocation(DefaultTimezone)
 	if err != nil {
@@ -30,49 +30,62 @@ func Location() *time.Location {
 	return loc
 }
 
-// Now returns the current time in Dhaka.
+// Now returns the current time in Dhaka (+06:00) for CreatedAt / UpdatedAt audit fields.
 func Now() time.Time {
 	return time.Now().In(Location())
 }
 
-// InDhaka converts any instant to the Dhaka wall-clock zone.
+// InDhaka converts an instant to Dhaka wall-clock (audit / device diagnostics only — not for PunchTime storage).
 func InDhaka(t time.Time) time.Time {
 	return t.In(Location())
 }
 
-// ParsePunchTime parses a punch timestamp. Values without a zone are treated as Dhaka local time.
+// WallClock extracts calendar date/time components without timezone conversion (actual log face value).
+func WallClock(t time.Time) time.Time {
+	return time.Date(
+		t.Year(), t.Month(), t.Day(),
+		t.Hour(), t.Minute(), t.Second(), t.Nanosecond(),
+		time.UTC,
+	)
+}
+
+// ParsePunchTime parses a punch timestamp and stores the wall-clock value from the source (no Dhaka shift).
 func ParsePunchTime(raw string) (time.Time, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return time.Time{}, errEmptyPunchTime
 	}
 
-	loc := Location()
 	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
-		return t.In(loc), nil
+		return WallClock(t), nil
 	}
 	if t, err := time.Parse(time.RFC3339, raw); err == nil {
-		return t.In(loc), nil
+		return WallClock(t), nil
 	}
 
 	for _, layout := range punchTimeLayouts[2:] {
-		if t, err := time.ParseInLocation(layout, raw, loc); err == nil {
+		if t, err := time.ParseInLocation(layout, raw, time.UTC); err == nil {
 			return t, nil
 		}
 	}
 
 	if n, err := strconv.ParseInt(raw, 10, 64); err == nil {
 		if len(raw) >= 13 {
-			return time.UnixMilli(n).In(loc), nil
+			return WallClock(time.UnixMilli(n)), nil
 		}
-		return time.Unix(n, 0).In(loc), nil
+		return WallClock(time.Unix(n, 0)), nil
 	}
 	return time.Time{}, errUnrecognizedPunchTime
 }
 
-// FormatPunchTime formats a punch time for API / device payloads in Dhaka (+06:00).
+// FormatPunchTime formats a stored punch time for dedupe keys and API (wall-clock, no Dhaka conversion).
 func FormatPunchTime(t time.Time) string {
-	return t.In(Location()).Format(time.RFC3339)
+	return WallClock(t).Format("2006-01-02T15:04:05")
+}
+
+// ParseRangeTime parses from/to filter query values using the same wall-clock rules as punch times.
+func ParseRangeTime(raw string) (time.Time, error) {
+	return ParsePunchTime(raw)
 }
 
 var (

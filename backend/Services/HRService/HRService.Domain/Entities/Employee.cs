@@ -18,6 +18,10 @@ public sealed class Employee
 
     public string? Gender { get; set; }
 
+    public string? Religion { get; set; }
+
+    public string? BloodGroup { get; set; }
+
     public DateTime? DateOfBirth { get; set; }
 
     public string? NationalId { get; set; }
@@ -33,6 +37,50 @@ public sealed class Employee
     public string EmploymentType { get; set; } = string.Empty;
 
     public string Status { get; set; } = "Active";
+
+    public bool IsOtEnabled { get; set; } = true;
+
+    public string? FatherNameEn { get; set; }
+
+    public string? FatherNameBn { get; set; }
+
+    public string? MotherNameEn { get; set; }
+
+    public string? MotherNameBn { get; set; }
+
+    public string? MaritalStatus { get; set; }
+
+    public string? SpouseNameEn { get; set; }
+
+    public string? SpouseNameBn { get; set; }
+
+    public string? SpouseOccupation { get; set; }
+
+    public string? SpouseContact { get; set; }
+
+    public string? EducationLevel { get; set; }
+
+    public string? Institution { get; set; }
+
+    public string? FieldOfStudy { get; set; }
+
+    public string? Skills { get; set; }
+
+    public string? Reference1Name { get; set; }
+
+    public string? Reference1Relation { get; set; }
+
+    public string? Reference1Phone { get; set; }
+
+    public string? Reference1Address { get; set; }
+
+    public string? Reference2Name { get; set; }
+
+    public string? Reference2Relation { get; set; }
+
+    public string? Reference2Phone { get; set; }
+
+    public string? Reference2Address { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.Now;
 

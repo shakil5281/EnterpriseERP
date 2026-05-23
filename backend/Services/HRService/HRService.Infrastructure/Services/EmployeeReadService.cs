@@ -23,7 +23,7 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
             q = q.Where(e => e.JobInfos.Any(j => j.IsCurrent && j.DesignationId == query.DesignationId));
 
         if (!string.IsNullOrWhiteSpace(query.Status) && !string.Equals(query.Status, "all", StringComparison.OrdinalIgnoreCase))
-            q = q.Where(e => e.Status == query.Status);
+            q = q.Where(e => e.Status.ToLower() == query.Status.Trim().ToLower());
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
@@ -33,14 +33,20 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
                 || e.PunchNumber.ToString().Contains(s));
         }
 
+        if (!string.IsNullOrWhiteSpace(query.Gender) &&
+            !string.Equals(query.Gender, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            q = q.Where(e => e.Gender == query.Gender);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Religion) &&
+            !string.Equals(query.Religion, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            q = q.Where(e => e.Religion == query.Religion);
+        }
+
         if (query is ManpowerSummaryQuery summaryQuery)
         {
-            if (!string.IsNullOrWhiteSpace(summaryQuery.Gender) &&
-                !string.Equals(summaryQuery.Gender, "all", StringComparison.OrdinalIgnoreCase))
-            {
-                q = q.Where(e => e.Gender == summaryQuery.Gender);
-            }
-
             if (summaryQuery.JoinDateFrom.HasValue)
                 q = q.Where(e => e.JoinDate >= summaryQuery.JoinDateFrom.Value.Date);
 
@@ -96,7 +102,8 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
 
         if (!string.IsNullOrWhiteSpace(query.Status) && !string.Equals(query.Status, "all", StringComparison.OrdinalIgnoreCase))
         {
-            q = q.Where(e => e.Status == query.Status);
+            var status = query.Status.Trim().ToLower();
+            q = q.Where(e => e.Status.ToLower() == status);
         }
 
         if (!string.IsNullOrWhiteSpace(query.Search))
@@ -106,6 +113,18 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
                 || e.EmployeeID.ToLower().Contains(s)
                 || e.PunchNumber.ToString().Contains(s)
                 || (e.Email != null && e.Email.ToLower().Contains(s)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Gender) &&
+            !string.Equals(query.Gender, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            q = q.Where(e => e.Gender == query.Gender);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Religion) &&
+            !string.Equals(query.Religion, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            q = q.Where(e => e.Religion == query.Religion);
         }
 
         var total = await q.CountAsync(cancellationToken);
@@ -122,6 +141,12 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
                 Email = e.Email,
                 CompanyId = e.CompanyId,
                 Status = e.Status,
+                Gender = e.Gender,
+                Religion = e.Religion,
+                BloodGroup = e.BloodGroup,
+                IsOtEnabled = e.IsOtEnabled,
+                JoinDate = e.JoinDate,
+                Phone = e.Phone,
                 DepartmentName = e.JobInfos.Where(j => j.IsCurrent).Select(j => j.Department != null ? j.Department.Name : null).FirstOrDefault(),
                 DesignationName = e.JobInfos.Where(j => j.IsCurrent).Select(j => j.Designation != null ? j.Designation.Name : null).FirstOrDefault()
             })
@@ -163,6 +188,13 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
         var sectionName = currentJob?.SectionId != null
             ? sectionNames.GetValueOrDefault(currentJob.SectionId.Value)
             : null;
+        var groupNames = await GroupNameResolver.ResolveAsync(
+            db,
+            currentJob?.GroupId != null ? [currentJob.GroupId] : [],
+            cancellationToken);
+        var groupName = currentJob?.GroupId != null
+            ? groupNames.GetValueOrDefault(currentJob.GroupId.Value)
+            : null;
 
         var currentSalary = employee.SalaryInfos.FirstOrDefault(s => s.IsCurrent);
 
@@ -175,6 +207,8 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
             FullName = employee.FullName,
             BanglaName = employee.BanglaName,
             Gender = employee.Gender,
+            Religion = employee.Religion,
+            BloodGroup = employee.BloodGroup,
             DateOfBirth = employee.DateOfBirth,
             NationalId = employee.NationalId,
             BirthCertificateNo = employee.BirthCertificateNo,
@@ -183,6 +217,28 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
             JoinDate = employee.JoinDate,
             EmploymentType = employee.EmploymentType,
             Status = employee.Status,
+            IsOtEnabled = employee.IsOtEnabled,
+            FatherNameEn = employee.FatherNameEn,
+            FatherNameBn = employee.FatherNameBn,
+            MotherNameEn = employee.MotherNameEn,
+            MotherNameBn = employee.MotherNameBn,
+            MaritalStatus = employee.MaritalStatus,
+            SpouseNameEn = employee.SpouseNameEn,
+            SpouseNameBn = employee.SpouseNameBn,
+            SpouseOccupation = employee.SpouseOccupation,
+            SpouseContact = employee.SpouseContact,
+            EducationLevel = employee.EducationLevel,
+            Institution = employee.Institution,
+            FieldOfStudy = employee.FieldOfStudy,
+            Skills = employee.Skills,
+            Reference1Name = employee.Reference1Name,
+            Reference1Relation = employee.Reference1Relation,
+            Reference1Phone = employee.Reference1Phone,
+            Reference1Address = employee.Reference1Address,
+            Reference2Name = employee.Reference2Name,
+            Reference2Relation = employee.Reference2Relation,
+            Reference2Phone = employee.Reference2Phone,
+            Reference2Address = employee.Reference2Address,
             CurrentJobInfo = currentJob == null ? null : new EmployeeJobInfoDto(
                 currentJob.DepartmentId,
                 currentJob.Department?.Name,
@@ -195,7 +251,9 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
                 currentJob.SupervisorId,
                 null,
                 currentJob.WorkLocation,
-                currentJob.EffectiveFrom),
+                currentJob.EffectiveFrom,
+                currentJob.GroupId,
+                groupName),
             CurrentSalaryInfo = currentSalary == null ? null : new EmployeeSalaryInfoDto(
                 currentSalary.BasicSalary,
                 currentSalary.HouseRent,
@@ -245,6 +303,9 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
                 e.JoinDate,
                 e.Status,
                 e.Phone,
+                e.Religion,
+                e.BloodGroup,
+                e.IsOtEnabled,
                 GrossSalary = e.SalaryInfos.Where(s => s.IsCurrent).Select(s => s.GrossSalary).FirstOrDefault()
             })
             .ToListAsync(cancellationToken);
@@ -266,6 +327,9 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
             JoinDate = r.JoinDate,
             Status = r.Status,
             Phone = r.Phone,
+            Religion = r.Religion,
+            BloodGroup = r.BloodGroup,
+            IsOtEnabled = r.IsOtEnabled,
             GrossSalary = r.GrossSalary
         }).ToList();
 

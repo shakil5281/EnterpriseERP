@@ -3,8 +3,10 @@
 import * as React from "react"
 import { authService, User, LoginResponse } from "@/lib/services/auth"
 import { syncActiveCompanyStorage } from "@/lib/active-company-storage"
-import { useRouter } from "next/navigation"
+import { refreshAccessToken } from "@/lib/auth-session"
+import { useRouter, usePathname } from "next/navigation"
 import { FullScreenLoading } from "@/components/loading-state"
+import { getRedirectUrlForUser } from "@/lib/role-redirect"
 
 interface LoginCredentials {
     username: string;
@@ -30,10 +32,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = React.useState(true)
     const [initializing, setInitializing] = React.useState(true)
     const router = useRouter()
+    const pathname = usePathname()
 
     React.useEffect(() => {
         const initAuth = async () => {
-            // Only run on client-side
             if (typeof window === 'undefined') {
                 setLoading(false);
                 setInitializing(false);
@@ -42,10 +44,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             if (authService.isAuthenticated()) {
                 try {
-                    // Fetch fresh profile data from server
                     const profile = await authService.getProfile();
                     if (profile && profile.roles && profile.roles.length > 0) {
-                        // Only set user when we have complete data with roles
                         setUser(profile);
                         syncActiveCompanyStorage({
                             allowedCompanyIds: profile.assignedCompanyIds ?? [],
@@ -53,7 +53,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                             isSuperAdmin: profile.roles.includes("SuperAdmin"),
                             accessToken: localStorage.getItem("token") ?? undefined,
                         });
-                        // Update localStorage with fresh data
                         localStorage.setItem('user', JSON.stringify({
                             username: profile.username,
                             fullName: profile.fullName,
@@ -61,13 +60,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                             roles: profile.roles
                         }));
                     } else {
-                        // No valid profile, clear auth
                         authService.logout();
                     }
                 } catch (error) {
                     console.error("Failed to fetch profile", error);
-                    // If token is invalid, logout
-                    if ((error as any)?.response?.status === 401) {
+                    if ((error as { response?: { status?: number } })?.response?.status === 401) {
+                        const newToken = await refreshAccessToken();
+                        if (newToken) {
+                            try {
+                                const profile = await authService.getProfile();
+                                if (profile?.roles?.length) {
+                                    setUser(profile);
+                                    syncActiveCompanyStorage({
+                                        allowedCompanyIds: profile.assignedCompanyIds ?? [],
+                                        defaultCompanyId: profile.defaultCompanyId ?? null,
+                                        isSuperAdmin: profile.roles.includes("SuperAdmin"),
+                                        accessToken: newToken,
+                                    });
+                                    localStorage.setItem('user', JSON.stringify({
+                                        username: profile.username,
+                                        fullName: profile.fullName,
+                                        email: profile.email,
+                                        roles: profile.roles
+                                    }));
+                                    setLoading(false);
+                                    setInitializing(false);
+                                    return;
+                                }
+                            } catch {
+                                /* fall through */
+                            }
+                        }
                         authService.logout();
                     }
                 }
@@ -78,7 +101,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         initAuth()
 
-        // Listen for profile updates from other tabs or components
         const handleProfileUpdate = () => {
             const storedUser = localStorage.getItem('user');
             if (storedUser) {
@@ -92,37 +114,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, [])
 
     const finishSuccessfulLogin = async (response: LoginResponse) => {
-        if (response.success) {
-            setInitializing(true) // Show loading screen during successful login
-            setLoading(true)
+        if (!response.success) return
 
-            // Fetch full profile after login to populate roles/permissions
-            try {
-                const profile = await authService.getProfile();
-                if (profile && profile.roles && profile.roles.length > 0) {
-                    setUser(profile);
-                    // Add delay to ensure UI updates properly
-                    await new Promise(resolve => setTimeout(resolve, 800));
-                } else {
-                    // Fallback to basic info from login response
-                    setUser({
-                        username: response.username,
-                        fullName: response.fullName,
-                        roles: response.roles || []
-                    } as User);
-                }
-            } catch (e) {
-                console.error("Failed to fetch profile after login", e);
-                // Fallback to basic info
+        setLoading(true)
+        let roles = response.roles ?? []
+        try {
+            const profile = await authService.getProfile()
+            if (profile?.roles?.length) {
+                setUser(profile)
+                roles = profile.roles
+                syncActiveCompanyStorage({
+                    allowedCompanyIds: profile.assignedCompanyIds ?? [],
+                    defaultCompanyId: profile.defaultCompanyId ?? null,
+                    isSuperAdmin: profile.roles.includes("SuperAdmin"),
+                    accessToken: localStorage.getItem("token") ?? undefined,
+                })
+                localStorage.setItem(
+                    "user",
+                    JSON.stringify({
+                        username: profile.username,
+                        fullName: profile.fullName,
+                        email: profile.email,
+                        roles: profile.roles,
+                    }),
+                )
+            } else {
                 setUser({
                     username: response.username,
                     fullName: response.fullName,
-                    roles: response.roles || []
-                } as User);
+                    roles: response.roles || [],
+                } as User)
             }
+        } catch (e) {
+            console.error("Failed to fetch profile after login", e)
+            setUser({
+                username: response.username,
+                fullName: response.fullName,
+                roles: response.roles || [],
+            } as User)
+        }
 
-            setLoading(false)
-            setInitializing(false)
+        setLoading(false)
+
+        if (pathname === "/login" || pathname?.startsWith("/login")) {
+            const params = new URLSearchParams(window.location.search)
+            const returnUrl = params.get("returnUrl")
+            const target =
+                returnUrl &&
+                returnUrl.startsWith("/") &&
+                !returnUrl.startsWith("//") &&
+                !returnUrl.startsWith("/login")
+                    ? returnUrl
+                    : getRedirectUrlForUser(roles)
+            router.replace(target)
         }
     }
 
@@ -163,7 +207,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return !!user.permissions?.includes(permission)
     }
 
-    // Show full-screen loading during initialization
     if (initializing) {
         return <FullScreenLoading message="Initializing your workspace..." />
     }

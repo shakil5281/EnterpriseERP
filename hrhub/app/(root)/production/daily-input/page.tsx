@@ -340,8 +340,8 @@ export default function DailyProductionInputPage() {
     ]
 
     const getHourLabel = (h: number) => {
-        let startHour = (h + 7) % 24;
-        let endHour = (h + 8) % 24;
+        const startHour = (h + 7) % 24;
+        const endHour = (h + 8) % 24;
 
         const format = (hour: number) => {
             const h12 = hour % 12 === 0 ? 12 : hour % 12;

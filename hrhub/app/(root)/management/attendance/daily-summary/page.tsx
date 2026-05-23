@@ -54,7 +54,8 @@ const chartData = [
 export default function DailySummaryPage() {
     const [date, setDate] = React.useState<Date | undefined>(new Date())
     const [summaryData, setSummaryData] = React.useState<DailySummaryResponse | null>(null)
-    const [isLoading, setIsLoading] = React.useState(true)
+    const [isLoading, setIsLoading] = React.useState(false)
+    const [hasLoaded, setHasLoaded] = React.useState(false)
     const [isExportingExcel, setIsExportingExcel] = React.useState(false)
     const [isExportingPdf, setIsExportingPdf] = React.useState(false)
     const [departments, setDepartments] = React.useState<any[]>([])
@@ -66,8 +67,11 @@ export default function DailySummaryPage() {
         try {
             const data = await attendanceApi.getDailySummary(q)
             setSummaryData(data)
+            setHasLoaded(true)
         } catch (error) {
+            console.error(error)
             toast.error("Failed to fetch daily summary data")
+            setSummaryData(null)
         } finally {
             setIsLoading(false)
         }
@@ -231,10 +235,29 @@ export default function DailySummaryPage() {
                 </div>
             </div>
 
-            {/* Summary Cards */}
+            {/* Filters — always visible so users can select company and apply */}
+            <div className="px-6">
+                <AttendanceCompanyFilter
+                    isLoading={isLoading}
+                    onFilterChange={({ query, legacy }) => {
+                        if (query.date) {
+                            setDate(new Date(query.date + "T00:00:00"))
+                        }
+                        setDeptFilter(legacy?.departmentId?.toString() || "all")
+                        setActiveQuery(query)
+                        fetchData(query)
+                    }}
+                    initialDate={date ? format(date, "yyyy-MM-dd") : undefined}
+                />
+            </div>
+
             {isLoading ? (
                 <div className="flex items-center justify-center py-20">
                     <IconLoader className="size-8 animate-spin text-muted-foreground" />
+                </div>
+            ) : !hasLoaded ? (
+                <div className="px-6 py-12 text-center text-sm text-muted-foreground">
+                    Select a company above to load the daily attendance summary.
                 </div>
             ) : (
                 <div className="space-y-6">
@@ -281,21 +304,6 @@ export default function DailySummaryPage() {
                             }}
                             status="warning"
                             chartData={chartData.map(d => ({ value: d.value * 0.03 + Math.random() * 2 }))}
-                        />
-                    </div>
-
-                    {/* Filters */}
-                    <div className="px-6">
-                        <AttendanceCompanyFilter
-                            onFilterChange={({ query, legacy }) => {
-                                if (query.date) {
-                                    setDate(new Date(query.date + "T00:00:00"))
-                                }
-                                setDeptFilter(legacy?.departmentId?.toString() || "all")
-                                setActiveQuery(query)
-                                fetchData(query)
-                            }}
-                            initialDate={date ? format(date, "yyyy-MM-dd") : undefined}
                         />
                     </div>
 

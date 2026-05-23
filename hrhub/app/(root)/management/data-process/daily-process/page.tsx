@@ -15,7 +15,7 @@ import { Progress } from "@/components/ui/progress"
 import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { DateRange } from "react-day-picker"
-import { eachDayOfInterval, format } from "date-fns"
+import { format, startOfMonth } from "date-fns"
 import { attendanceApi } from "@/lib/services/attendance-api"
 import { companyService, type Company } from "@/lib/services/company"
 import { NativeSelect } from "@/components/ui/native-select"
@@ -26,17 +26,28 @@ function isGuid(value: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
 
+function defaultProcessRange(): DateRange {
+    const today = new Date()
+    return { from: startOfMonth(today), to: today }
+}
+
 export default function DailyProcessPage() {
     const router = useRouter()
-    const [range, setRange] = React.useState<DateRange | undefined>({
-        from: new Date(),
-        to: new Date(),
-    })
+    const [range, setRange] = React.useState<DateRange | undefined>(defaultProcessRange)
     const [companies, setCompanies] = React.useState<Company[]>([])
     const [companyId, setCompanyId] = React.useState("")
     const [processing, setProcessing] = React.useState(false)
     const [progress, setProgress] = React.useState(0)
     const [result, setResult] = React.useState<string | null>(null)
+    const [lastBatch, setLastBatch] = React.useState<{
+        created: number
+        updated: number
+        skipped: number
+        present: number
+        absent: number
+        late: number
+        errors: { date: string; message: string }[]
+    } | null>(null)
 
     React.useEffect(() => {
         companyService
@@ -68,6 +79,7 @@ export default function DailyProcessPage() {
         setProcessing(true)
         setProgress(10)
         setResult(null)
+        setLastBatch(null)
 
         try {
             const batch = await attendanceApi.processRange({
@@ -75,8 +87,17 @@ export default function DailyProcessPage() {
                 startDate: format(range.from, "yyyy-MM-dd"),
                 endDate: format(end, "yyyy-MM-dd"),
             })
-            const totalRecords = batch.recordsProcessed
             setProgress(100)
+            setLastBatch({
+                created: batch.createdCount ?? 0,
+                updated: batch.updatedCount ?? 0,
+                skipped: batch.skippedLockedCount ?? 0,
+                present: batch.presentCount,
+                absent: batch.absentCount,
+                late: batch.lateCount,
+                errors: batch.errors ?? [],
+            })
+
             if (batch.errors.length > 0) {
                 toast.warning(`${batch.errors.length} day(s) failed during processing`)
             }
@@ -86,8 +107,12 @@ export default function DailyProcessPage() {
                     ? format(range.from, "dd MMM yyyy")
                     : `${format(range.from, "dd MMM yyyy")} – ${format(end, "dd MMM yyyy")}`
 
-            setResult(`Processed ${totalRecords} employee-day records for ${label}.`)
-            toast.success(`Daily process completed (${totalRecords} records)`)
+            setResult(
+                `${label}: ${batch.createdCount ?? 0} created, ${batch.updatedCount ?? 0} updated, ` +
+                    `${batch.skippedLockedCount ?? 0} skipped (locked/approved). ` +
+                    `Present ${batch.presentCount}, absent ${batch.absentCount}, late ${batch.lateCount}.`,
+            )
+            toast.success(`Daily process completed (${batch.daysProcessed} days)`)
         } catch (error: unknown) {
             console.error(error)
             const message =
@@ -123,7 +148,8 @@ export default function DailyProcessPage() {
                     <CardHeader>
                         <CardTitle className="text-lg">Bulk Processing Parameters</CardTitle>
                         <CardDescription>
-                            Select company and date range to run attendance processing via the platform API.
+                            Reads PunchRecords, upserts DailyAttendance (creates or updates), refreshes shift/holiday
+                            flags, and updates device logs. Locked or approved rows are skipped.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
@@ -169,9 +195,20 @@ export default function DailyProcessPage() {
                         ) : (
                             <div className="space-y-4 pt-2">
                                 {result && (
-                                    <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-md flex items-center gap-2 text-emerald-700 dark:text-emerald-400 animate-in fade-in slide-in-from-top-1">
-                                        <IconCheck className="size-4 stroke-3" />
+                                    <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-md flex items-start gap-2 text-emerald-700 dark:text-emerald-400 animate-in fade-in slide-in-from-top-1">
+                                        <IconCheck className="size-4 stroke-3 shrink-0 mt-0.5" />
                                         <p className="text-sm font-medium">{result}</p>
+                                    </div>
+                                )}
+
+                                {lastBatch && lastBatch.errors.length > 0 && (
+                                    <div className="rounded-md border border-amber-200 bg-amber-50/80 p-3 text-sm text-amber-950 space-y-1">
+                                        <p className="font-semibold">Failed days</p>
+                                        {lastBatch.errors.map((e) => (
+                                            <p key={e.date} className="text-xs font-mono">
+                                                {e.date}: {e.message}
+                                            </p>
+                                        ))}
                                     </div>
                                 )}
 
@@ -190,9 +227,11 @@ export default function DailyProcessPage() {
                         <div className="flex gap-2 items-start text-xs text-muted-foreground">
                             <IconInfoCircle className="size-4 shrink-0 text-primary opacity-70" />
                             <p>
-                                Each day in the selected range is sent to{" "}
-                                <code className="text-[11px]">POST /api/v1/Attendance/process</code> with{" "}
-                                <code className="text-[11px]">companyId</code> and <code className="text-[11px]">date</code>.
+                                Uses <code className="text-[11px]">POST /api/v1/Attendance/process/range</code>.
+                                HR <code className="text-[11px]">PunchNumber</code> must match PunchRecords (e.g. device
+                                badge 1733).                                 Job card and daily reports read from DailyAttendance — run this again after
+                                importing new punches (Remote Collect), changing shift weekly off, or fixing weekend
+                                days that show as Absent. Approved or payroll-locked rows are skipped.
                             </p>
                         </div>
                     </CardFooter>

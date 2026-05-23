@@ -1,5 +1,5 @@
 import api from "../api";
-import { unwrapApiData } from "@/lib/api-response";
+import { getHttpErrorMessage, unwrapApiData } from "@/lib/api-response";
 import type {
   HrEmployeeDetails,
   HrEmployeeListItem,
@@ -14,6 +14,7 @@ import {
   organogramService,
   resolveDepartmentGuid,
   resolveDesignationGuid,
+  resolveGroupGuid,
   resolveSectionGuid,
 } from "@/lib/services/organogram";
 
@@ -44,29 +45,22 @@ function isGuid(value: string | undefined | null): value is string {
   );
 }
 
-const HR_EMPLOYEE_ID_PATTERN = /^EMP-\d{4,}$/i;
+const HR_EMPLOYEE_ID_MAX_LENGTH = 32;
 
-/** HR API requires EMP-#### (4+ digits). Numeric-only values are normalized. */
+/** Empty = auto-generate on server (EMP-0001, …). Any non-whitespace code up to 32 chars is allowed. */
 export function normalizeHrEmployeeId(
   raw?: string | null,
 ): string | undefined {
   const trimmed = raw?.trim();
   if (!trimmed) return undefined;
-
-  const upper = trimmed.toUpperCase();
-  if (HR_EMPLOYEE_ID_PATTERN.test(upper)) return upper;
-
-  if (/^\d+$/.test(trimmed)) {
-    const digits = trimmed.replace(/^0+/, "") || "0";
-    return digits.length < 4 ? `EMP-${digits.padStart(4, "0")}` : `EMP-${digits}`;
-  }
-
   return trimmed;
 }
 
 export function isValidHrEmployeeId(raw?: string | null): boolean {
   const normalized = normalizeHrEmployeeId(raw);
-  return !normalized || HR_EMPLOYEE_ID_PATTERN.test(normalized);
+  if (!normalized) return true;
+  if (normalized.length > HR_EMPLOYEE_ID_MAX_LENGTH) return false;
+  return !/\s/.test(normalized);
 }
 
 async function listCompaniesForResolve() {
@@ -122,9 +116,13 @@ function mapHrListItemToEmployee(row: HrEmployeeListItem): Employee {
     departmentName: row.departmentName ?? undefined,
     designationName: row.designationName ?? undefined,
     status: row.status,
-    joinDate: "",
-    isActive: true,
-    isOtEnabled: false,
+    joinDate: row.joinDate ?? "",
+    gender: row.gender ?? undefined,
+    religion: row.religion ?? undefined,
+    bloodGroup: row.bloodGroup ?? undefined,
+    isOtEnabled: row.isOtEnabled ?? false,
+    phoneNumber: row.phone ?? undefined,
+    isActive: row.status === "Active",
     createdAt: "",
     companyId: stableIntFromGuid(row.companyId),
     companyEntityId: row.companyId,
@@ -189,13 +187,61 @@ function mapHrManpowerToEmployee(row: HrManpowerListItem): Employee {
     joinDate: row.joinDate,
     phoneNumber: row.phone ?? undefined,
     grossSalary: row.grossSalary,
+    religion: row.religion ?? undefined,
+    bloodGroup: row.bloodGroup ?? undefined,
     isActive: row.status === "Active",
-    isOtEnabled: false,
+    isOtEnabled: row.isOtEnabled ?? false,
     createdAt: "",
   };
 }
 
+function mapPrimaryBankAccount(
+  account?: HrEmployeeDetails["bankAccounts"][number],
+) {
+  if (!account) return {}
+  const isMcash = account.mobileBankingType === "mCash Account"
+  return {
+    bankName: account.bankName ?? undefined,
+    bankBranchName: account.branchName ?? undefined,
+    bankAccountNo: isMcash
+      ? account.mobileBankingNo ?? undefined
+      : account.accountNo ?? undefined,
+    bankRoutingNo: account.routingNo ?? undefined,
+    bankAccountType:
+      account.mobileBankingType ??
+      (account.bankName ? "Bank Account" : undefined),
+  }
+}
+
+function buildBankAccountPayload(data: CreateEmployeeDto) {
+  const isMcash = data.bankAccountType === "mCash Account"
+  if (isMcash) {
+    return {
+      bankName: undefined as string | undefined,
+      branchName: undefined as string | undefined,
+      accountNo: undefined as string | undefined,
+      routingNo: undefined as string | undefined,
+      mobileBankingType: "mCash Account",
+      mobileBankingNo: data.bankAccountNo,
+      isPrimary: true,
+    }
+  }
+
+  return {
+    bankName: data.bankName,
+    branchName: data.bankBranchName,
+    accountNo: data.bankAccountNo,
+    routingNo: undefined as string | undefined,
+    mobileBankingType: data.bankAccountType || "Bank Account",
+    mobileBankingNo: undefined as string | undefined,
+    isPrimary: true,
+  }
+}
+
 function mapHrDetailsToEmployee(row: HrEmployeeDetails): Employee {
+  const primaryBank = mapPrimaryBankAccount(
+    row.bankAccounts?.find((b) => b.isPrimary),
+  )
   return {
     id: stableIntFromGuid(row.id),
     entityId: row.id,
@@ -206,6 +252,8 @@ function mapHrDetailsToEmployee(row: HrEmployeeDetails): Employee {
     nid: row.nationalId ?? undefined,
     dateOfBirth: row.dateOfBirth ?? undefined,
     gender: row.gender ?? undefined,
+    religion: row.religion ?? undefined,
+    bloodGroup: row.bloodGroup ?? undefined,
     email: row.email ?? undefined,
     phoneNumber: row.phone ?? undefined,
     departmentId: row.currentJobInfo?.departmentId
@@ -220,6 +268,11 @@ function mapHrDetailsToEmployee(row: HrEmployeeDetails): Employee {
       ? stableIntFromGuid(row.currentJobInfo.designationId)
       : 0,
     designationName: row.currentJobInfo?.designationName ?? undefined,
+    lineName: row.currentJobInfo?.workLocation ?? undefined,
+    groupId: row.currentJobInfo?.groupId
+      ? stableIntFromGuid(row.currentJobInfo.groupId)
+      : undefined,
+    groupName: row.currentJobInfo?.groupName ?? undefined,
     status: row.status,
     joinDate: row.joinDate,
     basicSalary: row.currentSalaryInfo?.basicSalary,
@@ -229,27 +282,72 @@ function mapHrDetailsToEmployee(row: HrEmployeeDetails): Employee {
     foodAllowance: row.currentSalaryInfo?.foodAllowance,
     grossSalary: row.currentSalaryInfo?.grossSalary,
     isActive: row.status === "Active",
-    isOtEnabled: false,
+    isOtEnabled: row.isOtEnabled ?? false,
     createdAt: "",
     companyId: stableIntFromGuid(row.companyId),
     companyEntityId: row.companyId,
     presentAddress:
       row.addresses?.find((a) => a.addressType === "Present")?.addressLine ??
       undefined,
+    presentDivisionName:
+      row.addresses?.find((a) => a.addressType === "Present")?.division ?? undefined,
+    presentDistrictName:
+      row.addresses?.find((a) => a.addressType === "Present")?.district ?? undefined,
+    presentUpazilaName:
+      row.addresses?.find((a) => a.addressType === "Present")?.upazila ?? undefined,
+    presentPostOfficeName:
+      row.addresses?.find((a) => a.addressType === "Present")?.postOffice ?? undefined,
+    presentPostalCode:
+      row.addresses?.find((a) => a.addressType === "Present")?.postalCode ?? undefined,
     permanentAddress:
       row.addresses?.find((a) => a.addressType === "Permanent")?.addressLine ??
       undefined,
-    bankName: row.bankAccounts?.find((b) => b.isPrimary)?.bankName ?? undefined,
-    bankBranchName:
-      row.bankAccounts?.find((b) => b.isPrimary)?.branchName ?? undefined,
-    bankAccountNo:
-      row.bankAccounts?.find((b) => b.isPrimary)?.accountNo ?? undefined,
-    bankRoutingNo:
-      row.bankAccounts?.find((b) => b.isPrimary)?.routingNo ?? undefined,
+    permanentDivisionName:
+      row.addresses?.find((a) => a.addressType === "Permanent")?.division ?? undefined,
+    permanentDistrictName:
+      row.addresses?.find((a) => a.addressType === "Permanent")?.district ?? undefined,
+    permanentUpazilaName:
+      row.addresses?.find((a) => a.addressType === "Permanent")?.upazila ?? undefined,
+    permanentPostOfficeName:
+      row.addresses?.find((a) => a.addressType === "Permanent")?.postOffice ?? undefined,
+    permanentPostalCode:
+      row.addresses?.find((a) => a.addressType === "Permanent")?.postalCode ?? undefined,
+    profileImageUrl:
+      row.documents?.find((d) => d.documentType === "Profile Image")?.fileUrl ??
+      undefined,
+    signatureImageUrl:
+      row.documents?.find((d) => d.documentType === "Signature")?.fileUrl ??
+      undefined,
+    bankName: primaryBank.bankName,
+    bankBranchName: primaryBank.bankBranchName,
+    bankAccountNo: primaryBank.bankAccountNo,
+    bankRoutingNo: primaryBank.bankRoutingNo,
+    bankAccountType: primaryBank.bankAccountType,
     emergencyContactName: row.emergencyContacts?.[0]?.contactName,
     emergencyContactRelation: row.emergencyContacts?.[0]?.relation ?? undefined,
     emergencyContactPhone: row.emergencyContacts?.[0]?.phone,
     emergencyContactAddress: row.emergencyContacts?.[0]?.address ?? undefined,
+    fatherNameEn: row.fatherNameEn ?? undefined,
+    fatherNameBn: row.fatherNameBn ?? undefined,
+    motherNameEn: row.motherNameEn ?? undefined,
+    motherNameBn: row.motherNameBn ?? undefined,
+    maritalStatus: row.maritalStatus ?? undefined,
+    spouseNameEn: row.spouseNameEn ?? undefined,
+    spouseNameBn: row.spouseNameBn ?? undefined,
+    spouseOccupation: row.spouseOccupation ?? undefined,
+    spouseContact: row.spouseContact ?? undefined,
+    educationLevel: row.educationLevel ?? undefined,
+    institution: row.institution ?? undefined,
+    fieldOfStudy: row.fieldOfStudy ?? undefined,
+    skills: row.skills ?? undefined,
+    reference1Name: row.reference1Name ?? undefined,
+    reference1Relation: row.reference1Relation ?? undefined,
+    reference1Phone: row.reference1Phone ?? undefined,
+    reference1Address: row.reference1Address ?? undefined,
+    reference2Name: row.reference2Name ?? undefined,
+    reference2Relation: row.reference2Relation ?? undefined,
+    reference2Phone: row.reference2Phone ?? undefined,
+    reference2Address: row.reference2Address ?? undefined,
     documents: row.documents ?? [],
   };
 }
@@ -293,6 +391,116 @@ async function upsertAddress(
   }
 }
 
+async function syncEmployeeImageDocuments(
+  employeeId: string,
+  documents: HrEmployeeDetails["documents"],
+  data: { profileImageUrl?: string; signatureImageUrl?: string },
+) {
+  const upsertDoc = async (documentType: string, fileUrl?: string) => {
+    const trimmed = fileUrl?.trim()
+    const existing = documents.find((d) => d.documentType === documentType)
+    if (!trimmed) {
+      if (existing) await employeeService.deleteDocument(existing.id)
+      return
+    }
+    if (existing?.fileUrl === trimmed) return
+    if (existing) await employeeService.deleteDocument(existing.id)
+    await employeeService.addDocument(employeeId, {
+      documentType,
+      fileUrl: trimmed,
+    })
+  }
+
+  await upsertDoc("Profile Image", data.profileImageUrl)
+  await upsertDoc("Signature", data.signatureImageUrl)
+}
+
+function employeeProfilePayload(data: CreateEmployeeDto) {
+  return {
+    religion: data.religion || null,
+    bloodGroup: data.bloodGroup || null,
+    fatherNameEn: data.fatherNameEn || null,
+    fatherNameBn: data.fatherNameBn || null,
+    motherNameEn: data.motherNameEn || null,
+    motherNameBn: data.motherNameBn || null,
+    maritalStatus: data.maritalStatus || null,
+    spouseNameEn: data.spouseNameEn || null,
+    spouseNameBn: data.spouseNameBn || null,
+    spouseOccupation: data.spouseOccupation || null,
+    spouseContact: data.spouseContact || null,
+    educationLevel: data.educationLevel || null,
+    institution: data.institution || null,
+    fieldOfStudy: data.fieldOfStudy || null,
+    skills: data.skills || null,
+    reference1Name: data.reference1Name || null,
+    reference1Relation: data.reference1Relation || null,
+    reference1Phone: data.reference1Phone || null,
+    reference1Address: data.reference1Address || null,
+    reference2Name: data.reference2Name || null,
+    reference2Relation: data.reference2Relation || null,
+    reference2Phone: data.reference2Phone || null,
+    reference2Address: data.reference2Address || null,
+  }
+}
+
+async function resolveWorkLocation(
+  data: CreateEmployeeDto,
+): Promise<string | undefined> {
+  if (!data.lineId && !data.lineName) return undefined;
+
+  let workLocation = data.lineName;
+  if (data.lineId && data.sectionId) {
+    const lines = await organogramService.getLines({ sectionId: data.sectionId });
+    workLocation =
+      lines.find((line) => line.id === data.lineId)?.nameEn ?? workLocation;
+  }
+
+  const trimmed = workLocation?.trim();
+  return trimmed || undefined;
+}
+
+async function syncEmployeePlacement(
+  employeeId: string,
+  data: CreateEmployeeDto,
+  existing?: HrEmployeeDetails,
+) {
+  const workLocation = await resolveWorkLocation(data);
+  const currentJob = existing?.currentJobInfo;
+  const currentDept = currentJob?.departmentId
+    ? stableIntFromGuid(currentJob.departmentId)
+    : 0;
+  const currentSection = currentJob?.sectionId
+    ? stableIntFromGuid(currentJob.sectionId)
+    : 0;
+  const currentDesignation = currentJob?.designationId
+    ? stableIntFromGuid(currentJob.designationId)
+    : 0;
+  const currentGroup = currentJob?.groupId
+    ? stableIntFromGuid(currentJob.groupId)
+    : 0;
+  const currentLine = currentJob?.workLocation?.trim().toLowerCase() ?? "";
+  const nextLine = workLocation?.trim().toLowerCase() ?? "";
+
+  const placementChanged =
+    currentDept !== (data.departmentId ?? 0) ||
+    currentSection !== (data.sectionId ?? 0) ||
+    currentDesignation !== (data.designationId ?? 0) ||
+    currentGroup !== (data.groupId ?? 0) ||
+    currentLine !== nextLine;
+
+  if (!placementChanged) return;
+
+  await employeeService.transferEmployee(employeeId, {
+    departmentId: data.departmentId,
+    sectionId: data.sectionId,
+    designationId: data.designationId,
+    groupId: data.groupId,
+    workLocation,
+    effectiveFrom: data.joinDate || new Date().toISOString(),
+    companyId: data.companyId,
+  });
+}
+
 async function syncEmployeeSubResources(
   employeeId: string,
   data: CreateEmployeeDto,
@@ -306,6 +514,10 @@ async function syncEmployeeSubResources(
     "Present",
     {
       country: "Bangladesh",
+      division: data.presentDivision,
+      district: data.presentDistrict,
+      upazila: data.presentUpazila,
+      postOffice: data.presentPostOffice,
       postalCode: data.presentPostalCode,
       addressLine: data.presentAddress,
     },
@@ -318,31 +530,34 @@ async function syncEmployeeSubResources(
     "Permanent",
     {
       country: "Bangladesh",
+      division: data.permanentDivision,
+      district: data.permanentDistrict,
+      upazila: data.permanentUpazila,
+      postOffice: data.permanentPostOffice,
       postalCode: data.permanentPostalCode,
       addressLine: data.permanentAddress,
     },
     data.companyId,
   );
 
+  await syncEmployeeImageDocuments(employeeId, details.documents, {
+    profileImageUrl: data.profileImageUrl,
+    signatureImageUrl: data.signatureImageUrl,
+  });
+
+  await syncEmployeePlacement(employeeId, data, existing);
+
   const hasBank =
-    data.bankName ||
     data.bankAccountNo ||
+    data.bankName ||
     data.bankBranchName ||
-    data.bankRoutingNo;
+    data.bankAccountType === "mCash Account";
   const primary =
     details.bankAccounts.find((b) => b.isPrimary) ?? details.bankAccounts[0];
   if (!hasBank) {
     if (primary) await employeeService.deleteBankAccount(primary.id);
   } else {
-    const bankBody = {
-      bankName: data.bankName,
-      branchName: data.bankBranchName,
-      accountNo: data.bankAccountNo,
-      routingNo: data.bankRoutingNo,
-      mobileBankingType: data.bankAccountType,
-      mobileBankingNo: undefined as string | undefined,
-      isPrimary: true,
-    };
+    const bankBody = buildBankAccountPayload(data);
     if (primary) {
       await employeeService.updateBankAccount(primary.id, bankBody);
     } else {
@@ -379,6 +594,7 @@ function needsManpowerListApi(params?: {
   sectionId?: number;
   designationId?: number;
   gender?: string;
+  religion?: string;
   joinDateFrom?: string;
   joinDateTo?: string;
 }): boolean {
@@ -386,6 +602,7 @@ function needsManpowerListApi(params?: {
   if (params.sectionId !== undefined) return true;
   if (params.designationId !== undefined) return true;
   if (params.gender && params.gender.toLowerCase() !== "all") return true;
+  if (params.religion && params.religion.toLowerCase() !== "all") return true;
   if (params.joinDateFrom || params.joinDateTo) return true;
   return false;
 }
@@ -397,6 +614,8 @@ async function fetchHrEmployeesPage(params?: {
   companyId?: number;
   departmentId?: number;
   status?: string;
+  gender?: string;
+  religion?: string;
 }): Promise<PagedResult<HrEmployeeListItem>> {
   const companyGuid = await resolveCompanyGuid(params?.companyId);
   const departmentGuid = params?.departmentId
@@ -412,6 +631,14 @@ async function fetchHrEmployeesPage(params?: {
       status:
         params?.status && params.status.toLowerCase() !== "all"
           ? params.status
+          : undefined,
+      gender:
+        params?.gender && params.gender.toLowerCase() !== "all"
+          ? params.gender
+          : undefined,
+      religion:
+        params?.religion && params.religion.toLowerCase() !== "all"
+          ? params.religion
           : undefined,
     },
   });
@@ -457,6 +684,10 @@ export interface Employee {
   presentThanaId?: EmployeeAddressEntityId;
   presentPostOfficeId?: EmployeeAddressEntityId;
   presentPostalCode?: string;
+  presentDivisionName?: string;
+  presentDistrictName?: string;
+  presentUpazilaName?: string;
+  presentPostOfficeName?: string;
 
   permanentAddress?: string;
   permanentAddressBn?: string;
@@ -465,6 +696,10 @@ export interface Employee {
   permanentThanaId?: EmployeeAddressEntityId;
   permanentPostOfficeId?: EmployeeAddressEntityId;
   permanentPostalCode?: string;
+  permanentDivisionName?: string;
+  permanentDistrictName?: string;
+  permanentUpazilaName?: string;
+  permanentPostOfficeName?: string;
 
   // Family Information
   fatherNameEn?: string;
@@ -476,6 +711,22 @@ export interface Employee {
   spouseNameBn?: string;
   spouseOccupation?: string;
   spouseContact?: string;
+
+  // Education & Skills
+  educationLevel?: string;
+  institution?: string;
+  fieldOfStudy?: string;
+  skills?: string;
+
+  // References
+  reference1Name?: string;
+  reference1Relation?: string;
+  reference1Phone?: string;
+  reference1Address?: string;
+  reference2Name?: string;
+  reference2Relation?: string;
+  reference2Phone?: string;
+  reference2Address?: string;
 
   // Salary Information
   basicSalary?: number;
@@ -521,19 +772,41 @@ export interface CreateEmployeeDto {
   departmentId: number;
   sectionId?: number;
   designationId: number;
+  lineId?: number;
+  lineName?: string;
+  groupId?: number;
   status: string;
   joinDate: string;
   email?: string;
   phoneNumber?: string;
   presentAddress?: string;
+  presentDivision?: string;
+  presentDistrict?: string;
+  presentUpazila?: string;
+  presentPostOffice?: string;
   presentPostalCode?: string;
+  presentDivisionName?: string;
+  presentDistrictName?: string;
+  presentUpazilaName?: string;
+  presentPostOfficeName?: string;
   permanentAddress?: string;
+  permanentDivision?: string;
+  permanentDistrict?: string;
+  permanentUpazila?: string;
+  permanentPostOffice?: string;
   permanentPostalCode?: string;
+  permanentDivisionName?: string;
+  permanentDistrictName?: string;
+  permanentUpazilaName?: string;
+  permanentPostOfficeName?: string;
   basicSalary?: number;
   houseRent?: number;
   medicalAllowance?: number;
   conveyance?: number;
   foodAllowance?: number;
+  grossSalary?: number;
+  profileImageUrl?: string;
+  signatureImageUrl?: string;
   bankName?: string;
   bankBranchName?: string;
   bankAccountNo?: string;
@@ -544,6 +817,30 @@ export interface CreateEmployeeDto {
   emergencyContactPhone?: string;
   emergencyContactAddress?: string;
   companyId?: number;
+  religion?: string;
+  bloodGroup?: string;
+  fatherNameEn?: string;
+  fatherNameBn?: string;
+  motherNameEn?: string;
+  motherNameBn?: string;
+  maritalStatus?: string;
+  spouseNameEn?: string;
+  spouseNameBn?: string;
+  spouseOccupation?: string;
+  spouseContact?: string;
+  educationLevel?: string;
+  institution?: string;
+  fieldOfStudy?: string;
+  skills?: string;
+  reference1Name?: string;
+  reference1Relation?: string;
+  reference1Phone?: string;
+  reference1Address?: string;
+  reference2Name?: string;
+  reference2Relation?: string;
+  reference2Phone?: string;
+  reference2Address?: string;
+  isOtEnabled?: boolean;
 }
 
 export interface ManpowerSummary {
@@ -574,6 +871,7 @@ export type ManpowerFilterParams = {
   joinDateFrom?: string;
   joinDateTo?: string;
   gender?: string;
+  religion?: string;
 };
 
 function mapSummaryBucket(row: HrManpowerSummary["departmentSummary"][number]): SummaryItem {
@@ -628,10 +926,15 @@ async function buildManpowerQueryParams(
     if (designationId) query.designationId = designationId;
   }
 
+  if (params?.gender && params.gender.toLowerCase() !== "all") {
+    query.gender = params.gender;
+  }
+
+  if (params?.religion && params.religion.toLowerCase() !== "all") {
+    query.religion = params.religion;
+  }
+
   if (options?.summary) {
-    if (params?.gender && params.gender.toLowerCase() !== "all") {
-      query.gender = params.gender;
-    }
     if (params?.joinDateFrom) {
       query.joinDateFrom = params.joinDateFrom;
     }
@@ -737,6 +1040,7 @@ export const employeeService = {
         joinDateFrom: params?.joinDateFrom,
         joinDateTo: params?.joinDateTo,
         gender: params?.gender,
+        religion: params?.religion,
       });
     }
 
@@ -745,6 +1049,8 @@ export const employeeService = {
       companyId: params?.companyId,
       departmentId: params?.departmentId,
       status: params?.status,
+      gender: params?.gender,
+      religion: params?.religion,
       pageSize: 200,
     });
     return page.items.map(mapHrListItemToEmployee);
@@ -797,6 +1103,9 @@ export const employeeService = {
       ? await resolveSectionGuid(data.sectionId)
       : undefined;
     const designationId = await resolveDesignationGuid(data.designationId);
+    const groupId = data.groupId
+      ? await resolveGroupGuid(data.groupId)
+      : undefined;
     if (!departmentId || !designationId) {
       throw new Error("Department and designation are required.");
     }
@@ -804,38 +1113,47 @@ export const employeeService = {
       throw new Error("Punch number (device badge) is required and must be a positive integer.");
     }
     const employeeID = normalizeHrEmployeeId(data.employeeId);
-    if (employeeID && !HR_EMPLOYEE_ID_PATTERN.test(employeeID)) {
+    if (employeeID && !isValidHrEmployeeId(employeeID)) {
       throw new Error(
-        "Employee ID must match EMP-#### (e.g. EMP-0001) or leave empty to auto-generate.",
+        "Employee ID must be 1-32 characters without spaces, or leave empty to auto-generate.",
       );
     }
-    const response = await api.post<unknown>("hr/Employees", {
-      companyId,
-      punchNumber: data.punchNumber,
-      employeeID: employeeID ?? null,
-      fullName: data.fullNameEn,
-      banglaName: data.fullNameBn || null,
-      gender: data.gender || null,
-      dateOfBirth: data.dateOfBirth || null,
-      nationalId: data.nid || null,
-      birthCertificateNo: null,
-      phone: data.phoneNumber || null,
-      email: data.email || null,
-      joinDate: data.joinDate,
-      employmentType: data.status === "Probation" ? "Probation" : "Permanent",
-      departmentId,
-      sectionId: sectionId || null,
-      designationId,
-      gradeId: null,
-      basicSalary: data.basicSalary ?? 0,
-      houseRent: data.houseRent ?? 0,
-      medicalAllowance: data.medicalAllowance ?? 0,
-      conveyanceAllowance: data.conveyance ?? 0,
-      foodAllowance: data.foodAllowance ?? 0,
-    });
-    const createdId = unwrapApiData<string>(response.data);
-    await syncEmployeeSubResources(createdId, data);
-    return createdId;
+    const workLocation = await resolveWorkLocation(data);
+    try {
+      const response = await api.post<unknown>("hr/Employees", {
+        companyId,
+        punchNumber: data.punchNumber,
+        employeeID: employeeID ?? null,
+        fullName: data.fullNameEn,
+        banglaName: data.fullNameBn || null,
+        gender: data.gender || null,
+        dateOfBirth: data.dateOfBirth || null,
+        nationalId: data.nid || null,
+        birthCertificateNo: null,
+        phone: data.phoneNumber || null,
+        email: data.email || null,
+        joinDate: data.joinDate,
+        employmentType: data.status === "Probation" ? "Probation" : "Permanent",
+        departmentId,
+        sectionId: sectionId || null,
+        designationId,
+        gradeId: null,
+        groupId: groupId || null,
+        workLocation: workLocation || null,
+        basicSalary: data.basicSalary ?? 0,
+        houseRent: data.houseRent ?? 0,
+        medicalAllowance: data.medicalAllowance ?? 0,
+        conveyanceAllowance: data.conveyance ?? 0,
+        foodAllowance: data.foodAllowance ?? 0,
+        isOtEnabled: data.isOtEnabled ?? true,
+        ...employeeProfilePayload(data),
+      });
+      const createdId = unwrapApiData<string>(response.data);
+      await syncEmployeeSubResources(createdId, data);
+      return createdId;
+    } catch (error) {
+      throw new Error(getHttpErrorMessage(error, "Failed to create employee"));
+    }
   },
 
   updateEmployee: async (
@@ -846,41 +1164,36 @@ export const employeeService = {
     const id = isGuid(employeeId)
       ? employeeId
       : await resolveEmployeeGuid(employeeId, companyId);
-    await api.put(`hr/Employees/${encodeURIComponent(id)}`, {
-      fullName: data.fullNameEn,
-      banglaName: data.fullNameBn || null,
-      gender: data.gender || null,
-      dateOfBirth: data.dateOfBirth || null,
-      nationalId: data.nid || null,
-      birthCertificateNo: null,
-      phone: data.phoneNumber || null,
-      email: data.email || null,
-      joinDate: data.joinDate,
-      employmentType: data.status === "Probation" ? "Probation" : "Permanent",
-      status: data.status || (data.isActive ? "Active" : "Inactive"),
-    });
 
-    if (
-      data.basicSalary !== undefined ||
-      data.houseRent !== undefined ||
-      data.medicalAllowance !== undefined ||
-      data.conveyance !== undefined ||
-      data.foodAllowance !== undefined
-    ) {
-      await employeeService.updateSalary(id, {
+    try {
+      await api.put(`hr/Employees/${encodeURIComponent(id)}`, {
+        fullName: data.fullNameEn,
+        banglaName: data.fullNameBn || null,
+        gender: data.gender || null,
+        dateOfBirth: data.dateOfBirth || null,
+        nationalId: data.nid || null,
+        birthCertificateNo: null,
+        phone: data.phoneNumber || null,
+        email: data.email || null,
+        joinDate: data.joinDate,
+        employmentType: data.status === "Probation" ? "Probation" : "Permanent",
+        status: data.status || (data.isActive ? "Active" : "Inactive"),
+        isOtEnabled: data.isOtEnabled ?? true,
         basicSalary: data.basicSalary ?? 0,
         houseRent: data.houseRent ?? 0,
         medicalAllowance: data.medicalAllowance ?? 0,
         conveyanceAllowance: data.conveyance ?? 0,
         foodAllowance: data.foodAllowance ?? 0,
-        effectiveFrom: new Date().toISOString(),
+        ...employeeProfilePayload(data),
       });
+
+      const fresh = await fetchHrEmployeeDetails(id);
+      await syncEmployeeSubResources(id, data, fresh);
+
+      return { success: true };
+    } catch (error) {
+      throw new Error(getHttpErrorMessage(error, "Failed to update employee"));
     }
-
-    const existing = await fetchHrEmployeeDetails(id);
-    await syncEmployeeSubResources(id, data, existing);
-
-    return { success: true };
   },
 
   deleteEmployee: async (employeeId: string, companyId: number) => {
@@ -963,6 +1276,7 @@ export const employeeService = {
       departmentId?: number;
       sectionId?: number;
       designationId?: number;
+      groupId?: number;
       gradeId?: string;
       supervisorId?: string;
       workLocation?: string;
@@ -982,6 +1296,7 @@ export const employeeService = {
       designationId: data.designationId
         ? await resolveDesignationGuid(data.designationId)
         : null,
+      groupId: data.groupId ? await resolveGroupGuid(data.groupId) : null,
       gradeId: data.gradeId || null,
       supervisorId: data.supervisorId || null,
       workLocation: data.workLocation || null,
@@ -1000,11 +1315,22 @@ export const employeeService = {
   },
 
   getEmployeeTransfers: async (employeeId: string, companyId?: number) => {
-    const id = await resolveEmployeeGuid(employeeId, companyId);
-    const response = await api.get<unknown>(
-      `hr/Employees/${encodeURIComponent(id)}/transfers`,
-    );
-    return unwrapApiData<HrTransferItem[]>(response.data) ?? [];
+    const id = isGuid(employeeId)
+      ? employeeId
+      : await resolveEmployeeGuid(employeeId, companyId);
+    try {
+      const response = await api.get<unknown>(
+        `hr/Employees/${encodeURIComponent(id)}/transfers`,
+      );
+      return unwrapApiData<HrTransferItem[]>(response.data) ?? [];
+    } catch {
+      const paged = await employeeService.listTransfers({
+        companyId,
+        employeeId: id,
+        pageSize: 200,
+      });
+      return paged?.items ?? [];
+    }
   },
 
   listTransfers: async (params?: {

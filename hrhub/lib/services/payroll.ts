@@ -1,8 +1,6 @@
 import api from "../api";
 import { platformApiUrl, unwrapResponse, downloadBlob } from "./api-helpers";
 import type {
-  PayrollPolicyDto,
-  PayrollPeriodDto,
   SalarySheetRowDto,
   PayrollSummaryDto,
   PayrollSummaryBreakdownDto,
@@ -20,15 +18,17 @@ import type {
   FinalSettlementDto,
   DailySalarySheetRowDto,
   PayrollBonusRowDto,
-  PayrollLockCheckDto,
   PayrollApprovalRequest,
   PayrollProcessRequest,
+  PayrollPolicyTemplateDto,
+  CompanyPayrollPolicyAssignmentDto,
+  CompanyPayrollPolicySummaryDto,
+  AssignCompanyPayrollPolicyRequest,
 } from "./payroll-types";
 
 export type {
-  PayrollPolicyDto,
-  PayrollPeriodDto,
   SalarySheetRowDto,
+  SalaryProcessingMode,
   PayrollSummaryDto,
   PayrollSummaryBreakdownDto,
   EmployeePayrollDto,
@@ -199,20 +199,6 @@ async function downloadExport(path: string, params: Record<string, unknown>, fil
 }
 
 export const payrollService = {
-  // Policies
-  createPayrollPolicy: (data: Record<string, unknown>) =>
-    api.post(platformApiUrl("/api/v1/payroll-policies"), data).then((r) => unwrapResponse<PayrollPolicyDto>(r)),
-  getPayrollPolicies: (companyId?: string) =>
-    api.get(platformApiUrl("/api/v1/payroll-policies"), { params: { companyId } }).then((r) => unwrapResponse<PayrollPolicyDto[]>(r)),
-  getPayrollPolicyById: (id: string) =>
-    api.get(platformApiUrl(`/api/v1/payroll-policies/${encodeURIComponent(id)}`)).then((r) => unwrapResponse<PayrollPolicyDto>(r)),
-  updatePayrollPolicy: (id: string, data: Record<string, unknown>) =>
-    api.put(platformApiUrl(`/api/v1/payroll-policies/${encodeURIComponent(id)}`), data).then((r) => unwrapResponse<PayrollPolicyDto>(r)),
-  activatePayrollPolicy: (id: string) =>
-    api.patch(platformApiUrl(`/api/v1/payroll-policies/${encodeURIComponent(id)}/activate`)).then((r) => unwrapResponse<PayrollPolicyDto>(r)),
-  deactivatePayrollPolicy: (id: string) =>
-    api.patch(platformApiUrl(`/api/v1/payroll-policies/${encodeURIComponent(id)}/deactivate`)).then((r) => unwrapResponse<PayrollPolicyDto>(r)),
-
   // Structures
   createSalaryStructure: (data: Record<string, unknown>) =>
     api.post(platformApiUrl("/api/v1/salary-structures"), data).then((r) => unwrapResponse<SalaryStructureDto>(r)),
@@ -231,47 +217,37 @@ export const payrollService = {
   getEmployeeSalaryHistory: (employeeId: string, companyId: string) =>
     api.get(platformApiUrl(`/api/v1/employee-salaries/${encodeURIComponent(employeeId)}/history`), { params: { companyId } }).then((r) => unwrapResponse<EmployeeSalaryDto[]>(r)),
 
-  // Periods
-  createPayrollPeriod: (data: Record<string, unknown>) =>
-    api.post(platformApiUrl("/api/v1/payroll-periods"), data).then((r) => unwrapResponse<PayrollPeriodDto>(r)),
-  getPayrollPeriods: (companyId?: string) =>
-    api.get(platformApiUrl("/api/v1/payroll-periods"), { params: { companyId } }).then((r) => unwrapResponse<PayrollPeriodDto[]>(r)),
-  closePayrollPeriod: (id: string, data: PayrollApprovalRequest) =>
-    api.patch(platformApiUrl(`/api/v1/payroll-periods/${encodeURIComponent(id)}/close`), data).then((r) => unwrapResponse<PayrollPeriodDto>(r)),
-  lockPayrollPeriod: (id: string, data: { lockedBy: string; remarks?: string | null }) =>
-    api.patch(platformApiUrl(`/api/v1/payroll-periods/${encodeURIComponent(id)}/lock`), data).then((r) => unwrapResponse<PayrollPeriodDto>(r)),
-  unlockPayrollPeriod: (id: string, data: { unlockedBy: string; unlockReason: string }) =>
-    api.patch(platformApiUrl(`/api/v1/payroll-periods/${encodeURIComponent(id)}/unlock`), data).then((r) => unwrapResponse<PayrollPeriodDto>(r)),
-
   // Process
   processPayroll: (data: PayrollProcessRequest) =>
     api.post(platformApiUrl("/api/v1/payroll/process"), data).then((r) => unwrapResponse<PayrollSummaryDto>(r)),
   reprocessPayroll: (data: PayrollProcessRequest) =>
     api.post(platformApiUrl("/api/v1/payroll/reprocess"), data).then((r) => unwrapResponse<PayrollSummaryDto>(r)),
-  getPayrollByPeriod: (periodId: string, params?: Record<string, unknown>) =>
-    api.get(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}`), { params }).then((r) => unwrapResponse<EmployeePayrollDto[]>(r)),
-  getEmployeePayroll: (periodId: string, employeeId: string) =>
-    api.get(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/employees/${encodeURIComponent(employeeId)}`)).then((r) => unwrapResponse<EmployeePayrollDto>(r)),
-  getSalarySheetByPeriod: (periodId: string, params?: Record<string, unknown>) =>
-    api.get(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/salary-sheet`), { params }).then((r) => unwrapResponse<SalarySheetRowDto[]>(r)),
-  getBankSheetByPeriod: (periodId: string) =>
-    api.get(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/bank-sheet`)).then((r) => unwrapResponse<BankSheetRowDto[]>(r)),
-  getPayslipsByPeriod: (periodId: string) =>
-    api.get(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/payslips`)).then((r) => unwrapResponse<EmployeePayrollDto[]>(r)),
-  getPayslipByPeriod: (periodId: string, employeeId: string) =>
-    api.get(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/payslips/${encodeURIComponent(employeeId)}`)).then((r) => unwrapResponse<PayslipDto>(r)),
-  getPayrollSummary: (periodId: string) =>
-    api.get(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/summary`)).then((r) => unwrapResponse<PayrollSummaryDto>(r)),
-  getPayrollSummaryBreakdown: (periodId: string) =>
-    api.get(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/summary/breakdown`)).then((r) => unwrapResponse<PayrollSummaryBreakdownDto>(r)),
-  submitPayroll: (periodId: string, data: PayrollApprovalRequest) =>
-    api.post(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/submit`), data).then((r) => unwrapResponse<PayrollPeriodDto>(r)),
-  approvePayroll: (periodId: string, data: PayrollApprovalRequest) =>
-    api.patch(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/approve`), data).then((r) => unwrapResponse<PayrollPeriodDto>(r)),
-  rejectPayroll: (periodId: string, data: PayrollApprovalRequest) =>
-    api.patch(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(periodId)}/reject`), data).then((r) => unwrapResponse<PayrollPeriodDto>(r)),
-  checkPayrollLock: (params: { companyId: string; year: number; month: number }) =>
-    api.get(platformApiUrl("/api/v1/payroll-locks/check"), { params }).then((r) => unwrapResponse<PayrollLockCheckDto>(r)),
+  getPayrollEmployees: (companyId: string, yearNo: number, monthNo: number, params?: Record<string, unknown>) =>
+    api.get(platformApiUrl("/api/v1/payroll/employees"), { params: { companyId, yearNo, monthNo, ...params } }).then((r) => unwrapResponse<EmployeePayrollDto[]>(r)),
+  getEmployeePayroll: (companyId: string, yearNo: number, monthNo: number, employeeId: string) =>
+    api.get(platformApiUrl(`/api/v1/payroll/employees/${encodeURIComponent(employeeId)}`), { params: { companyId, yearNo, monthNo } }).then((r) => unwrapResponse<EmployeePayrollDto[]>(r)),
+  getSalarySheet: (companyId: string, yearNo: number, monthNo: number, params?: Record<string, unknown>) =>
+    api.get(platformApiUrl("/api/v1/payroll/salary-sheet"), { params: { companyId, yearNo, monthNo, ...params } }).then((r) => unwrapResponse<SalarySheetRowDto[]>(r)),
+  getBankSheet: (companyId: string, yearNo: number, monthNo: number) =>
+    api.get(platformApiUrl("/api/v1/payroll/bank-sheet"), { params: { companyId, yearNo, monthNo } }).then((r) => unwrapResponse<BankSheetRowDto[]>(r)),
+  getPayslips: (companyId: string, yearNo: number, monthNo: number) =>
+    api.get(platformApiUrl("/api/v1/payroll/payslips"), { params: { companyId, yearNo, monthNo } }).then((r) => unwrapResponse<EmployeePayrollDto[]>(r)),
+  getPayslip: (companyId: string, yearNo: number, monthNo: number, employeeId: string) =>
+    api.get(platformApiUrl(`/api/v1/payroll/payslips/${encodeURIComponent(employeeId)}`), { params: { companyId, yearNo, monthNo } }).then((r) => unwrapResponse<PayslipDto>(r)),
+  getPayrollSummary: (companyId: string, yearNo: number, monthNo: number) =>
+    api.get(platformApiUrl("/api/v1/payroll/summary"), { params: { companyId, yearNo, monthNo } }).then((r) => unwrapResponse<PayrollSummaryDto>(r)),
+  getPayrollSummaryBreakdown: (companyId: string, yearNo: number, monthNo: number) =>
+    api.get(platformApiUrl("/api/v1/payroll/summary/breakdown"), { params: { companyId, yearNo, monthNo } }).then((r) => unwrapResponse<PayrollSummaryBreakdownDto>(r)),
+  getCompanyPayrollPolicy: (companyId: string) =>
+    api.get(platformApiUrl("/api/v1/payroll/company-policy"), { params: { companyId } }).then((r) => unwrapResponse<CompanyPayrollPolicySummaryDto | null>(r)),
+
+  // SuperAdmin policy admin
+  getPayrollPolicyTemplates: () =>
+    api.get(platformApiUrl("/api/v1/admin/payroll/policy-templates")).then((r) => unwrapResponse<PayrollPolicyTemplateDto[]>(r)),
+  getAdminCompanyPayrollPolicy: (companyId: string) =>
+    api.get(platformApiUrl(`/api/v1/admin/payroll/company-policy/${encodeURIComponent(companyId)}`)).then((r) => unwrapResponse<CompanyPayrollPolicyAssignmentDto | null>(r)),
+  assignCompanyPayrollPolicy: (data: AssignCompanyPayrollPolicyRequest) =>
+    api.post(platformApiUrl("/api/v1/admin/payroll/company-policy/assign"), data).then((r) => unwrapResponse<CompanyPayrollPolicyAssignmentDto>(r)),
 
   // Advances
   createSalaryAdvance: (data: Record<string, unknown>) =>
@@ -391,8 +367,8 @@ export const payrollService = {
     api.post(platformApiUrl("/api/v1/payroll/bonuses/process-festival"), data).then((r) => unwrapResponse<FestivalBonusSummary>(r)),
   deleteBonus: (employeePayrollId: string) =>
     api.delete(platformApiUrl(`/api/v1/payroll/bonuses/${encodeURIComponent(employeePayrollId)}`)).then((r) => unwrapResponse<boolean>(r)),
-  getFestivalBonusBankSheet: (periodId: string) =>
-    api.get(platformApiUrl("/api/v1/payroll/bonuses/bank-sheet"), { params: { periodId } }).then((r) => unwrapResponse<{ employeeId: string; employeeName?: string; bankAccountNo?: string; bankName?: string; netPayable: number }[]>(r)),
+  getFestivalBonusBankSheet: (companyId: string, yearNo: number, monthNo: number) =>
+    api.get(platformApiUrl("/api/v1/payroll/bonuses/bank-sheet"), { params: { companyId, yearNo, monthNo } }).then((r) => unwrapResponse<{ employeeId: string; employeeName?: string; bankAccountNo?: string; bankName?: string; netPayable: number }[]>(r)),
 
   // Legacy-compatible helpers for existing pages
   getMonthlySheet: async (params: {
@@ -407,7 +383,7 @@ export const payrollService = {
     searchTerm?: string;
     status?: string;
   }) => {
-    const { findOrCreatePayrollPeriod, mapSalarySheetRow, companyGuidFromSelection } = await import("@/lib/payroll-utils");
+    const { payrollMonthKey, mapSalarySheetRow, companyGuidFromSelection } = await import("@/lib/payroll-utils");
     const { companyService } = await import("@/lib/services/company");
     let guid = params.companyGuid;
     if (!guid && params.companyId) {
@@ -415,19 +391,16 @@ export const payrollService = {
       guid = companyGuidFromSelection(companies, String(params.companyId));
     }
     if (!guid) return [];
-    const period = await findOrCreatePayrollPeriod(guid, params.year, params.month);
-    const response = await api.get(platformApiUrl(`/api/v1/payroll/${encodeURIComponent(period.id)}/salary-sheet`), {
-      params: {
-        departmentId: params.departmentId,
-        sectionId: params.sectionId,
-        designationId: params.designationId,
-        lineId: params.lineId,
-        searchTerm: params.searchTerm,
-        status: params.status,
-      },
+    const rows = await payrollService.getSalarySheet(guid, params.year, params.month, {
+      departmentId: params.departmentId,
+      sectionId: params.sectionId,
+      designationId: params.designationId,
+      lineId: params.lineId,
+      searchTerm: params.searchTerm,
+      status: params.status,
     });
-    const rows = unwrapResponse<SalarySheetRowDto[]>(response);
-    return rows.map((r) => mapSalarySheetRow(r, period.id, params.year, params.month));
+    const key = payrollMonthKey(guid, params.year, params.month);
+    return rows.map((r) => mapSalarySheetRow(r, key, params.year, params.month));
   },
 
   processSalary: async (data: {
@@ -438,7 +411,7 @@ export const payrollService = {
     processedBy?: string;
     departmentId?: number;
   }): Promise<PayrollSummaryDto & { message?: string }> => {
-    const { findOrCreatePayrollPeriod, companyGuidFromSelection } = await import("@/lib/payroll-utils");
+    const { companyGuidFromSelection } = await import("@/lib/payroll-utils");
     const { companyService } = await import("@/lib/services/company");
     let guid = data.companyGuid;
     if (!guid && data.companyId) {
@@ -446,7 +419,6 @@ export const payrollService = {
       guid = companyGuidFromSelection(companies, String(data.companyId));
     }
     if (!guid) throw new Error("Company is required");
-    await findOrCreatePayrollPeriod(guid, data.year, data.month);
     const result = await payrollService.processPayroll({
       companyId: guid,
       yearNo: data.year,
@@ -457,7 +429,7 @@ export const payrollService = {
   },
 
   getSummary: async (year: number, month: number, companyId?: number, companyGuid?: string): Promise<SalarySummary> => {
-    const { findOrCreatePayrollPeriod, companyGuidFromSelection } = await import("@/lib/payroll-utils");
+    const { companyGuidFromSelection } = await import("@/lib/payroll-utils");
     const { companyService } = await import("@/lib/services/company");
     let guid = companyGuid;
     if (!guid && companyId) {
@@ -467,8 +439,7 @@ export const payrollService = {
     if (!guid) {
       return { totalGrossSalary: 0, totalOTAmount: 0, totalDeductions: 0, totalNetPayable: 0, totalEmployees: 0, departmentSummaries: [], sectionSummaries: [], lineSummaries: [], groupSummaries: [] };
     }
-    const period = await findOrCreatePayrollPeriod(guid, year, month);
-    const breakdown = await payrollService.getPayrollSummaryBreakdown(period.id);
+    const breakdown = await payrollService.getPayrollSummaryBreakdown(guid, year, month);
     return {
       totalGrossSalary: breakdown.summary.grossSalary,
       totalOTAmount: breakdown.departmentSummaries.reduce((s, x) => s + x.totalOTAmount, 0),
@@ -482,8 +453,11 @@ export const payrollService = {
     };
   },
 
-  getPayslip: async (periodId: string, employeeId: string): Promise<Payslip> => {
-    const dto = await payrollService.getPayslipByPeriod(periodId, employeeId);
+  getLegacyPayslip: async (periodId: string, employeeId: string): Promise<Payslip> => {
+    const { parsePayrollMonthKey } = await import("@/lib/payroll-utils");
+    const parsed = parsePayrollMonthKey(periodId);
+    if (!parsed) throw new Error("Invalid payroll month key");
+    const dto = await payrollService.getPayslip(parsed.companyId, parsed.year, parsed.month, employeeId);
     const p = dto.payroll;
     return {
       periodId,
@@ -492,8 +466,8 @@ export const payrollService = {
       employeeName: "",
       department: "",
       designation: "",
-      year: 0,
-      month: 0,
+      year: parsed.year,
+      month: parsed.month,
       grossSalary: p.grossSalary,
       basicSalary: p.basicSalary,
       totalDays: p.totalDays,
@@ -626,8 +600,8 @@ export const payrollService = {
 
   createIncrement: (data: Record<string, unknown>) => payrollService.createSalaryIncrement(data),
 
-  getBankSheet: async (params: { year: number; month: number; companyId?: number; companyGuid?: string; departmentId?: number; searchTerm?: string }) => {
-    const { findOrCreatePayrollPeriod, mapBankSheetRow, companyGuidFromSelection } = await import("@/lib/payroll-utils");
+  getLegacyBankSheet: async (params: { year: number; month: number; companyId?: number; companyGuid?: string; departmentId?: number; searchTerm?: string }) => {
+    const { mapBankSheetRow, companyGuidFromSelection } = await import("@/lib/payroll-utils");
     const { companyService } = await import("@/lib/services/company");
     let guid = params.companyGuid;
     if (!guid && params.companyId) {
@@ -635,8 +609,7 @@ export const payrollService = {
       guid = companyGuidFromSelection(companies, String(params.companyId));
     }
     if (!guid) return [];
-    const period = await findOrCreatePayrollPeriod(guid, params.year, params.month);
-    const rows = await payrollService.getBankSheetByPeriod(period.id);
+    const rows = await payrollService.getBankSheet(guid, params.year, params.month);
     return rows.map((r) => mapBankSheetRow(r));
   },
 
@@ -726,7 +699,7 @@ async function resolvePeriodExportParams(params: {
   companyId?: number;
   companyGuid?: string;
 }): Promise<Record<string, unknown>> {
-  const { findOrCreatePayrollPeriod, companyGuidFromSelection } = await import("@/lib/payroll-utils");
+  const { companyGuidFromSelection } = await import("@/lib/payroll-utils");
   const { companyService } = await import("@/lib/services/company");
   let guid = params.companyGuid;
   if (!guid && params.companyId) {
@@ -734,8 +707,7 @@ async function resolvePeriodExportParams(params: {
     guid = companyGuidFromSelection(companies, String(params.companyId));
   }
   if (!guid) return {};
-  const period = await findOrCreatePayrollPeriod(guid, params.year, params.month);
-  return { periodId: period.id };
+  return { companyId: guid, yearNo: params.year, monthNo: params.month };
 }
 
 async function resolveCompanyGuid(companyId: number): Promise<string | undefined> {

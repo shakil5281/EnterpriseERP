@@ -1,4 +1,5 @@
 import api from "@/lib/api"
+import { platformApiUrl, unwrapResponse, downloadBlob } from "./api-helpers"
 
 export interface BillDto {
   id: number
@@ -15,6 +16,7 @@ export interface BillDto {
   companyName: string
   inTime?: string
   outTime?: string
+  tiffinCount?: number
 }
 
 export interface BillSummaryDto {
@@ -28,40 +30,104 @@ export interface BillResponseDto {
   records: BillDto[]
 }
 
+function mapRecord(r: BillDto & { tiffinCount?: number | null }): BillDto {
+  return {
+    id: r.id,
+    employeeCard: r.employeeCard,
+    employeeId: r.employeeId,
+    employeeName: r.employeeName,
+    department: r.department,
+    designation: r.designation,
+    date: r.date,
+    amount: r.amount,
+    status: r.status,
+    createdAt: r.createdAt,
+    shiftName: r.shiftName,
+    companyName: r.companyName,
+    inTime: r.inTime,
+    outTime: r.outTime,
+    tiffinCount: r.tiffinCount ?? undefined,
+  }
+}
+
 const createBillService = (endpoint: string) => ({
-  getAll: async (params: any): Promise<BillResponseDto> => {
-    const response = await api.get(`/${endpoint}`, { params })
-    return response.data
+  getAll: async (params: {
+    companyId: string
+    fromDate: string
+    toDate: string
+    departmentId?: string
+    employeeType?: string
+    searchTerm?: string
+  }): Promise<BillResponseDto> => {
+    const response = await api.get<unknown>(platformApiUrl(`/api/v1/${endpoint}`), {
+      params: {
+        companyId: params.companyId,
+        fromDate: params.fromDate,
+        toDate: params.toDate,
+        departmentId: params.departmentId,
+        employeeType: params.employeeType && params.employeeType !== "all" ? params.employeeType : undefined,
+        searchTerm: params.searchTerm,
+      },
+    })
+    const raw = unwrapResponse<{
+      summary: BillSummaryDto
+      records: BillDto[]
+    }>(response)
+    return {
+      summary: raw.summary,
+      records: (raw.records ?? []).map(mapRecord),
+    }
   },
-  process: async (data: any) => {
-    const response = await api.post(`/${endpoint}/process`, data)
-    return response.data
+  process: async (data: {
+    companyId: string
+    fromDate: string
+    toDate: string
+    departmentId?: string
+    employeeType?: string
+    searchTerm?: string
+  }) => {
+    const response = await api.post<unknown>(platformApiUrl(`/api/v1/${endpoint}/process`), {
+      companyId: data.companyId,
+      fromDate: data.fromDate,
+      toDate: data.toDate,
+      departmentId: data.departmentId || null,
+      employeeType: data.employeeType && data.employeeType !== "all" ? data.employeeType : null,
+      searchTerm: data.searchTerm || null,
+    })
+    return unwrapResponse<number>(response)
   },
   delete: async (id: number) => {
-    const response = await api.delete(`/${endpoint}/${id}`)
-    return response.data
+    const response = await api.delete<unknown>(platformApiUrl(`/api/v1/${endpoint}/${id}`))
+    return unwrapResponse<boolean>(response)
   },
   deleteMultiple: async (ids: number[]) => {
-    const response = await api.post(`/${endpoint}/delete-multiple`, ids)
-    return response.data
+    const response = await api.post<unknown>(platformApiUrl(`/api/v1/${endpoint}/delete-multiple`), { ids })
+    return unwrapResponse<number>(response)
   },
-  export: async (params: any) => {
-    const response = await api.get(`/${endpoint}/export`, {
-      params,
+  export: async (params: {
+    companyId: string
+    fromDate: string
+    toDate: string
+    departmentId?: string
+    employeeType?: string
+    searchTerm?: string
+  }) => {
+    const response = await api.get(platformApiUrl(`/api/v1/${endpoint}/export`), {
+      params: {
+        companyId: params.companyId,
+        fromDate: params.fromDate,
+        toDate: params.toDate,
+        departmentId: params.departmentId,
+        employeeType: params.employeeType && params.employeeType !== "all" ? params.employeeType : undefined,
+        searchTerm: params.searchTerm,
+      },
       responseType: "blob",
     })
-
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    const link = document.createElement("a")
-    link.href = url
-    link.setAttribute("download", `${endpoint}_reports_${new Date().toISOString().split("T")[0]}.xlsx`)
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
+    downloadBlob(response.data, `${endpoint}_${new Date().toISOString().split("T")[0]}.csv`, "text/csv")
   },
 })
 
-export const nightBillService = createBillService("NightBill")
-export const tiffinBillService = createBillService("TiffinBill")
-export const ifterBillService = createBillService("IfterBill")
-export const holidayBillService = createBillService("HolidayBill")
+export const nightBillService = createBillService("night-bills")
+export const tiffinBillService = createBillService("tiffin-bills")
+export const ifterBillService = createBillService("ifter-bills")
+export const holidayBillService = createBillService("holiday-bills")

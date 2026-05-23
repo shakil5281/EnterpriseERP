@@ -35,12 +35,14 @@ public static class DependencyInjection
         }
 
         services.AddScoped<IAttendanceProcessingService, AttendanceProcessingService>();
+        services.AddScoped<IDailyAttendanceProcessOrchestrator, DailyAttendanceProcessOrchestrator>();
+        services.AddScoped<IAttendanceBillService, AttendanceBillService>();
         services.AddScoped<IAttendanceDbContext>(provider => provider.GetRequiredService<AttendanceDbContext>());
         services.AddSingleton<IPunchCompanyIdResolver, PunchCompanyIdResolver>();
 
         services.AddHttpClient<IShiftServiceClient, ShiftServiceClient>(client =>
         {
-            client.BaseAddress = new Uri(configuration["ExternalServices:ShiftServiceUrl"] ?? "http://localhost:5005/");
+            client.BaseAddress = new Uri(configuration["ExternalServices:ShiftServiceUrl"] ?? "http://127.0.0.1:5000/api/v1/");
         });
 
         return services;

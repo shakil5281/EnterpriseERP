@@ -1,10 +1,24 @@
 "use client"
 
 import * as React from "react"
-import { format, subDays } from "date-fns"
-import { DateRange } from "react-day-picker"
+import { format, startOfDay, startOfMonth, subDays } from "date-fns"
+import { DateRange, Matcher } from "react-day-picker"
 import { Label } from "@/components/ui/label"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
+
+export type PunchDateRangePreset = "lastDays" | "currentMonthToToday"
+
+/** First day of the current calendar month through today (local). */
+export function getCurrentMonthToTodayRange(): DateRange {
+  const today = startOfDay(new Date())
+  return { from: startOfMonth(today), to: today }
+}
+
+function currentMonthDisabledMatchers(): Matcher[] {
+  const today = startOfDay(new Date())
+  const monthStart = startOfMonth(today)
+  return [{ before: monthStart }, { after: today }]
+}
 
 export type PunchDateRangeValue = {
   from?: Date
@@ -13,15 +27,10 @@ export type PunchDateRangeValue = {
   toIso?: string
 }
 
-function toDhakaOffsetIso(date: Date, endOfDay: boolean): string {
-  const d = new Date(date)
-  if (endOfDay) {
-    d.setHours(23, 59, 59, 999)
-  } else {
-    d.setHours(0, 0, 0, 0)
-  }
-  const offsetMs = 6 * 60 * 60 * 1000
-  return new Date(d.getTime() - offsetMs).toISOString()
+/** Calendar-day bounds for punch queries (wall-clock, matches PunchData ParsePunchTime). */
+function toPunchRangeIso(date: Date, endOfDay: boolean): string {
+  const day = format(date, "yyyy-MM-dd")
+  return endOfDay ? `${day}T23:59:59` : `${day}T00:00:00`
 }
 
 export function punchRangeToIso(range: DateRange | undefined): PunchDateRangeValue {
@@ -31,8 +40,8 @@ export function punchRangeToIso(range: DateRange | undefined): PunchDateRangeVal
   return {
     from,
     to,
-    fromIso: toDhakaOffsetIso(from, false),
-    toIso: toDhakaOffsetIso(to, true),
+    fromIso: toPunchRangeIso(from, false),
+    toIso: toPunchRangeIso(to, true),
   }
 }
 
@@ -40,7 +49,10 @@ type PunchDateRangeFilterProps = {
   value: DateRange | undefined
   onChange: (range: DateRange | undefined, iso: PunchDateRangeValue) => void
   label?: string
+  /** Used when preset is `lastDays` (default). */
   defaultDays?: number
+  /** `currentMonthToToday`: default 1st of month → today; calendar limited to this month. */
+  preset?: PunchDateRangePreset
 }
 
 export function PunchDateRangeFilter({
@@ -48,16 +60,22 @@ export function PunchDateRangeFilter({
   onChange,
   label = "Date range",
   defaultDays = 7,
+  preset = "lastDays",
 }: PunchDateRangeFilterProps) {
+  const monthOnly = preset === "currentMonthToToday"
+
   React.useEffect(() => {
     if (!value?.from) {
-      const from = subDays(new Date(), defaultDays)
-      const to = new Date()
-      const range = { from, to }
+      const range =
+        monthOnly
+          ? getCurrentMonthToTodayRange()
+          : { from: subDays(new Date(), defaultDays), to: new Date() }
       onChange(range, punchRangeToIso(range))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const today = startOfDay(new Date())
 
   return (
     <div className="space-y-2">
@@ -65,11 +83,17 @@ export function PunchDateRangeFilter({
       <DateRangePicker
         date={value}
         setDate={(range) => onChange(range, punchRangeToIso(range))}
+        placeholder={monthOnly ? "Select dates this month" : undefined}
+        defaultMonth={monthOnly ? startOfMonth(today) : value?.from}
+        numberOfMonths={monthOnly ? 1 : 2}
+        disabled={monthOnly ? currentMonthDisabledMatchers() : undefined}
+        fromDate={monthOnly ? startOfMonth(today) : undefined}
+        toDate={monthOnly ? today : undefined}
       />
       {value?.from && (
         <p className="text-[10px] text-muted-foreground font-mono">
-          {format(value.from, "yyyy-MM-dd")}
-          {value.to ? ` → ${format(value.to, "yyyy-MM-dd")}` : ""}
+          {format(value.from, "dd MMM yyyy")}
+          {value.to ? ` → ${format(value.to, "dd MMM yyyy")}` : ""}
         </p>
       )}
     </div>

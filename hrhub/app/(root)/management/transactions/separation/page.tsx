@@ -9,7 +9,7 @@ export default function SeparationRedirectPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/management/human-resource/employee-status");
+    router.replace("/management/human-resource/separations");
   }, [router]);
 
   return (

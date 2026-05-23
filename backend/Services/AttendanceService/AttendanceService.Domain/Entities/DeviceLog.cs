@@ -10,5 +10,5 @@ public sealed class DeviceLog
     public DateTime PunchTime { get; set; }
     public string? DeviceSerial { get; set; }
     public bool IsProcessed { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
 }

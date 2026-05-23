@@ -13,7 +13,11 @@ import {
 import { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/data-table"
 import { PunchCompanySelect } from "@/components/punch-data/punch-company-select"
-import { PunchDateRangeFilter, punchRangeToIso } from "@/components/punch-data/punch-date-range-filter"
+import {
+    PunchDateRangeFilter,
+    getCurrentMonthToTodayRange,
+    punchRangeToIso,
+} from "@/components/punch-data/punch-date-range-filter"
 import { PunchStatusBadge } from "@/components/punch-data/punch-status-badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -26,6 +30,7 @@ import {
     type RemoteCollectResult,
     type RemoteCollectStatus,
 } from "@/lib/services/punch-data"
+import { attendanceApi } from "@/lib/services/attendance-api"
 import { toast } from "sonner"
 
 function formatDateTime(value?: string | null): string {
@@ -38,8 +43,12 @@ function formatDateTime(value?: string | null): string {
 export default function RemoteCollectPage() {
     const [companyEntityId, setCompanyEntityId] = React.useState("")
     const [punchCompanyId, setPunchCompanyId] = React.useState(1)
-    const [range, setRange] = React.useState<DateRange | undefined>()
-    const [rangeIso, setRangeIso] = React.useState(punchRangeToIso(undefined))
+    const [range, setRange] = React.useState<DateRange | undefined>(() =>
+        getCurrentMonthToTodayRange(),
+    )
+    const [rangeIso, setRangeIso] = React.useState(() =>
+        punchRangeToIso(getCurrentMonthToTodayRange()),
+    )
     const [useWatermark, setUseWatermark] = React.useState(false)
     const [preview, setPreview] = React.useState<RemoteCollectPreview | null>(null)
     const [lastResult, setLastResult] = React.useState<RemoteCollectResult | null>(null)
@@ -125,6 +134,25 @@ export default function RemoteCollectPage() {
             })
             setLastResult(result)
             toast.success(`Collected ${result.inserted} new punch(es), ${result.duplicates} duplicate(s)`)
+
+            if (companyEntityId && result.inserted > 0 && rangeIso.fromIso && rangeIso.toIso) {
+                try {
+                    const batch = await attendanceApi.processRange({
+                        companyId: companyEntityId,
+                        startDate: rangeIso.fromIso.slice(0, 10),
+                        endDate: rangeIso.toIso.slice(0, 10),
+                    })
+                    toast.success(
+                        `Attendance updated: ${batch.createdCount ?? 0} created, ${batch.updatedCount ?? 0} updated`,
+                    )
+                } catch (processError) {
+                    console.error(processError)
+                    toast.warning(
+                        "Punches saved, but daily attendance process failed. Run Data Process → Daily Process for this date range.",
+                    )
+                }
+            }
+
             await loadHistoriesAndPunches()
             await loadRemoteStatus()
         } catch (error) {
@@ -233,8 +261,8 @@ export default function RemoteCollectPage() {
                                     setRange(r)
                                     setRangeIso(iso)
                                 }}
-                                defaultDays={62}
-                                label="Collect window"
+                                preset="currentMonthToToday"
+                                label="Collect window (this month)"
                             />
                             <label className="flex items-center gap-2 text-sm">
                                 <input

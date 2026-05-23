@@ -2,6 +2,8 @@ using PayrollService.Application;
 using PayrollService.Domain.Entities;
 using PayrollService.Infrastructure.Persistence;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace PayrollService.Infrastructure.Services;
 
 public sealed class SalaryIncrementService(PayrollDbContext db) : ISalaryIncrementService
@@ -19,12 +21,6 @@ public sealed class SalaryIncrementService(PayrollDbContext db) : ISalaryIncreme
             throw new InvalidOperationException("Only pending increment requests can be approved.");
         }
 
-        var locked = db.PayrollPeriods.Any(x => x.CompanyId == increment.CompanyId && x.IsPayrollLocked && x.StartDate <= increment.EffectiveFrom && x.EndDate >= increment.EffectiveFrom);
-        if (locked)
-        {
-            throw new InvalidOperationException("Backdated increment affects a locked payroll period.");
-        }
-
         foreach (var current in db.EmployeeSalaries.Where(x => x.CompanyId == increment.CompanyId && x.EmployeeId == increment.EmployeeId && x.IsCurrent))
         {
             current.IsCurrent = false;
@@ -37,6 +33,7 @@ public sealed class SalaryIncrementService(PayrollDbContext db) : ISalaryIncreme
             CompanyId = increment.CompanyId,
             EmployeeId = increment.EmployeeId,
             SalaryStructureId = old?.SalaryStructureId,
+            SalaryCalculationType = old?.SalaryCalculationType ?? "Monthly",
             GrossSalary = increment.NewGrossSalary,
             BasicSalary = increment.NewBasicSalary,
             HouseRent = old?.HouseRent ?? 0,
@@ -49,7 +46,7 @@ public sealed class SalaryIncrementService(PayrollDbContext db) : ISalaryIncreme
 
         increment.Status = "Approved";
         increment.ApprovedBy = approvedBy;
-        increment.ApprovedAt = DateTime.UtcNow;
+        increment.ApprovedAt = BusinessTime.Now;
         db.PayrollAuditLogs.Add(new PayrollAuditLog { CompanyId = increment.CompanyId, EntityName = nameof(SalaryIncrementRequestEntity), EntityId = increment.Id, Action = "Approved", ActorId = approvedBy });
         await db.SaveChangesAsync(cancellationToken);
     }

@@ -1,6 +1,8 @@
 using FinishingService.Domain;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace FinishingService.Application.Services;
 
 public sealed class FinishingBalanceService(IFinishingDbContext db) : IFinishingBalanceService
@@ -102,7 +104,7 @@ public sealed class FinishingBalanceService(IFinishingDbContext db) : IFinishing
         balance.BalanceQty = balance.FinishingReceiveQty - balance.TransferQty - balance.RejectQty - await db.FinishingWastages
             .Where(x => x.CompanyId == wastage.CompanyId && x.OrderId == wastage.OrderId && x.ColorName == wastage.ColorName && x.SizeName == wastage.SizeName)
             .SumAsync(x => x.WastageQty, cancellationToken);
-        balance.UpdatedAt = DateTime.UtcNow;
+        balance.UpdatedAt = BusinessTime.Now;
     }
 
     public async Task SyncSewingOutputAsync(Guid companyId, Guid orderId, string? colorName, string sizeName, int quantity, CancellationToken cancellationToken = default)
@@ -139,6 +141,6 @@ public sealed class FinishingBalanceService(IFinishingDbContext db) : IFinishing
     private static void Recalculate(FinishingBalance balance)
     {
         balance.BalanceQty = balance.FinishingReceiveQty - balance.TransferQty - balance.RejectQty;
-        balance.UpdatedAt = DateTime.UtcNow;
+        balance.UpdatedAt = BusinessTime.Now;
     }
 }

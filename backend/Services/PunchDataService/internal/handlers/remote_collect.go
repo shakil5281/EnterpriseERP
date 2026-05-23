@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,11 +49,38 @@ func NewRemoteCollectHandler(cfg RemoteCollectHandlerConfig, col *collector.Remo
 }
 
 type remoteCollectBody struct {
-	CompanyID    int        `json:"companyId"`
-	From         *time.Time `json:"from,omitempty"`
-	To           *time.Time `json:"to,omitempty"`
-	BatchSize    int        `json:"batchSize,omitempty"`
-	UseWatermark bool       `json:"useWatermark,omitempty"`
+	CompanyID    int    `json:"companyId"`
+	From         string `json:"from,omitempty"`
+	To           string `json:"to,omitempty"`
+	BatchSize    int    `json:"batchSize,omitempty"`
+	UseWatermark bool   `json:"useWatermark,omitempty"`
+}
+
+func decodeRemoteCollectBody(r io.Reader) (remoteCollectBody, error) {
+	var body remoteCollectBody
+	dec := json.NewDecoder(r)
+	if err := dec.Decode(&body); err != nil {
+		return body, err
+	}
+	return body, nil
+}
+
+func parseRemoteCollectRange(fromRaw, toRaw string) (from, to *time.Time, err error) {
+	if strings.TrimSpace(fromRaw) != "" {
+		t, parseErr := timeutil.ParseRangeTime(fromRaw)
+		if parseErr != nil {
+			return nil, nil, parseErr
+		}
+		from = &t
+	}
+	if strings.TrimSpace(toRaw) != "" {
+		t, parseErr := timeutil.ParseRangeTime(toRaw)
+		if parseErr != nil {
+			return nil, nil, parseErr
+		}
+		to = &t
+	}
+	return from, to, nil
 }
 
 func (h *RemoteCollectHandler) requireConfigured(c *gin.Context) bool {
@@ -115,8 +145,8 @@ func (h *RemoteCollectHandler) Collect(c *gin.Context) {
 		response.Fail(c, http.StatusBadGateway, response.Err("REMOTE_COLLECT_FAILED", err.Error()))
 		return
 	}
-	var body remoteCollectBody
-	if err := c.ShouldBindJSON(&body); err != nil {
+	body, err := decodeRemoteCollectBody(c.Request.Body)
+	if err != nil {
 		response.Fail(c, http.StatusBadRequest, response.Err("INVALID_BODY", err.Error()))
 		return
 	}
@@ -126,10 +156,16 @@ func (h *RemoteCollectHandler) Collect(c *gin.Context) {
 	}
 	body.CompanyID = companyID
 
+	from, to, err := parseRemoteCollectRange(body.From, body.To)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, response.Err("INVALID_RANGE", err.Error()))
+		return
+	}
+
 	result, err := col.Collect(c.Request.Context(), collector.RemoteCollectRequest{
 		CompanyID:    body.CompanyID,
-		From:         body.From,
-		To:           body.To,
+		From:         from,
+		To:           to,
 		BatchSize:    body.BatchSize,
 		UseWatermark: body.UseWatermark,
 	})
@@ -162,16 +198,16 @@ func (h *RemoteCollectHandler) Preview(c *gin.Context) {
 		response.Fail(c, http.StatusBadGateway, response.Err("REMOTE_PREVIEW_FAILED", err.Error()))
 		return
 	}
-	to := timeutil.Now()
+	to := timeutil.WallClock(timeutil.Now())
 	if v := c.Query("to"); v != "" {
-		if t, err := time.Parse(time.RFC3339, v); err == nil {
-			to = timeutil.InDhaka(t)
+		if t, err := timeutil.ParseRangeTime(v); err == nil {
+			to = t
 		}
 	}
 	from := to.Add(-24 * time.Hour)
 	if v := c.Query("from"); v != "" {
-		if t, err := time.Parse(time.RFC3339, v); err == nil {
-			from = timeutil.InDhaka(t)
+		if t, err := timeutil.ParseRangeTime(v); err == nil {
+			from = t
 		}
 	}
 	mapped, unmapped, err := col.PreviewDetail(c.Request.Context(), from, to)

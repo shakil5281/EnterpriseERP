@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AttendanceService.Application.Features.Attendance;
 
-internal static class AttendanceReportHelper
+public static class AttendanceReportHelper
 {
     public static AttendanceEmployeeFilter ToEmployeeFilter(AttendanceFilterDto filter) =>
         new(
@@ -72,6 +72,16 @@ internal static class AttendanceReportHelper
 
     public static bool IsPresent(AttendanceStatus status) =>
         status is AttendanceStatus.Present or AttendanceStatus.Late or AttendanceStatus.EarlyOut;
+
+    public static bool IsAbsent(AttendanceStatus status) =>
+        status == AttendanceStatus.Absent;
+
+    public static string FormatJobCardStatus(AttendanceStatus status) =>
+        status switch
+        {
+            AttendanceStatus.WeeklyOff => "Weekend",
+            _ => status.ToString()
+        };
 
     public static string ResolveMissingType(DailyAttendance row)
     {

@@ -71,7 +71,7 @@ export default function BankSheetPage() {
     const handleSearch = async () => {
         setIsLoading(true)
         try {
-            const data = await payrollService.getBankSheet({
+            const data = await payrollService.getLegacyBankSheet({
                 year,
                 month,
                 companyId: selectedCompanyId === "all" ? undefined : parseInt(selectedCompanyId),

@@ -14,10 +14,9 @@ public sealed class AQLCalculationTests
     {
         // Arrange
         var acceptQty = 1;
-        var rejectQty = 2;
 
         // Act
-        var result = totalDefects > acceptQty 
+        var result = totalDefects > acceptQty
             ? QualityInspectionResults.Failed 
             : QualityInspectionResults.Passed;
 

@@ -1,14 +1,18 @@
 using MediatR;
-using ShiftService.Application.DTOs;
-using ShiftService.Domain.Entities;
+using ShiftService.Application.Common;
 using ShiftService.Application.Common.Interfaces;
+using ShiftService.Domain.Entities;
+using ShiftService.Domain.Enums;
+
+using Erp.BuildingBlocks.SharedKernel;
 
 namespace ShiftService.Application.Features.Shifts.Commands;
 
 public record CreateShiftCommand(
-    Guid CompanyId, string ShiftCode, string ShiftName, string ShiftType,
+    Guid CompanyId, string ShiftName, string ShiftType,
+    ShiftCategory ShiftCategory,
     TimeSpan StartTime, TimeSpan EndTime, bool IsCrossDay, bool IsGeneralDuty,
-    bool IsDefault) : IRequest<Guid>;
+    bool IsDefault, int PunchWindowBeforeMinutes = 60, int? WeeklyOffDayOfWeek = null) : IRequest<Guid>;
 
 public class CreateShiftCommandHandler(IShiftDbContext db) : IRequestHandler<CreateShiftCommand, Guid>
 {
@@ -18,18 +22,27 @@ public class CreateShiftCommandHandler(IShiftDbContext db) : IRequestHandler<Cre
         {
             Id = Guid.NewGuid(),
             CompanyId = request.CompanyId,
-            ShiftCode = request.ShiftCode,
             ShiftName = request.ShiftName,
             ShiftType = request.ShiftType,
+            ShiftCategory = request.ShiftCategory,
+            PunchWindowBeforeMinutes = request.PunchWindowBeforeMinutes > 0 ? request.PunchWindowBeforeMinutes : 60,
             StartTime = request.StartTime,
             EndTime = request.EndTime,
             IsCrossDay = request.IsCrossDay,
             IsGeneralDuty = request.IsGeneralDuty,
             IsDefault = request.IsDefault,
-            CreatedAt = DateTimeOffset.UtcNow
+            WeeklyOffDayOfWeek = request.WeeklyOffDayOfWeek,
+            CreatedAt = BusinessTime.NowOffset
         };
 
+        ShiftPolicyTemplates.ApplyCategoryDefaults(shift);
+
+        var rule = ShiftPolicyTemplates.CreateDefaultRule(shift.CompanyId, shift.Id, shift.ShiftCategory);
+        var lunch = ShiftPolicyTemplates.CreateDefaultLunchBreak(shift.CompanyId, shift.Id, shift.StartTime);
+
         db.Shifts.Add(shift);
+        db.ShiftRules.Add(rule);
+        db.ShiftBreaks.Add(lunch);
         await db.SaveChangesAsync(cancellationToken);
         return shift.Id;
     }

@@ -9,6 +9,8 @@ using AttendanceService.Application.Features.Attendance.Queries;
 using AttendanceService.Application.DTOs;
 using Erp.BuildingBlocks.CommonResponses;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace AttendanceService.Api.Controllers;
 
 [ApiController]
@@ -57,7 +59,7 @@ public class AttendanceController(IMediator mediator, ITenantContext tenant) : C
     {
         var data = await mediator.Send(new GetDailyReportQuery(q.ToFilter()));
         var csv = BuildDailyReportCsv(data);
-        return File(Encoding.UTF8.GetBytes(csv), "text/csv", $"daily-report-{DateTime.UtcNow:yyyyMMdd}.csv");
+        return File(Encoding.UTF8.GetBytes(csv), "text/csv", $"daily-report-{BusinessTime.Now:yyyyMMdd}.csv");
     }
 
     [HttpGet("daily-summary")]
@@ -73,7 +75,17 @@ public class AttendanceController(IMediator mediator, ITenantContext tenant) : C
     {
         var data = await mediator.Send(new GetDailySummaryReportQuery(q.ToFilter()));
         var csv = BuildDailySummaryCsv(data);
-        return File(Encoding.UTF8.GetBytes(csv), "text/csv", $"daily-summary-{DateTime.UtcNow:yyyyMMdd}.csv");
+        return File(Encoding.UTF8.GetBytes(csv), "text/csv", $"daily-summary-{BusinessTime.Now:yyyyMMdd}.csv");
+    }
+
+    [HttpGet("job-card/roster")]
+    public async Task<ActionResult<ApiResponse<PagedJobCardRosterDto>>> GetJobCardRoster(
+        [FromQuery] AttendanceReportQueryParams q,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 1)
+    {
+        var data = await mediator.Send(new GetJobCardRosterQuery(q.ToFilter(), page, pageSize));
+        return Ok(ApiResponse<PagedJobCardRosterDto>.Ok(data, HttpContext.TraceIdentifier));
     }
 
     [HttpGet("job-card")]

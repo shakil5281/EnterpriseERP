@@ -138,7 +138,7 @@ export interface BackendDailyAttendance {
     attendanceDate: string;
     inTime: string | null;
     outTime: string | null;
-    shiftCode: string | null;
+    shiftName: string | null;
     lateMinutes: number;
     otMinutes: number;
     workingMinutes: number;
@@ -179,6 +179,9 @@ export interface ProcessDailyAttendanceResult {
     presentCount: number;
     absentCount: number;
     lateCount: number;
+    createdCount: number;
+    updatedCount: number;
+    skippedLockedCount: number;
 }
 
 /** Calendar date only (yyyy-MM-dd) — avoids UTC offset excluding stored attendance rows. */

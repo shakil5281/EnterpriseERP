@@ -76,6 +76,44 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                     b.ToTable("AllowanceBills", (string)null);
                 });
 
+            modelBuilder.Entity("PayrollService.Domain.Entities.CompanyPayrollPolicyAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("AssignedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("FixedOvertimeRate")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("PolicyTemplateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PolicyTemplateId");
+
+                    b.HasIndex("CompanyId", "IsActive")
+                        .HasFilter("[IsActive] = 1");
+
+                    b.ToTable("CompanyPayrollPolicyAssignments", (string)null);
+                });
+
             modelBuilder.Entity("PayrollService.Domain.Entities.EmployeePayroll", b =>
                 {
                     b.Property<Guid>("Id")
@@ -94,6 +132,16 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("AppliedPolicyCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("AppliedPolicySnapshotJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("AppliedPolicyVersion")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("AttendanceBonusAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -104,6 +152,10 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("ConveyanceAllowance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -119,11 +171,19 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal>("FoodAllowance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal>("GrossSalary")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("HolidayPresentDays")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("HouseRent")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
@@ -147,6 +207,13 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal>("MedicalAllowance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("MonthNo")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("NetSalary")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -163,6 +230,10 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("OvertimeCalculationType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<decimal>("OvertimeHours")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -171,15 +242,17 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<Guid>("PayrollPeriodId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid>("PayrollRunId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("PresentDays")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ProcessingMode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<decimal>("ProvidentFundDeduction")
                         .HasPrecision(18, 2)
@@ -228,9 +301,12 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int>("YearNo")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyId", "PayrollPeriodId", "EmployeeId")
+                    b.HasIndex("CompanyId", "EmployeeId", "YearNo", "MonthNo")
                         .IsUnique();
 
                     b.ToTable("EmployeePayrolls", (string)null);
@@ -286,6 +362,13 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("MedicalAllowance")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("SalaryCalculationType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("Monthly");
 
                     b.Property<Guid?>("SalaryStructureId")
                         .HasColumnType("uniqueidentifier");
@@ -361,49 +444,6 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("FinalSettlements", (string)null);
-                });
-
-            modelBuilder.Entity("PayrollService.Domain.Entities.PayrollApproval", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("ApprovalLevel")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ApprovalStatus")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)")
-                        .HasDefaultValue("Pending");
-
-                    b.Property<DateTime?>("ApprovedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("ApprovedBy")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("PayrollPeriodId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("RejectedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("RejectedBy")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Remarks")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("PayrollApprovals", (string)null);
                 });
 
             modelBuilder.Entity("PayrollService.Domain.Entities.PayrollAuditLog", b =>
@@ -569,92 +609,21 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                     b.ToTable("PayrollEarnings", (string)null);
                 });
 
-            modelBuilder.Entity("PayrollService.Domain.Entities.PayrollLock", b =>
+            modelBuilder.Entity("PayrollService.Domain.Entities.PayrollPolicyTemplate", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("IsLocked")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime>("LockedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("LockedBy")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("PayrollPeriodId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("UnlockReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime?>("UnlockedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("UnlockedBy")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("PayrollLocks", (string)null);
-                });
-
-            modelBuilder.Entity("PayrollService.Domain.Entities.PayrollPeriod", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateOnly>("EndDate")
-                        .HasColumnType("date");
-
-                    b.Property<bool>("IsAttendanceLocked")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsPayrollLocked")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("MonthNo")
-                        .HasColumnType("int");
-
-                    b.Property<DateOnly>("StartDate")
-                        .HasColumnType("date");
-
-                    b.Property<string>("Status")
+                    b.Property<string>("AbsentBase")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)")
-                        .HasDefaultValue("Open");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
-                    b.Property<int>("YearNo")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CompanyId", "YearNo", "MonthNo")
-                        .IsUnique();
-
-                    b.ToTable("PayrollPeriods", (string)null);
-                });
-
-            modelBuilder.Entity("PayrollService.Domain.Entities.PayrollPolicy", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("AbsentDayDivisor")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<bool>("AllowAbsentDeduction")
                         .HasColumnType("bit");
@@ -680,140 +649,208 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                     b.Property<bool>("AllowTiffinBill")
                         .HasColumnType("bit");
 
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<decimal>("BasicDivisor")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("ComplianceMode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("FixedAbsentDays")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("FixedConveyance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("FixedFood")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("FixedMedical")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int?>("FixedMonthDays")
                         .HasColumnType("int");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("LateDeductionType")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<string>("MonthDayCalculationType")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
-                    b.Property<string>("OvertimeCalculationType")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<string>("OtBase")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
-                    b.Property<decimal>("OvertimeDivisor")
-                        .ValueGeneratedOnAdd()
+                    b.Property<decimal>("OtDivisor")
                         .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
-                        .HasDefaultValue(208m);
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("OvertimeMultiplier")
-                        .ValueGeneratedOnAdd()
+                    b.Property<decimal>("OtMultiplier")
                         .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
-                        .HasDefaultValue(2m);
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("PolicyCode")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
 
                     b.Property<string>("PolicyName")
                         .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("SalaryCalculationType")
+                    b.Property<bool>("RequireAttendanceApproval")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Status")
                         .IsRequired()
+                        .ValueGeneratedOnAdd()
                         .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("Active");
 
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("UseApprovedAttendanceOnly")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("UseAttendanceForSalary")
-                        .HasColumnType("bit");
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyId", "PolicyName")
+                    b.HasIndex("PolicyCode")
                         .IsUnique();
 
-                    b.ToTable("PayrollPolicies", (string)null);
+                    b.ToTable("PayrollPolicyTemplates", (string)null);
 
                     b.HasData(
                         new
                         {
-                            Id = new Guid("10000000-0000-0000-0000-000000000001"),
+                            Id = new Guid("a1000001-0000-0000-0000-000000000001"),
+                            AbsentBase = "Basic",
+                            AbsentDayDivisor = "FixedDays",
                             AllowAbsentDeduction = true,
                             AllowAttendanceBonus = false,
-                            AllowEarnLeaveEncashment = false,
-                            AllowFestivalBonus = false,
+                            AllowEarnLeaveEncashment = true,
+                            AllowFestivalBonus = true,
                             AllowLateDeduction = false,
                             AllowNightBill = false,
                             AllowOvertime = true,
                             AllowTiffinBill = false,
-                            CompanyId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            BasicDivisor = 1.5m,
+                            ComplianceMode = "FullCompliance",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FixedAbsentDays = 30,
+                            FixedConveyance = 450m,
+                            FixedFood = 1250m,
+                            FixedMedical = 750m,
                             FixedMonthDays = 30,
-                            IsActive = true,
                             MonthDayCalculationType = "FixedDays",
-                            OvertimeCalculationType = "BasicSalaryBased",
-                            OvertimeDivisor = 208m,
-                            OvertimeMultiplier = 2m,
-                            PolicyName = "Unity General Duty Monthly",
-                            SalaryCalculationType = "Monthly",
-                            UseApprovedAttendanceOnly = true,
-                            UseAttendanceForSalary = true
+                            OtBase = "Basic",
+                            OtDivisor = 208m,
+                            OtMultiplier = 2m,
+                            PolicyCode = "BDT_COMPLIANCE_V1",
+                            PolicyName = "Bangladesh Full Compliance Salary Rule",
+                            RequireAttendanceApproval = true,
+                            Status = "Active",
+                            Version = 1
                         },
                         new
                         {
-                            Id = new Guid("10000000-0000-0000-0000-000000000002"),
+                            Id = new Guid("a1000002-0000-0000-0000-000000000002"),
+                            AbsentBase = "Gross",
+                            AbsentDayDivisor = "CalendarDays",
                             AllowAbsentDeduction = true,
-                            AllowAttendanceBonus = true,
-                            AllowEarnLeaveEncashment = false,
-                            AllowFestivalBonus = false,
+                            AllowAttendanceBonus = false,
+                            AllowEarnLeaveEncashment = true,
+                            AllowFestivalBonus = true,
                             AllowLateDeduction = false,
                             AllowNightBill = false,
                             AllowOvertime = true,
-                            AllowTiffinBill = true,
-                            CompanyId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            AllowTiffinBill = false,
+                            BasicDivisor = 1.5m,
+                            ComplianceMode = "NonCompliance",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            IsActive = true,
+                            FixedAbsentDays = 30,
+                            FixedConveyance = 450m,
+                            FixedFood = 1250m,
+                            FixedMedical = 750m,
+                            FixedMonthDays = 30,
                             MonthDayCalculationType = "CalendarDays",
-                            OvertimeCalculationType = "BasicSalaryBased",
-                            OvertimeDivisor = 208m,
-                            OvertimeMultiplier = 2m,
-                            PolicyName = "Ekushe General Duty Monthly",
-                            SalaryCalculationType = "Monthly",
-                            UseApprovedAttendanceOnly = true,
-                            UseAttendanceForSalary = true
+                            OtBase = "Gross",
+                            OtDivisor = 208m,
+                            OtMultiplier = 2m,
+                            PolicyCode = "BDT_NONCOMPLIANCE_GROSS_OT_V1",
+                            PolicyName = "Non-Compliance Gross OT",
+                            RequireAttendanceApproval = false,
+                            Status = "Active",
+                            Version = 1
                         },
                         new
                         {
-                            Id = new Guid("10000000-0000-0000-0000-000000000003"),
+                            Id = new Guid("a1000003-0000-0000-0000-000000000003"),
+                            AbsentBase = "Gross",
+                            AbsentDayDivisor = "CalendarDays",
                             AllowAbsentDeduction = true,
                             AllowAttendanceBonus = false,
-                            AllowEarnLeaveEncashment = false,
-                            AllowFestivalBonus = false,
+                            AllowEarnLeaveEncashment = true,
+                            AllowFestivalBonus = true,
                             AllowLateDeduction = false,
-                            AllowNightBill = true,
+                            AllowNightBill = false,
                             AllowOvertime = true,
-                            AllowTiffinBill = true,
-                            CompanyId = new Guid("20000000-0000-0000-0000-000000000003"),
+                            AllowTiffinBill = false,
+                            BasicDivisor = 1.5m,
+                            ComplianceMode = "NonCompliance",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FixedAbsentDays = 30,
+                            FixedConveyance = 450m,
+                            FixedFood = 1250m,
+                            FixedMedical = 750m,
                             FixedMonthDays = 30,
-                            IsActive = true,
-                            MonthDayCalculationType = "FixedDays",
-                            OvertimeCalculationType = "BasicSalaryBased",
-                            OvertimeDivisor = 208m,
-                            OvertimeMultiplier = 2m,
-                            PolicyName = "Dyeing Shift Monthly",
-                            SalaryCalculationType = "Monthly",
-                            UseApprovedAttendanceOnly = true,
-                            UseAttendanceForSalary = true
+                            MonthDayCalculationType = "CalendarDays",
+                            OtBase = "Gross",
+                            OtDivisor = 240m,
+                            OtMultiplier = 1.5m,
+                            PolicyCode = "BDT_NONCOMPLIANCE_GROSS240_OT_V1",
+                            PolicyName = "Non-Compliance Gross 240 OT",
+                            RequireAttendanceApproval = false,
+                            Status = "Active",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = new Guid("a1000004-0000-0000-0000-000000000004"),
+                            AbsentBase = "Gross",
+                            AbsentDayDivisor = "CalendarDays",
+                            AllowAbsentDeduction = true,
+                            AllowAttendanceBonus = false,
+                            AllowEarnLeaveEncashment = true,
+                            AllowFestivalBonus = true,
+                            AllowLateDeduction = false,
+                            AllowNightBill = false,
+                            AllowOvertime = true,
+                            AllowTiffinBill = false,
+                            BasicDivisor = 1.5m,
+                            ComplianceMode = "NonCompliance",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FixedAbsentDays = 30,
+                            FixedConveyance = 450m,
+                            FixedFood = 1250m,
+                            FixedMedical = 750m,
+                            FixedMonthDays = 30,
+                            MonthDayCalculationType = "CalendarDays",
+                            OtBase = "Fixed",
+                            OtDivisor = 208m,
+                            OtMultiplier = 2m,
+                            PolicyCode = "BDT_NONCOMPLIANCE_FIXED_OT_V1",
+                            PolicyName = "Non-Compliance Fixed OT Rate",
+                            RequireAttendanceApproval = false,
+                            Status = "Active",
+                            Version = 1
                         });
                 });
 
@@ -823,8 +860,18 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AppliedPolicyCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<int?>("AppliedPolicyVersion")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date");
 
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("nvarchar(max)");
@@ -832,8 +879,16 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                     b.Property<int>("FailedEmployees")
                         .HasColumnType("int");
 
-                    b.Property<Guid>("PayrollPeriodId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<decimal?>("FixedOvertimeRate")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("MonthNo")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OvertimeCalculationType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<DateTime>("ProcessedAt")
                         .HasColumnType("datetime2");
@@ -844,6 +899,11 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                     b.Property<int>("ProcessedEmployees")
                         .HasColumnType("int");
 
+                    b.Property<string>("ProcessingMode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<int>("RunNo")
                         .HasColumnType("int");
 
@@ -852,12 +912,18 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
                     b.Property<int>("TotalEmployees")
+                        .HasColumnType("int");
+
+                    b.Property<int>("YearNo")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PayrollPeriodId", "RunNo")
+                    b.HasIndex("CompanyId", "YearNo", "MonthNo", "RunNo")
                         .IsUnique();
 
                     b.ToTable("PayrollRuns", (string)null);
@@ -1138,6 +1204,17 @@ namespace PayrollService.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("SalaryStructureComponents", (string)null);
+                });
+
+            modelBuilder.Entity("PayrollService.Domain.Entities.CompanyPayrollPolicyAssignment", b =>
+                {
+                    b.HasOne("PayrollService.Domain.Entities.PayrollPolicyTemplate", "PolicyTemplate")
+                        .WithMany()
+                        .HasForeignKey("PolicyTemplateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PolicyTemplate");
                 });
 
             modelBuilder.Entity("PayrollService.Domain.Entities.PayrollDeduction", b =>

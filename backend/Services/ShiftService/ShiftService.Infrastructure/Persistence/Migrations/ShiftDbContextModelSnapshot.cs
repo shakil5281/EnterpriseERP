@@ -54,15 +54,15 @@ namespace ShiftService.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                      b.HasIndex("ShiftId");
-  
-                      b.HasIndex("CompanyId", "EmployeeId", "IsCurrent");
+                    b.HasIndex("ShiftId");
 
-                      b.HasIndex("CompanyId", "EmployeeId")
-                          .IsUnique()
-                          .HasFilter("[IsCurrent] = 1");
-  
-                      b.ToTable("EmployeeShiftAssignments", (string)null);
+                    b.HasIndex("CompanyId", "EmployeeId")
+                        .IsUnique()
+                        .HasFilter("[IsCurrent] = 1");
+
+                    b.HasIndex("CompanyId", "EmployeeId", "IsCurrent");
+
+                    b.ToTable("EmployeeShiftAssignments", (string)null);
                 });
 
             modelBuilder.Entity("ShiftService.Domain.Entities.Shift", b =>
@@ -104,10 +104,13 @@ namespace ShiftService.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsGeneralDuty")
                         .HasColumnType("bit");
 
-                    b.Property<string>("ShiftCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<int>("PunchWindowBeforeMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(60);
+
+                    b.Property<int>("ShiftCategory")
+                        .HasColumnType("int");
 
                     b.Property<string>("ShiftName")
                         .IsRequired()
@@ -128,9 +131,12 @@ namespace ShiftService.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int?>("WeeklyOffDayOfWeek")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyId", "ShiftCode")
+                    b.HasIndex("CompanyId", "ShiftName")
                         .IsUnique();
 
                     b.ToTable("Shifts", (string)null);
@@ -147,7 +153,8 @@ namespace ShiftService.Infrastructure.Persistence.Migrations
                             IsDefault = true,
                             IsDeleted = false,
                             IsGeneralDuty = true,
-                            ShiftCode = "UNITY_GENERAL",
+                            PunchWindowBeforeMinutes = 60,
+                            ShiftCategory = 0,
                             ShiftName = "Unity General Duty",
                             ShiftType = "GeneralDuty",
                             StartTime = new TimeSpan(0, 8, 0, 0, 0)
@@ -163,7 +170,8 @@ namespace ShiftService.Infrastructure.Persistence.Migrations
                             IsDefault = true,
                             IsDeleted = false,
                             IsGeneralDuty = true,
-                            ShiftCode = "EKUSHE_GENERAL",
+                            PunchWindowBeforeMinutes = 60,
+                            ShiftCategory = 0,
                             ShiftName = "Ekushe General Duty",
                             ShiftType = "GeneralDuty",
                             StartTime = new TimeSpan(0, 8, 0, 0, 0)
@@ -179,7 +187,8 @@ namespace ShiftService.Infrastructure.Persistence.Migrations
                             IsDefault = false,
                             IsDeleted = false,
                             IsGeneralDuty = false,
-                            ShiftCode = "DYEING_DAY",
+                            PunchWindowBeforeMinutes = 60,
+                            ShiftCategory = 1,
                             ShiftName = "Dyeing Day Shift",
                             ShiftType = "Day",
                             StartTime = new TimeSpan(0, 8, 0, 0, 0)
@@ -195,7 +204,8 @@ namespace ShiftService.Infrastructure.Persistence.Migrations
                             IsDefault = false,
                             IsDeleted = false,
                             IsGeneralDuty = false,
-                            ShiftCode = "DYEING_NIGHT",
+                            PunchWindowBeforeMinutes = 60,
+                            ShiftCategory = 2,
                             ShiftName = "Dyeing Night Shift",
                             ShiftType = "Night",
                             StartTime = new TimeSpan(0, 20, 0, 0, 0)
@@ -221,6 +231,9 @@ namespace ShiftService.Infrastructure.Persistence.Migrations
 
                     b.Property<TimeSpan>("BreakStartTime")
                         .HasColumnType("time");
+
+                    b.Property<int>("BreakType")
+                        .HasColumnType("int");
 
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uniqueidentifier");
@@ -290,16 +303,25 @@ namespace ShiftService.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("DeductLunchFromWorking")
+                        .HasColumnType("bit");
+
                     b.Property<int>("EarlyOutBeforeMinutes")
                         .HasColumnType("int");
 
                     b.Property<int>("HalfDayWorkingMinutes")
                         .HasColumnType("int");
 
+                    b.Property<bool>("HolidayWorkAllAsOvertime")
+                        .HasColumnType("bit");
+
                     b.Property<int>("InGraceMinutes")
                         .HasColumnType("int");
 
                     b.Property<int>("LateAfterMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LunchBreakMinutes")
                         .HasColumnType("int");
 
                     b.Property<int>("MaximumOvertimeMinutes")
@@ -322,6 +344,9 @@ namespace ShiftService.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("WeeklyOffWorkAllAsOvertime")
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 
@@ -362,8 +387,8 @@ namespace ShiftService.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ShiftId");
 
-                      b.HasIndex("CompanyId", "EmployeeId", "ShiftDate")
-                          .IsUnique();
+                    b.HasIndex("CompanyId", "EmployeeId", "ShiftDate")
+                        .IsUnique();
 
                     b.ToTable("TemporaryShiftAssignments", (string)null);
                 });

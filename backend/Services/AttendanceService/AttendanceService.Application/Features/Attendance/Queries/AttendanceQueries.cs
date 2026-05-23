@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using AttendanceService.Application.Common;
 using AttendanceService.Application.Common.Interfaces;
+using AttendanceService.Application.Features.Attendance;
 using AttendanceService.Application.DTOs;
 using AttendanceService.Domain.Enums;
 
@@ -50,7 +51,7 @@ public class AttendanceQueryHandlers(IAttendanceDbContext db, IEmployeeDirectory
             a.AttendanceDate,
             a.InTime,
             a.OutTime,
-            a.ShiftCode,
+            a.ShiftName,
             a.LateMinutes,
             a.OvertimeMinutes,
             a.WorkingMinutes,
@@ -142,7 +143,7 @@ public class AttendanceSummaryQueryHandler(IAttendanceDbContext db, IEmployeeDir
                     empId,
                     punchNum,
                     g.Count(x => x.Status == AttendanceStatus.Present || x.Status == AttendanceStatus.Late || x.Status == AttendanceStatus.EarlyOut),
-                    g.Count(x => x.Status == AttendanceStatus.Absent),
+                    g.Count(x => AttendanceReportHelper.IsAbsent(x.Status)),
                     g.Count(x => x.Status == AttendanceStatus.Late),
                     g.Count(x => x.Status == AttendanceStatus.EarlyOut),
                     g.Sum(x => x.OvertimeMinutes),

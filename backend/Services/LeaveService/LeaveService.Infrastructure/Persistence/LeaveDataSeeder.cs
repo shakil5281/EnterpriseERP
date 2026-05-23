@@ -1,6 +1,8 @@
 using LeaveService.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace LeaveService.Infrastructure.Persistence;
 
 public static class LeaveDataSeeder
@@ -26,7 +28,7 @@ public static class LeaveDataSeeder
             MaxCarryForwardDays = 0,
             IsEncashable = false,
             IsActive = true,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = BusinessTime.Now,
         };
         var sl = new LeaveType
         {
@@ -39,7 +41,7 @@ public static class LeaveDataSeeder
             MaxCarryForwardDays = 5,
             IsEncashable = false,
             IsActive = true,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = BusinessTime.Now,
         };
         var lwp = new LeaveType
         {
@@ -52,7 +54,7 @@ public static class LeaveDataSeeder
             MaxCarryForwardDays = 0,
             IsEncashable = false,
             IsActive = true,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = BusinessTime.Now,
         };
         db.LeaveTypes.AddRange(cl, sl, lwp);
 
@@ -72,7 +74,7 @@ public static class LeaveDataSeeder
             ExcludeWeeklyOffFromLeaveDays = true,
             ApprovalLevelCount = 2,
             IsActive = true,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = BusinessTime.Now,
         };
         db.LeavePolicies.Add(policy);
 
@@ -82,7 +84,7 @@ public static class LeaveDataSeeder
             CompanyId = DemoCompany,
             EmployeeId = DemoEmployee,
             LeaveTypeId = cl.Id,
-            YearNo = DateTime.UtcNow.Year,
+            YearNo = BusinessTime.Now.Year,
             OpeningBalance = 0,
             EntitledDays = 10,
             AccruedDays = 0,
@@ -91,19 +93,19 @@ public static class LeaveDataSeeder
             EncashDays = 0,
             CarryForwardDays = 0,
             BalanceDays = 10,
-            UpdatedAt = DateTime.UtcNow,
+            UpdatedAt = BusinessTime.Now,
         });
 
         db.Holidays.Add(new Holiday
         {
             Id = Guid.NewGuid(),
             CompanyId = DemoCompany,
-            HolidayDate = new DateOnly(DateTime.UtcNow.Year, 1, 1),
+            HolidayDate = new DateOnly(BusinessTime.Now.Year, 1, 1),
             HolidayName = "New Year",
             HolidayType = "Government",
             IsPaid = true,
             IsActive = true,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = BusinessTime.Now,
         });
 
         db.WeeklyOffRules.Add(new WeeklyOffRule { Id = Guid.NewGuid(), CompanyId = DemoCompany, DayOfWeekName = "Sunday", IsActive = true });

@@ -4,6 +4,8 @@ using CuttingService.Domain;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace CuttingService.Application.Handlers;
 
 public sealed class CuttingCommandHandlers(
@@ -67,7 +69,7 @@ public sealed class CuttingCommandHandlers(
         if (total != plan.TotalPlanQty) throw new InvalidOperationException("Total plan qty must match size breakdown total.");
         plan.Status = CuttingPlanStatuses.Approved;
         plan.ApprovedBy = command.ApprovedBy;
-        plan.ApprovedAt = DateTime.UtcNow;
+        plan.ApprovedAt = BusinessTime.Now;
         db.Add(new CuttingAuditLog { CompanyId = plan.CompanyId, EntityName = nameof(CuttingPlan), EntityId = plan.Id, Action = "Approved", UserId = command.ApprovedBy });
         await balances.UpdatePlanQtyAsync(plan, ct);
         await uow.SaveChangesAsync(ct);
@@ -91,7 +93,7 @@ public sealed class CuttingCommandHandlers(
     {
         var plan = await uow.CuttingPlans.GetByIdAsync(command.Id, ct) ?? throw new KeyNotFoundException("Cutting plan not found.");
         plan.Status = CuttingPlanStatuses.Completed;
-        plan.CompletedAt = DateTime.UtcNow;
+        plan.CompletedAt = BusinessTime.Now;
         db.Add(new CuttingAuditLog { CompanyId = plan.CompanyId, EntityName = nameof(CuttingPlan), EntityId = plan.Id, Action = "Completed", UserId = command.UserId });
         await uow.SaveChangesAsync(ct);
         await publisher.PublishAsync(new CuttingCompleted(plan.CompanyId, plan.OrderId, plan.Id, plan.CompletedAt.Value), ct);
@@ -221,7 +223,7 @@ public sealed class CuttingCommandHandlers(
             if (item.TransferQty > transferable) throw new InvalidOperationException("Panel transfer cannot exceed cut balance.");
         }
         transfer.Status = PanelTransferStatuses.Confirmed;
-        transfer.ConfirmedAt = DateTime.UtcNow;
+        transfer.ConfirmedAt = BusinessTime.Now;
         await balances.AddTransferAsync(transfer, ct);
         await uow.SaveChangesAsync(ct);
         await production.NotifyPanelTransferAsync(transfer.CompanyId, transfer.OrderId, transfer.Id, ct);

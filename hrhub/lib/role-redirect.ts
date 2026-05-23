@@ -57,3 +57,13 @@ export function getRedirectUrlForUser(roles: string[]): string {
     // Default to home if no matching role found
     return '/'
 }
+
+/** Safe internal path from ?returnUrl= (login redirect). */
+export function resolveReturnUrl(returnUrl: string | null | undefined, roles: string[]): string {
+    if (!returnUrl) return getRedirectUrlForUser(roles)
+    const decoded = decodeURIComponent(returnUrl.trim())
+    if (!decoded.startsWith('/') || decoded.startsWith('//') || decoded.startsWith('/login')) {
+        return getRedirectUrlForUser(roles)
+    }
+    return decoded
+}

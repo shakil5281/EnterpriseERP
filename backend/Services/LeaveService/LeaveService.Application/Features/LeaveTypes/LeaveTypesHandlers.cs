@@ -6,6 +6,8 @@ using LeaveService.Contracts.LeaveTypes;
 using LeaveService.Domain.Entities;
 using MediatR;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace LeaveService.Application.Features.LeaveTypes;
 
 public sealed record CreateLeaveTypeCommand(CreateLeaveTypeRequest Request, Guid? CreatedBy) : IRequest<LeaveTypeDto>;
@@ -50,7 +52,7 @@ public sealed class CreateLeaveTypeCommandHandler(ILeaveUnitOfWork uow, IMapper 
             MaxCarryForwardDays = request.Request.MaxCarryForwardDays,
             IsEncashable = request.Request.IsEncashable,
             IsActive = true,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = BusinessTime.Now,
             CreatedBy = request.CreatedBy,
         };
         uow.LeaveTypes.Add(entity);
@@ -81,7 +83,7 @@ public sealed class UpdateLeaveTypeCommandHandler(ILeaveUnitOfWork uow, IMapper 
         entity.IsCarryForward = request.Request.IsCarryForward;
         entity.MaxCarryForwardDays = request.Request.MaxCarryForwardDays;
         entity.IsEncashable = request.Request.IsEncashable;
-        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = BusinessTime.Now;
         entity.UpdatedBy = request.UpdatedBy;
         await audit.WriteAsync(entity.CompanyId, request.UpdatedBy, "LeaveTypeUpdated", nameof(LeaveType), entity.Id, null, cancellationToken);
         await uow.SaveChangesAsync(cancellationToken);
@@ -98,7 +100,7 @@ public sealed class SetLeaveTypeActiveCommandHandler(ILeaveUnitOfWork uow, IMapp
         var entity = await uow.LeaveTypes.GetByIdAsync(request.Id, cancellationToken)
                      ?? throw new LeaveBusinessException("Leave type not found.");
         entity.IsActive = request.IsActive;
-        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = BusinessTime.Now;
         entity.UpdatedBy = request.UpdatedBy;
         await audit.WriteAsync(entity.CompanyId, request.UpdatedBy, request.IsActive ? "LeaveTypeActivated" : "LeaveTypeDeactivated", nameof(LeaveType), entity.Id, null, cancellationToken);
         await uow.SaveChangesAsync(cancellationToken);

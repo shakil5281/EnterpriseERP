@@ -100,7 +100,7 @@ func (s *Service) ProcessLogFile(ctx context.Context, id uuid.UUID, opts Process
 			LogFileID:    rec.LogFileID,
 			PunchNumber: rec.PunchNumber,
 			DeviceID:     rec.DeviceID,
-			PunchTime:    timeutil.InDhaka(rec.PunchTime),
+			PunchTime:    rec.PunchTime,
 			Source:       rec.Source,
 		}); pubErr != nil {
 			s.logger.Warn("publish PunchLogCollected failed", "punchId", rec.ID, "error", pubErr)

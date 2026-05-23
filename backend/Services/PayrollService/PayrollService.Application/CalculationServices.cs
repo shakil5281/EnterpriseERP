@@ -4,36 +4,47 @@ namespace PayrollService.Application;
 
 public sealed class OvertimeCalculationService : IOvertimeCalculationService
 {
-    public (decimal RatePerHour, decimal Amount) Calculate(PayrollPolicy policy, EmployeeSalary salary, decimal overtimeHours, decimal fixedRate = 0)
+    public (decimal RatePerHour, decimal Amount) Calculate(
+        PayrollCalculationSettings settings,
+        EmployeeSalary salary,
+        decimal overtimeHours,
+        decimal fixedRate = 0)
     {
-        if (!policy.AllowOvertime || overtimeHours <= 0 || string.Equals(policy.OvertimeCalculationType, "None", StringComparison.OrdinalIgnoreCase))
+        if (!settings.AllowOvertime || overtimeHours <= 0 ||
+            string.Equals(settings.OvertimeCalculationType, "None", StringComparison.OrdinalIgnoreCase))
         {
             return (0, 0);
         }
 
-        var divisor = policy.OvertimeDivisor <= 0 ? 208 : policy.OvertimeDivisor;
-        var multiplier = policy.OvertimeMultiplier <= 0 ? 2 : policy.OvertimeMultiplier;
-        var rate = policy.OvertimeCalculationType switch
+        var divisor = settings.OvertimeDivisor <= 0 ? 208 : settings.OvertimeDivisor;
+        var multiplier = settings.OvertimeMultiplier <= 0 ? 2 : settings.OvertimeMultiplier;
+        var rate = settings.OvertimeCalculationType switch
         {
             "GrossSalaryBased" => salary.GrossSalary / divisor * multiplier,
-            "FixedRate" => fixedRate,
+            "FixedRate" => settings.FixedOvertimeRate ?? fixedRate,
             _ => salary.BasicSalary / divisor * multiplier,
         };
 
-        return (decimal.Round(rate, 2, MidpointRounding.AwayFromZero), decimal.Round(rate * overtimeHours, 2, MidpointRounding.AwayFromZero));
+        var roundedRate = decimal.Round(rate, 2, MidpointRounding.AwayFromZero);
+        return (roundedRate, decimal.Round(roundedRate * overtimeHours, 2, MidpointRounding.AwayFromZero));
     }
 }
 
 public sealed class BonusCalculationService : IBonusCalculationService
 {
-    public decimal CalculateAttendanceBonus(PayrollPolicy policy, AttendanceSummary attendance, decimal configuredAmount, decimal allowedLateLimit)
+    public decimal CalculateAttendanceBonus(
+        PayrollCalculationSettings settings,
+        AttendanceSummary attendance,
+        decimal configuredAmount,
+        decimal allowedLateLimit)
     {
-        if (!policy.AllowAttendanceBonus || !attendance.IsApproved)
+        if (!settings.AllowAttendanceBonus || !attendance.IsApproved)
         {
             return 0;
         }
 
-        if (attendance.AbsentDays > 0 || attendance.LeaveWithoutPayDays > 0 || attendance.MissingPunchDays > 0 || attendance.LateDays > allowedLateLimit)
+        if (attendance.AbsentDays > 0 || attendance.LeaveWithoutPayDays > 0 || attendance.MissingPunchDays > 0 ||
+            attendance.LateDays > allowedLateLimit)
         {
             return 0;
         }
@@ -58,40 +69,83 @@ public sealed class BonusCalculationService : IBonusCalculationService
     }
 }
 
-public sealed class PayrollCalculationService(IOvertimeCalculationService overtimeCalculationService, IBonusCalculationService bonusCalculationService) : IPayrollCalculationService
+public sealed class PayrollCalculationService(
+    IOvertimeCalculationService overtimeCalculationService,
+    IBonusCalculationService bonusCalculationService) : IPayrollCalculationService
 {
-    public PayrollCalculationResult Calculate(PayrollPolicy policy, EmployeeSalary salary, AttendanceSummary attendance, PayrollCalculationInputs inputs)
+    private const decimal StandardHoursPerDay = 8m;
+
+    public PayrollCalculationResult Calculate(
+        PayrollCalculationSettings settings,
+        EmployeeSalary salary,
+        AttendanceSummary attendance,
+        PayrollCalculationInputs inputs,
+        string? salaryCalculationTypeOverride = null)
     {
-        if (policy.UseApprovedAttendanceOnly && !attendance.IsApproved)
+        if (settings.UseApprovedAttendanceOnly && !attendance.IsApproved)
         {
             throw new InvalidOperationException("Attendance summary must be approved before payroll processing.");
         }
 
-        var totalDays = policy.MonthDayCalculationType switch
+        var calcType = salaryCalculationTypeOverride ?? salary.SalaryCalculationType;
+        if (string.IsNullOrWhiteSpace(calcType))
         {
-            "CalendarDays" => attendance.TotalDays,
-            "WorkingDays" => attendance.WorkingDays,
-            "FixedDays" => policy.FixedMonthDays ?? 30,
-            _ => attendance.TotalDays > 0 ? attendance.TotalDays : 30,
-        };
-        totalDays = totalDays <= 0 ? 30 : totalDays;
+            calcType = "Monthly";
+        }
 
-        var perDaySalary = salary.GrossSalary / totalDays;
-        var absentDeduction = policy.AllowAbsentDeduction ? perDaySalary * attendance.AbsentDays : 0;
-        var lwpDeduction = perDaySalary * attendance.LeaveWithoutPayDays;
-        var lateDeduction = policy.AllowLateDeduction ? perDaySalary * attendance.LateDays : 0;
-        var payableSalary = salary.GrossSalary - absentDeduction - lwpDeduction;
-
+        var totalDays = ResolveTotalDays(settings, attendance);
         var overtimeHours = decimal.Round(attendance.OvertimeMinutes / 60m, 2, MidpointRounding.AwayFromZero);
-        var (otRate, otAmount) = overtimeCalculationService.Calculate(policy, salary, overtimeHours);
-        var tiffin = policy.AllowTiffinBill ? attendance.ApprovedTiffinDays * inputs.TiffinRate : 0;
-        var night = policy.AllowNightBill ? attendance.ApprovedNightDutyDays * inputs.NightBillRate : 0;
-        var attendanceBonus = bonusCalculationService.CalculateAttendanceBonus(policy, attendance, inputs.AttendanceBonusAmount, inputs.AllowedLateLimit);
-        var earnLeave = policy.AllowEarnLeaveEncashment ? inputs.EarnLeaveEncashmentAmount : 0;
+        var fixedOt = (decimal)(settings.FixedOvertimeRate ?? 0);
+        var (otRate, otAmount) = overtimeCalculationService.Calculate(settings, salary, overtimeHours, fixedOt);
+
+        decimal perDaySalary;
+        decimal payableSalary;
+        decimal absentDeduction;
+        decimal lwpDeduction;
+        decimal lateDeduction;
+
+        switch (calcType.ToUpperInvariant())
+        {
+            case "DAILY":
+                perDaySalary = totalDays > 0 ? salary.GrossSalary / totalDays : salary.GrossSalary;
+                payableSalary = perDaySalary * attendance.PresentDays;
+                absentDeduction = 0;
+                lwpDeduction = perDaySalary * attendance.LeaveWithoutPayDays;
+                lateDeduction = settings.AllowLateDeduction ? perDaySalary * attendance.LateDays : 0;
+                break;
+
+            case "HOURLY":
+                var hourlyRate = totalDays > 0
+                    ? salary.GrossSalary / (totalDays * StandardHoursPerDay)
+                    : salary.GrossSalary / (30 * StandardHoursPerDay);
+                var regularHours = attendance.PresentDays * StandardHoursPerDay;
+                payableSalary = hourlyRate * regularHours;
+                perDaySalary = hourlyRate * StandardHoursPerDay;
+                absentDeduction = 0;
+                lwpDeduction = 0;
+                lateDeduction = settings.AllowLateDeduction ? perDaySalary * attendance.LateDays : 0;
+                break;
+
+            default:
+                var absentPerDay = ResolveAbsentPerDay(settings, salary, totalDays);
+                absentDeduction = settings.AllowAbsentDeduction ? absentPerDay * attendance.AbsentDays : 0;
+                lwpDeduction = absentPerDay * attendance.LeaveWithoutPayDays;
+                lateDeduction = settings.AllowLateDeduction ? absentPerDay * attendance.LateDays : 0;
+                perDaySalary = absentPerDay;
+                payableSalary = salary.GrossSalary - absentDeduction - lwpDeduction;
+                break;
+        }
+
+        var tiffin = settings.AllowTiffinBill ? attendance.ApprovedTiffinDays * inputs.TiffinRate : 0;
+        var night = settings.AllowNightBill ? attendance.ApprovedNightDutyDays * inputs.NightBillRate : 0;
+        var attendanceBonus = bonusCalculationService.CalculateAttendanceBonus(
+            settings, attendance, inputs.AttendanceBonusAmount, inputs.AllowedLateLimit);
+        var earnLeave = settings.AllowEarnLeaveEncashment ? inputs.EarnLeaveEncashmentAmount : 0;
 
         var attendanceDeduction = absentDeduction + lwpDeduction;
-        var totalEarnings = salary.GrossSalary + otAmount + tiffin + night + attendanceBonus + earnLeave;
-        var totalDeduction = attendanceDeduction + lateDeduction + inputs.AdvanceDeduction + inputs.LoanDeduction + inputs.TaxDeduction + inputs.ProvidentFundDeduction + inputs.OtherDeduction;
+        var totalEarnings = payableSalary + otAmount + tiffin + night + attendanceBonus + earnLeave;
+        var totalDeduction = attendanceDeduction + lateDeduction + inputs.AdvanceDeduction + inputs.LoanDeduction +
+                             inputs.TaxDeduction + inputs.ProvidentFundDeduction + inputs.OtherDeduction;
         var netSalary = totalEarnings - totalDeduction;
 
         return new PayrollCalculationResult(
@@ -111,17 +165,44 @@ public sealed class PayrollCalculationService(IOvertimeCalculationService overti
             decimal.Round(totalDeduction, 2, MidpointRounding.AwayFromZero),
             decimal.Round(netSalary, 2, MidpointRounding.AwayFromZero));
     }
-}
 
-public sealed class FinalSettlementService : IFinalSettlementService
-{
-    public decimal CalculateNetPayable(FinalSettlement settlement)
+    private static decimal ResolveTotalDays(PayrollCalculationSettings settings, AttendanceSummary attendance)
     {
-        return settlement.SalaryPayable
-            + settlement.EarnLeaveAmount
-            + settlement.ServiceBenefitAmount
-            + settlement.GratuityAmount
-            - settlement.AdvanceDeduction
-            - settlement.OtherDeduction;
+        var days = settings.MonthDayCalculationType switch
+        {
+            "CalendarDays" => attendance.TotalDays,
+            "WorkingDays" => attendance.WorkingDays,
+            "FixedDays" => settings.FixedMonthDays ?? 30,
+            _ => attendance.TotalDays > 0 ? attendance.TotalDays : 30,
+        };
+        return days <= 0 ? 30 : days;
+    }
+
+    private static decimal ResolveAbsentPerDay(PayrollCalculationSettings settings, EmployeeSalary salary, decimal totalDays)
+    {
+        if (string.Equals(settings.AbsentDeductionBase, "Basic", StringComparison.OrdinalIgnoreCase))
+        {
+            var divisor = string.Equals(settings.AbsentDayDivisor, "CalendarDays", StringComparison.OrdinalIgnoreCase)
+                ? totalDays
+                : settings.FixedAbsentDays ?? 30;
+            if (divisor <= 0)
+            {
+                return 0;
+            }
+
+            // Compliance spec uses whole-number basic for absent (e.g. 13033.00 / 30 = 434.43).
+            var basicBase = decimal.Floor(salary.BasicSalary);
+            return decimal.Round(basicBase / divisor, 2, MidpointRounding.AwayFromZero);
+        }
+
+        var grossDivisor = string.Equals(settings.AbsentDayDivisor, "FixedDays", StringComparison.OrdinalIgnoreCase)
+            ? settings.FixedAbsentDays ?? totalDays
+            : totalDays;
+        if (grossDivisor <= 0)
+        {
+            grossDivisor = totalDays > 0 ? totalDays : 30;
+        }
+
+        return decimal.Round(salary.GrossSalary / grossDivisor, 2, MidpointRounding.AwayFromZero);
     }
 }

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -17,7 +18,11 @@ builder.Host.UseSerilog((_, cfg) => cfg.WriteTo.Console());
 
 builder.Services.AddShiftApplication();
 builder.Services.AddShiftInfrastructure(builder.Configuration);
-builder.Services.AddControllers();
+builder.Services.AddScoped<ShiftService.Application.Common.Interfaces.ILeaveCalendarProvider, ShiftService.Infrastructure.Services.NoOpLeaveCalendarProvider>();
+builder.Services.AddControllers().AddJsonOptions(o =>
+{
+    o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {

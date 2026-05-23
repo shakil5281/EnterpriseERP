@@ -15,6 +15,12 @@ export interface HrEmployeeListItem {
   email?: string | null;
   companyId: string;
   status: string;
+  gender?: string | null;
+  religion?: string | null;
+  bloodGroup?: string | null;
+  isOtEnabled?: boolean;
+  joinDate?: string;
+  phone?: string | null;
   designationName?: string | null;
   departmentName?: string | null;
 }
@@ -30,6 +36,8 @@ export interface HrEmployeeJobInfo {
   gradeName?: string | null;
   supervisorId?: string | null;
   supervisorName?: string | null;
+  groupId?: string | null;
+  groupName?: string | null;
   workLocation?: string | null;
   effectiveFrom: string;
 }
@@ -98,6 +106,30 @@ export interface HrEmployeeDetails {
   joinDate: string;
   employmentType: string;
   status: string;
+  isOtEnabled?: boolean;
+  religion?: string | null;
+  bloodGroup?: string | null;
+  fatherNameEn?: string | null;
+  fatherNameBn?: string | null;
+  motherNameEn?: string | null;
+  motherNameBn?: string | null;
+  maritalStatus?: string | null;
+  spouseNameEn?: string | null;
+  spouseNameBn?: string | null;
+  spouseOccupation?: string | null;
+  spouseContact?: string | null;
+  educationLevel?: string | null;
+  institution?: string | null;
+  fieldOfStudy?: string | null;
+  skills?: string | null;
+  reference1Name?: string | null;
+  reference1Relation?: string | null;
+  reference1Phone?: string | null;
+  reference1Address?: string | null;
+  reference2Name?: string | null;
+  reference2Relation?: string | null;
+  reference2Phone?: string | null;
+  reference2Address?: string | null;
   currentJobInfo?: HrEmployeeJobInfo | null;
   currentSalaryInfo?: HrEmployeeSalaryInfo | null;
   addresses: HrEmployeeAddress[];
@@ -117,6 +149,9 @@ export interface HrManpowerListItem {
   joinDate: string;
   status: string;
   phone?: string | null;
+  religion?: string | null;
+  bloodGroup?: string | null;
+  isOtEnabled?: boolean;
   grossSalary: number;
 }
 

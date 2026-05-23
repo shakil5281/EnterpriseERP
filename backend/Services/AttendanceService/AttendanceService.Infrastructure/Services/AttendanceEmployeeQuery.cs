@@ -1,4 +1,5 @@
 using AttendanceService.Application.Common.Interfaces;
+using AttendanceService.Application.DTOs;
 using AttendanceService.Infrastructure.Persistence.HrRead;
 using Microsoft.EntityFrameworkCore;
 
@@ -114,6 +115,106 @@ public sealed class AttendanceEmployeeQuery(HrReadDbContext db) : IAttendanceEmp
             .Select(e => e.Id)
             .ToListAsync(cancellationToken);
         return ids.ToHashSet();
+    }
+
+    public async Task<PagedJobCardRosterDto> GetPagedRosterAsync(
+        AttendanceEmployeeFilter filter,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+
+        var baseQuery = BuildEmployeeQuery(filter);
+        var totalCount = await baseQuery.CountAsync(cancellationToken);
+
+        var rows = await baseQuery
+            .OrderBy(e => e.EmployeeID)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(e => new
+            {
+                e.Id,
+                e.PunchNumber,
+                e.EmployeeID,
+                e.FullName
+            })
+            .ToListAsync(cancellationToken);
+
+        if (rows.Count == 0)
+        {
+            return new PagedJobCardRosterDto([], page, pageSize, totalCount);
+        }
+
+        var employeeIds = rows.Select(r => r.Id).ToList();
+        var jobRows = await db.EmployeeJobInfos.AsNoTracking()
+            .Where(j => j.CompanyId == filter.CompanyId && j.IsCurrent && employeeIds.Contains(j.EmployeeId))
+            .Select(j => new
+            {
+                j.EmployeeId,
+                j.DepartmentId,
+                j.SectionId,
+                j.DesignationId
+            })
+            .ToListAsync(cancellationToken);
+
+        var deptIds = jobRows.Where(j => j.DepartmentId.HasValue).Select(j => j.DepartmentId!.Value).Distinct().ToList();
+        var desigIds = jobRows.Where(j => j.DesignationId.HasValue).Select(j => j.DesignationId!.Value).Distinct().ToList();
+
+        var departments = deptIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.Departments.AsNoTracking()
+                .Where(d => deptIds.Contains(d.Id) && !d.IsDeleted)
+                .ToDictionaryAsync(d => d.Id, d => d.Name, cancellationToken);
+
+        var designations = desigIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.Designations.AsNoTracking()
+                .Where(d => desigIds.Contains(d.Id) && !d.IsDeleted)
+                .ToDictionaryAsync(d => d.Id, d => d.Name, cancellationToken);
+
+        var sectionNames = await ResolveSectionNamesAsync(
+            jobRows.Where(j => j.SectionId.HasValue).Select(j => j.SectionId!.Value).Distinct(),
+            cancellationToken);
+
+        var jobByEmployee = jobRows.GroupBy(j => j.EmployeeId).ToDictionary(g => g.Key, g => g.First());
+
+        var items = rows.Select(row =>
+        {
+            jobByEmployee.TryGetValue(row.Id, out var job);
+            string deptName = string.Empty;
+            string sectionName = string.Empty;
+            string desigName = string.Empty;
+
+            if (job != null)
+            {
+                if (job.DepartmentId.HasValue && departments.TryGetValue(job.DepartmentId.Value, out var dn))
+                {
+                    deptName = dn;
+                }
+
+                if (job.DesignationId.HasValue && designations.TryGetValue(job.DesignationId.Value, out var dsn))
+                {
+                    desigName = dsn;
+                }
+
+                if (job.SectionId.HasValue && sectionNames.TryGetValue(job.SectionId.Value, out var sn))
+                {
+                    sectionName = sn;
+                }
+            }
+
+            return new JobCardRosterItemDto(
+                row.PunchNumber,
+                row.EmployeeID,
+                row.FullName,
+                deptName,
+                sectionName,
+                desigName);
+        }).ToList();
+
+        return new PagedJobCardRosterDto(items, page, pageSize, totalCount);
     }
 
     private IQueryable<HrEmployeeEntity> BuildEmployeeQuery(AttendanceEmployeeFilter filter)

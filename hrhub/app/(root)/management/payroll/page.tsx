@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress"
 import { format, addMonths, startOfMonth } from "date-fns"
 import { payrollService } from "@/lib/services/payroll"
 import { companyService, type Company } from "@/lib/services/company"
-import { companyGuidFromSelection, findOrCreatePayrollPeriod } from "@/lib/payroll-utils"
+import { companyGuidFromSelection } from "@/lib/payroll-utils"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
 
 export default function PayrollPage() {
@@ -25,8 +25,6 @@ export default function PayrollPage() {
     netSalary: number
     status: string
   } | null>(null)
-  const [locked, setLocked] = React.useState(false)
-
   React.useEffect(() => {
     companyService.getAll().then(async (list) => {
       setCompanies(list)
@@ -34,8 +32,7 @@ export default function PayrollPage() {
       if (!first) return
       const guid = first.entityId
       try {
-        const period = await findOrCreatePayrollPeriod(guid, year, month)
-        const s = await payrollService.getPayrollSummary(period.id)
+        const s = await payrollService.getPayrollSummary(guid, year, month)
         setSummary({
           totalEmployees: s.totalEmployees,
           grossSalary: s.grossSalary,
@@ -43,8 +40,6 @@ export default function PayrollPage() {
           netSalary: s.netSalary,
           status: s.status,
         })
-        const lock = await payrollService.checkPayrollLock({ companyId: guid, year, month })
-        setLocked(lock.isLocked)
       } catch {
         setSummary(null)
       }
@@ -53,13 +48,9 @@ export default function PayrollPage() {
 
   const progress =
     summary && summary.totalEmployees > 0
-      ? summary.status === "Approved"
+      ? summary.status === "Processed"
         ? 100
-        : summary.status === "Processed"
-          ? 75
-          : summary.status === "Submitted"
-            ? 50
-            : 25
+        : 25
       : 0
 
   return (
@@ -92,7 +83,6 @@ export default function PayrollPage() {
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               Payroll Status
               {summary ? <PayrollStatusBadge status={summary.status} /> : null}
-              {locked ? <PayrollStatusBadge status="Locked" /> : null}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">

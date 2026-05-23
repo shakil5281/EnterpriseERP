@@ -8,6 +8,7 @@ namespace AttendanceService.Application.Features.Attendance.Queries;
 public record GetDailyReportQuery(AttendanceFilterDto Filter) : IRequest<IReadOnlyList<DailyReportRowDto>>;
 public record GetDailySummaryReportQuery(AttendanceFilterDto Filter) : IRequest<DailySummaryReportDto>;
 public record GetJobCardQuery(AttendanceFilterDto Filter, int? EmployeeCard, string? EmployeeId) : IRequest<JobCardReportDto?>;
+public record GetJobCardRosterQuery(AttendanceFilterDto Filter, int Page, int PageSize) : IRequest<PagedJobCardRosterDto>;
 public record GetMissingEntriesQuery(AttendanceFilterDto Filter) : IRequest<MissingEntriesReportDto>;
 public record GetAbsenteeismRecordsQuery(AttendanceFilterDto Filter) : IRequest<AbsenteeismReportDto>;
 public record GetDailyOtSheetQuery(AttendanceFilterDto Filter) : IRequest<IReadOnlyList<DailyOtSheetRowDto>>;
@@ -36,7 +37,7 @@ public sealed class GetDailyReportQueryHandler(
                 profile?.DepartmentName ?? string.Empty,
                 profile?.SectionName ?? string.Empty,
                 profile?.DesignationName ?? string.Empty,
-                a.ShiftCode ?? string.Empty,
+                a.ShiftName ?? string.Empty,
                 AttendanceReportHelper.FormatDate(a.AttendanceDate),
                 AttendanceReportHelper.FormatTime(a.InTime),
                 AttendanceReportHelper.FormatTime(a.OutTime),
@@ -56,7 +57,7 @@ public sealed class GetDailySummaryReportQueryHandler(
         var profiles = await employeeQuery.GetProfilesAsync(AttendanceReportHelper.ToEmployeeFilter(request.Filter), cancellationToken);
 
         var present = rows.Count(r => AttendanceReportHelper.IsPresent(r.Status));
-        var absent = rows.Count(r => r.Status == AttendanceStatus.Absent);
+        var absent = rows.Count(r => AttendanceReportHelper.IsAbsent(r.Status));
         var late = rows.Count(r => r.Status == AttendanceStatus.Late);
         var leave = rows.Count(r => r.Status == AttendanceStatus.Leave || r.Status == AttendanceStatus.LeaveWithoutPay);
         var total = rows.Count;
@@ -106,7 +107,7 @@ public sealed class GetDailySummaryReportQueryHandler(
                     name,
                     g.Count(),
                     g.Count(x => AttendanceReportHelper.IsPresent(x.Status)),
-                    g.Count(x => x.Status == AttendanceStatus.Absent),
+                    g.Count(x => AttendanceReportHelper.IsAbsent(x.Status)),
                     g.Count(x => x.Status == AttendanceStatus.Late),
                     g.Count(x => x.Status == AttendanceStatus.Leave || x.Status == AttendanceStatus.LeaveWithoutPay),
                     AttendanceReportHelper.StableHash(g.Key!.Value));
@@ -128,7 +129,7 @@ public sealed class GetDailySummaryReportQueryHandler(
                     name,
                     g.Count(),
                     g.Count(x => AttendanceReportHelper.IsPresent(x.Status)),
-                    g.Count(x => x.Status == AttendanceStatus.Absent),
+                    g.Count(x => AttendanceReportHelper.IsAbsent(x.Status)),
                     g.Count(x => x.Status == AttendanceStatus.Late),
                     g.Count(x => x.Status == AttendanceStatus.Leave || x.Status == AttendanceStatus.LeaveWithoutPay),
                     sectionId: AttendanceReportHelper.StableHash(g.Key!.Value));
@@ -150,7 +151,7 @@ public sealed class GetDailySummaryReportQueryHandler(
                     name,
                     g.Count(),
                     g.Count(x => AttendanceReportHelper.IsPresent(x.Status)),
-                    g.Count(x => x.Status == AttendanceStatus.Absent),
+                    g.Count(x => AttendanceReportHelper.IsAbsent(x.Status)),
                     g.Count(x => x.Status == AttendanceStatus.Late),
                     g.Count(x => x.Status == AttendanceStatus.Leave || x.Status == AttendanceStatus.LeaveWithoutPay),
                     designationId: AttendanceReportHelper.StableHash(g.Key!.Value));
@@ -174,7 +175,7 @@ public sealed class GetDailySummaryReportQueryHandler(
                     name,
                     g.Count(),
                     g.Count(x => AttendanceReportHelper.IsPresent(x.Status)),
-                    g.Count(x => x.Status == AttendanceStatus.Absent),
+                    g.Count(x => AttendanceReportHelper.IsAbsent(x.Status)),
                     g.Count(x => x.Status == AttendanceStatus.Late),
                     g.Count(x => x.Status == AttendanceStatus.Leave || x.Status == AttendanceStatus.LeaveWithoutPay),
                     AttendanceReportHelper.StableHash(g.Key.DepartmentId!.Value),
@@ -191,6 +192,17 @@ public sealed class GetDailySummaryReportQueryHandler(
             [],
             []);
     }
+}
+
+public sealed class GetJobCardRosterQueryHandler(
+    IAttendanceEmployeeQuery employeeQuery) : IRequestHandler<GetJobCardRosterQuery, PagedJobCardRosterDto>
+{
+    public Task<PagedJobCardRosterDto> Handle(GetJobCardRosterQuery request, CancellationToken cancellationToken) =>
+        employeeQuery.GetPagedRosterAsync(
+            AttendanceReportHelper.ToEmployeeFilter(request.Filter),
+            request.Page,
+            request.PageSize,
+            cancellationToken);
 }
 
 public sealed class GetJobCardQueryHandler(
@@ -239,21 +251,21 @@ public sealed class GetJobCardQueryHandler(
         var dayRows = rows.Select(a => new JobCardDayRowDto(
             AttendanceReportHelper.FormatDate(a.AttendanceDate),
             a.AttendanceDate.ToString("dddd"),
-            a.Status.ToString(),
+            AttendanceReportHelper.FormatJobCardStatus(a.Status),
             AttendanceReportHelper.FormatTime(a.InTime),
             AttendanceReportHelper.FormatTime(a.OutTime),
             a.LateMinutes,
             a.EarlyOutMinutes,
             AttendanceReportHelper.ToOtHours(a.OvertimeMinutes),
             Math.Round(a.WorkingMinutes / 60m, 2),
-            a.ShiftCode,
+            a.ShiftName,
             null,
             a.DayType is DayType.WeeklyOff or DayType.Holiday,
             a.Remarks)).ToList();
 
         var summary = new JobCardSummaryDto(
             rows.Count(r => AttendanceReportHelper.IsPresent(r.Status)),
-            rows.Count(r => r.Status == AttendanceStatus.Absent),
+            rows.Count(r => AttendanceReportHelper.IsAbsent(r.Status)),
             rows.Count(r => r.DayType == DayType.WeeklyOff),
             rows.Count(r => r.DayType == DayType.Holiday),
             rows.Sum(r => AttendanceReportHelper.ToOtHours(r.OvertimeMinutes)),
@@ -273,7 +285,7 @@ public sealed class GetJobCardQueryHandler(
                 profile.SectionName ?? string.Empty,
                 null,
                 null,
-                rows.FirstOrDefault()?.ShiftCode),
+                rows.FirstOrDefault()?.ShiftName),
             summary,
             dayRows,
             AttendanceReportHelper.FormatDate(start),
@@ -305,7 +317,7 @@ public sealed class GetMissingEntriesQueryHandler(
                 legacyCompanyId,
                 profile?.DepartmentName ?? string.Empty,
                 profile?.DesignationName ?? string.Empty,
-                a.ShiftCode,
+                a.ShiftName,
                 AttendanceReportHelper.FormatDate(a.AttendanceDate),
                 AttendanceReportHelper.FormatTime(a.InTime),
                 AttendanceReportHelper.FormatTime(a.OutTime),
@@ -331,7 +343,7 @@ public sealed class GetAbsenteeismRecordsQueryHandler(
     public async Task<AbsenteeismReportDto> Handle(GetAbsenteeismRecordsQuery request, CancellationToken cancellationToken)
     {
         var rows = await AttendanceReportHelper.LoadAttendancesAsync(db, request.Filter, employeeQuery, cancellationToken);
-        var absentRows = rows.Where(r => r.Status == AttendanceStatus.Absent).OrderBy(r => r.EmployeeId).ThenBy(r => r.AttendanceDate).ToList();
+        var absentRows = rows.Where(r => AttendanceReportHelper.IsAbsent(r.Status)).OrderBy(r => r.EmployeeId).ThenBy(r => r.AttendanceDate).ToList();
         var profiles = await employeeQuery.GetProfilesAsync(AttendanceReportHelper.ToEmployeeFilter(request.Filter), cancellationToken);
 
         var consecutiveByKey = new Dictionary<(Guid EmployeeId, DateTime Date), int>();
@@ -406,7 +418,7 @@ public sealed class GetDailyOtSheetQueryHandler(
                 profile?.DepartmentName ?? string.Empty,
                 profile?.SectionName ?? string.Empty,
                 profile?.DesignationName ?? string.Empty,
-                a.ShiftCode ?? string.Empty,
+                a.ShiftName ?? string.Empty,
                 AttendanceReportHelper.FormatDate(a.AttendanceDate),
                 AttendanceReportHelper.FormatTime(a.InTime),
                 AttendanceReportHelper.FormatTime(a.OutTime),

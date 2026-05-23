@@ -158,7 +158,7 @@ interface LoginCredentials {
 
 function storeSessionFromLogin(data: LoginEnvelope) {
   const token = data.accessToken;
-  document.cookie = `token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
+  document.cookie = `token=${token}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax`;
   localStorage.setItem("token", token);
   localStorage.setItem("refreshToken", data.refreshToken);
   const isSuperAdmin = data.roles?.includes("SuperAdmin") ?? false;

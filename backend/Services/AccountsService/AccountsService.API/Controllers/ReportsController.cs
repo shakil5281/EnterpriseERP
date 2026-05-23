@@ -8,6 +8,8 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace AccountsService.API.Controllers;
 
 [ApiController]
@@ -42,7 +44,7 @@ public sealed class ReportsController(IMediator mediator, IReportExportClient ex
         var report = await mediator.Send(new GetTrialBalanceQuery(companyId, fromDate, toDate), ct);
         var csv = new StringBuilder("Code,Name,Debit,Credit,Balance\r\n");
         foreach (var line in report.Lines) csv.AppendLine($"{line.Code},{line.Name},{line.Debit},{line.Credit},{line.Balance}");
-        return File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", $"trial-balance-{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
+        return File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", $"trial-balance-{BusinessTime.Now:yyyyMMddHHmmss}.csv");
     }
 
     [HttpGet("trial-balance/export.xlsx"), Authorize(Policy = AccountsPermissions.ReportView)]

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { leaveService, type WeeklyOff } from "@/lib/services/leave"
+import { getHttpErrorMessage } from "@/lib/api-response"
 import { toast } from "sonner"
 import { useCompanyContext } from "@/components/providers/company-context"
 import { LeaveCompanyBar } from "@/components/leave/leave-company-bar"
@@ -27,8 +28,8 @@ export default function WeeklyOffsPage() {
         setIsLoading(true)
         try {
             setRows(await leaveService.listWeeklyOffs(activeCompanyId))
-        } catch {
-            toast.error("Failed to load weekly offs")
+        } catch (e) {
+            toast.error(getHttpErrorMessage(e, "Failed to load weekly offs"))
         } finally {
             setIsLoading(false)
         }
@@ -44,8 +45,8 @@ export default function WeeklyOffsPage() {
             await leaveService.createWeeklyOff({ companyId: activeCompanyId, dayOfWeekName: day })
             toast.success("Weekly off added")
             load()
-        } catch {
-            toast.error("Failed to add weekly off")
+        } catch (e) {
+            toast.error(getHttpErrorMessage(e, "Failed to add weekly off"))
         }
     }
 
@@ -54,8 +55,8 @@ export default function WeeklyOffsPage() {
             await leaveService.deleteWeeklyOff(id)
             toast.success("Removed")
             load()
-        } catch {
-            toast.error("Failed to delete")
+        } catch (e) {
+            toast.error(getHttpErrorMessage(e, "Failed to delete"))
         }
     }
 

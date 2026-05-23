@@ -75,6 +75,7 @@ export const sidebarData = {
                         { title: "Company Organogram", url: "/management/information/company-organogram" },
                         { title: "Address", url: "/management/information/address-management" },
                         { title: "Shift", url: "/management/information/shift" },
+                        { title: "Temporary Shift", url: "/management/information/shift/temporary" },
                         { title: "Group", url: "/management/information/group" },
                         { title: "Floor", url: "/management/information/floor" },
                     ],
@@ -90,16 +91,15 @@ export const sidebarData = {
                         { title: "Manpower Summary", url: "/management/human-resource/manpower-summary" },
                         { title: "Migration & Transfer", url: "/management/human-resource/migration-transfer" },
                         { title: "Manpower Requirement", url: "/management/human-resource/manpower-requirement" },
-                        { title: "Employee status", url: "/management/human-resource/employee-status" },
+                        { title: "Separations", url: "/management/human-resource/separations" },
                     ],
                 },
                 {
                     title: "Attendance",
-                    url: "/management/attendance",
+                    url: "/management/attendance/daily-report",
                     icon: IconFingerprint,
                     roles: ["SuperAdmin", "Admin", "HR", "Management", "HR Officer"],
                     items: [
-                        { title: "Attendance Console", url: "/management/attendance" },
                         { title: "Daily Attendance Report", url: "/management/attendance/daily-report" },
                         { title: "Daily Input", url: "/management/attendance/daily-input" },
                         { title: "Daily Summary", url: "/management/attendance/daily-summary" },
@@ -119,7 +119,6 @@ export const sidebarData = {
                     roles: ["SuperAdmin", "Admin", "HR", "Management"], // HR Officer excluded from Payroll
                     items: [
                         { title: "Salary Process", url: "/management/payroll/salary-process" },
-                        { title: "Payroll Approval", url: "/management/payroll/workflow/approval" },
                         { title: "Salary Sheet", url: "/management/payroll/salary-sheet" },
                         { title: "Bank Sheet", url: "/management/payroll/bank-sheet" },
                         { title: "Daily Salary Sheet", url: "/management/payroll/daily-salary-sheet" },
@@ -131,8 +130,6 @@ export const sidebarData = {
                         { title: "Allowance Bills", url: "/management/payroll/allowance-bills" },
                         { title: "Deductions", url: "/management/payroll/deductions" },
                         { title: "Final Settlement", url: "/management/payroll/final-settlements" },
-                        { title: "Payroll Policies", url: "/management/payroll/setup/policies" },
-                        { title: "Payroll Periods", url: "/management/payroll/setup/periods" },
                         { title: "Salary Grade", url: "/management/payroll/salary-grade" },
                         { title: "Salary Information", url: "/management/payroll/salary-info" },
                     ],
@@ -197,6 +194,7 @@ export const sidebarData = {
                     items: [
                         { title: "Users", url: "/management/administrator/users" },
                         { title: "Permissions", url: "/management/administrator/permissions" },
+                        { title: "Payroll Policies", url: "/management/administrator/payroll-policies", roles: ["SuperAdmin"] },
                         { title: "Database Management", url: "/management/database" },
                     ],
                 },

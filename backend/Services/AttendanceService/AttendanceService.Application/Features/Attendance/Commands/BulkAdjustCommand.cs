@@ -4,6 +4,7 @@ using AttendanceService.Application.Common;
 using AttendanceService.Application.Common.Interfaces;
 using AttendanceService.Application.DTOs;
 using AttendanceService.Domain.Entities;
+using Erp.BuildingBlocks.SharedKernel;
 
 namespace AttendanceService.Application.Features.Attendance.Commands;
 
@@ -72,7 +73,7 @@ public sealed class BulkAdjustAttendanceHandler(
                             PunchNumber = emp.PunchNumber,
                             EmployeeID = emp.EmployeeID,
                             AttendanceDate = date,
-                            CreatedAt = DateTimeOffset.UtcNow
+                            CreatedAt = BusinessTime.NowOffset
                         };
                         db.DailyAttendances.Add(attendance);
                     }

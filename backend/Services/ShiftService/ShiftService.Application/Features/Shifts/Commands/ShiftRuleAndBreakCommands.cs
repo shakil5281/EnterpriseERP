@@ -3,6 +3,8 @@ using ShiftService.Application.Common.Interfaces;
 using ShiftService.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace ShiftService.Application.Features.Shifts.Commands;
 
 public record CreateShiftRuleCommand(
@@ -12,8 +14,8 @@ public record CreateShiftRuleCommand(
     int MinimumOvertimeMinutes, int MaximumOvertimeMinutes) : IRequest<Guid>;
 
 public record CreateShiftBreakCommand(
-    Guid CompanyId, Guid ShiftId, string BreakName, TimeSpan BreakStartTime,
-    TimeSpan BreakEndTime, int BreakMinutes, bool IsPaidBreak) : IRequest<Guid>;
+    Guid CompanyId, Guid ShiftId, ShiftService.Domain.Enums.BreakType BreakType, string BreakName,
+    TimeSpan BreakStartTime, TimeSpan BreakEndTime, int BreakMinutes, bool IsPaidBreak) : IRequest<Guid>;
 
 public record UpdateShiftRuleCommand(
     Guid Id, int InGraceMinutes, int OutGraceMinutes,
@@ -45,7 +47,7 @@ public class ShiftRuleAndBreakHandlers(IShiftDbContext db) :
             OvertimeStartAfterMinutes = request.OvertimeStartAfterMinutes,
             MinimumOvertimeMinutes = request.MinimumOvertimeMinutes,
             MaximumOvertimeMinutes = request.MaximumOvertimeMinutes,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = BusinessTime.Now
         };
 
         db.ShiftRules.Add(rule);
@@ -60,6 +62,7 @@ public class ShiftRuleAndBreakHandlers(IShiftDbContext db) :
             Id = Guid.NewGuid(),
             CompanyId = request.CompanyId,
             ShiftId = request.ShiftId,
+            BreakType = request.BreakType,
             BreakName = request.BreakName,
             BreakStartTime = request.BreakStartTime,
             BreakEndTime = request.BreakEndTime,
@@ -88,7 +91,7 @@ public class ShiftRuleAndBreakHandlers(IShiftDbContext db) :
         rule.OvertimeStartAfterMinutes = request.OvertimeStartAfterMinutes;
         rule.MinimumOvertimeMinutes = request.MinimumOvertimeMinutes;
         rule.MaximumOvertimeMinutes = request.MaximumOvertimeMinutes;
-        rule.UpdatedAt = DateTime.UtcNow;
+        rule.UpdatedAt = BusinessTime.Now;
 
         await db.SaveChangesAsync(cancellationToken);
         return true;

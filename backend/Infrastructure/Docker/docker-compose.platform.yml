@@ -1,10 +1,16 @@
-# Canonical Docker Compose definitions for EnterpriseERP (referenced from repo-root docker-compose.yml).
-# Run from EnterpriseERP root:
-#   docker compose up -d redis rabbitmq seq
-#   dotnet run --project ApiGateway/Gateway.Api/Gateway.Api.csproj
+# Canonical Docker Compose definitions for EnterpriseERP (referenced from backend/docker-compose.yml).
 #
-# Gateway in Docker (Windows Docker Desktop uses host.docker.internal for upstreams):
-#   docker compose --profile gateway-docker up -d --build gateway
+# Infrastructure only:
+#   docker compose up -d redis rabbitmq seq
+#
+# Full API gateway stack (Platform.Host + Go services + YARP gateway on :5000):
+#   docker compose --profile gateway-docker up -d --build
+#
+# Host-only gateway (requires microservices running on the host at ports 5012–5049):
+#   docker compose --profile gateway-host up -d --build gateway-host
+#
+# SQL Server must accept TCP from Docker. Override ERP_SQL_SERVER in .env if needed
+# (default: host.docker.internal for Docker Desktop on Windows).
 
 services:
   redis:
@@ -12,6 +18,8 @@ services:
     ports:
       - "6379:6379"
     restart: unless-stopped
+    networks:
+      - erp
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -22,18 +30,115 @@ services:
       RABBITMQ_DEFAULT_USER: erp
       RABBITMQ_DEFAULT_PASS: erp_dev_password
     restart: unless-stopped
+    networks:
+      - erp
 
   seq:
     image: datalust/seq:latest
     environment:
       ACCEPT_EULA: "Y"
-      # Seq 2024+ requires first-run auth; disable for local dev only.
       SEQ_FIRSTRUN_NOAUTHENTICATION: "true"
     ports:
       - "5341:80"
     restart: unless-stopped
+    networks:
+      - erp
+
+  platform-host:
+    profiles:
+      - gateway-docker
+    build:
+      context: ../..
+      dockerfile: Platform.Host/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__AuthDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=AuthServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__CompanyDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=CompanyServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__HrDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=HRServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__AttendanceDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=AttendanceServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__LeaveDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=LeaveServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__ShiftDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=ShiftServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__PayrollDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=PayrollServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__NotificationDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=NotificationServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__QualityDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=QualityServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__FinishingDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=FinishingServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__SecurityDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=SecurityServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__AccountsDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=AccountsServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__Redis: "redis:6379"
+      RabbitMQ__HostName: rabbitmq
+      RabbitMQ__UserName: erp
+      RabbitMQ__Password: erp_dev_password
+      Jwt__SigningKey: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
+      Jwt__Issuer: AuthService
+      Jwt__Audience: Erp.Platform
+      PlatformHost__SkipServiceDatabaseMigrations: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - erp
+    restart: unless-stopped
+
+  punchdata:
+    profiles:
+      - gateway-docker
+    build:
+      context: ../../Services/PunchDataService
+      dockerfile: Dockerfile
+    environment:
+      PUNCHDATA_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=PunchDataDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      PUNCHDATA_SERVER_ADDRESS: ":5050"
+      PUNCHDATA_JWT_SIGNINGKEY: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - erp
+    restart: unless-stopped
+
+  importexport:
+    profiles:
+      - gateway-docker
+    build:
+      context: ../../Services/ImportExportService
+      dockerfile: Dockerfile
+    environment:
+      IMPORTEXPORT_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=ImportExportDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      IMPORTEXPORT_COMPANY_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=CompanyServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      IMPORTEXPORT_SERVER_ADDRESS: ":8060"
+      IMPORTEXPORT_REDIS: "redis:6379"
+      IMPORTEXPORT_JWT_SIGNINGKEY: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
+      IMPORTEXPORT_HR_BASE_URL: "http://platform-host:8080/api/v1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - redis
+    networks:
+      - erp
+    restart: unless-stopped
 
   gateway:
+    profiles:
+      - gateway-docker
+    build:
+      context: ../..
+      dockerfile: ApiGateway/Dockerfile
+    ports:
+      - "5000:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+    depends_on:
+      - platform-host
+      - punchdata
+      - importexport
+    networks:
+      - erp
+    restart: unless-stopped
+
+  gateway-host:
+    profiles:
+      - gateway-host
     build:
       context: ../..
       dockerfile: ApiGateway/Dockerfile
@@ -59,8 +164,12 @@ services:
       ReverseProxy__Clusters__notification__Destinations__d1__Address: "http://host.docker.internal:5047/"
       ReverseProxy__Clusters__audit__Destinations__d1__Address: "http://host.docker.internal:5048/"
       ReverseProxy__Clusters__filestorage__Destinations__d1__Address: "http://host.docker.internal:5049/"
+      ReverseProxy__Clusters__importexport__Destinations__d1__Address: "http://host.docker.internal:8060/"
       ReverseProxy__Clusters__legacy__Destinations__d1__Address: "http://host.docker.internal:5011/"
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    profiles:
-      - gateway-docker
+    restart: unless-stopped
+
+networks:
+  erp:
+    driver: bridge

@@ -5,6 +5,8 @@ using LeaveService.Contracts.LeaveApplications;
 using LeaveService.Domain.Entities;
 using MediatR;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace LeaveService.Application.Features.LeaveApplications;
 
 public sealed record ApplyLeaveCommand(ApplyLeaveRequest Request) : IRequest<LeaveApplicationDto>;
@@ -93,8 +95,8 @@ public sealed class ApplyLeaveCommandHandler(
             Reason = r.Reason,
             Status = requiresApproval ? "Pending" : "Approved",
             AppliedBy = r.AppliedBy,
-            AppliedAt = DateTime.UtcNow,
-            ApprovedAt = requiresApproval ? null : DateTime.UtcNow,
+            AppliedAt = BusinessTime.Now,
+            ApprovedAt = requiresApproval ? null : BusinessTime.Now,
             AttachmentUrl = r.AttachmentUrl,
         };
 
@@ -134,7 +136,7 @@ public sealed class ApplyLeaveCommandHandler(
                 EmployeeId = r.EmployeeId,
                 LeaveTypeId = r.LeaveTypeId,
                 LeaveApplicationId = app.Id,
-                TransactionDate = DateTime.UtcNow,
+                TransactionDate = BusinessTime.Now,
                 TransactionType = "Apply",
                 Days = totalDays,
                 YearNo = yearNo,
@@ -143,7 +145,7 @@ public sealed class ApplyLeaveCommandHandler(
         }
         else
         {
-            app.ApprovedAt = DateTime.UtcNow;
+            app.ApprovedAt = BusinessTime.Now;
             await balances.RecordDirectApprovalAsync(r.CompanyId, r.EmployeeId, r.LeaveTypeId, yearNo, totalDays, cancellationToken);
             uow.LeaveTransactions.Add(new LeaveTransaction
             {
@@ -152,7 +154,7 @@ public sealed class ApplyLeaveCommandHandler(
                 EmployeeId = r.EmployeeId,
                 LeaveTypeId = r.LeaveTypeId,
                 LeaveApplicationId = app.Id,
-                TransactionDate = DateTime.UtcNow,
+                TransactionDate = BusinessTime.Now,
                 TransactionType = "Approve",
                 Days = totalDays,
                 YearNo = yearNo,
@@ -254,7 +256,7 @@ public sealed class ApproveLeaveCommandHandler(
         }
 
         current.Status = "Approved";
-        current.ActionAt = DateTime.UtcNow;
+        current.ActionAt = BusinessTime.Now;
         current.ApproverUserId ??= r.ApproverUserId;
 
         var morePending = ordered.Any(s => s.Status == "Pending");
@@ -267,7 +269,7 @@ public sealed class ApproveLeaveCommandHandler(
         }
 
         app.Status = "Approved";
-        app.ApprovedAt = DateTime.UtcNow;
+        app.ApprovedAt = BusinessTime.Now;
         var y = app.FromDate.Year;
         await balances.FinalizeApprovalAsync(app.CompanyId, app.EmployeeId, app.LeaveTypeId, y, app.TotalDays, cancellationToken);
         uow.LeaveTransactions.Add(new LeaveTransaction
@@ -277,7 +279,7 @@ public sealed class ApproveLeaveCommandHandler(
             EmployeeId = app.EmployeeId,
             LeaveTypeId = app.LeaveTypeId,
             LeaveApplicationId = app.Id,
-            TransactionDate = DateTime.UtcNow,
+            TransactionDate = BusinessTime.Now,
             TransactionType = "Approve",
             Days = app.TotalDays,
             YearNo = y,
@@ -325,13 +327,13 @@ public sealed class RejectLeaveCommandHandler(
             {
                 s.Status = "Rejected";
                 s.Remarks = r.Remarks;
-                s.ActionAt = DateTime.UtcNow;
+                s.ActionAt = BusinessTime.Now;
                 s.ApproverUserId ??= r.RejectedBy;
             }
         }
 
         app.Status = "Rejected";
-        app.RejectedAt = DateTime.UtcNow;
+        app.RejectedAt = BusinessTime.Now;
         var y = app.FromDate.Year;
         await balances.ReleasePendingAsync(app.CompanyId, app.EmployeeId, app.LeaveTypeId, y, app.TotalDays, cancellationToken);
         uow.LeaveTransactions.Add(new LeaveTransaction
@@ -341,7 +343,7 @@ public sealed class RejectLeaveCommandHandler(
             EmployeeId = app.EmployeeId,
             LeaveTypeId = app.LeaveTypeId,
             LeaveApplicationId = app.Id,
-            TransactionDate = DateTime.UtcNow,
+            TransactionDate = BusinessTime.Now,
             TransactionType = "Reject",
             Days = app.TotalDays,
             YearNo = y,
@@ -385,7 +387,7 @@ public sealed class CancelLeaveCommandHandler(
         }
 
         app.Status = "Cancelled";
-        app.CancelledAt = DateTime.UtcNow;
+        app.CancelledAt = BusinessTime.Now;
         uow.LeaveTransactions.Add(new LeaveTransaction
         {
             Id = Guid.NewGuid(),
@@ -393,7 +395,7 @@ public sealed class CancelLeaveCommandHandler(
             EmployeeId = app.EmployeeId,
             LeaveTypeId = app.LeaveTypeId,
             LeaveApplicationId = app.Id,
-            TransactionDate = DateTime.UtcNow,
+            TransactionDate = BusinessTime.Now,
             TransactionType = "Cancel",
             Days = app.TotalDays,
             YearNo = y,

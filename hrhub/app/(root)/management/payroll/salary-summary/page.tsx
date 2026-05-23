@@ -219,7 +219,7 @@ export default function SalarySummaryPage() {
                         <div className="xl:col-span-2 space-y-4">
                             <Tabs defaultValue="department" className="w-full">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                                    <TabsList className="grid grid-cols-2 sm:grid-cols-4 h-auto p-1 bg-muted/40">
+                                    <TabsList scrollable={false} className="grid grid-cols-2 sm:grid-cols-4 h-auto p-1 bg-muted/40">
                                         <TabsTrigger value="department" className="py-2 flex items-center gap-1.5">
                                             <IconHierarchy className="size-3.5" />
                                             Dept

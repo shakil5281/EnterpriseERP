@@ -21,4 +21,7 @@
     <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.EventBus\Erp.BuildingBlocks.EventBus.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.SharedKernel\Erp.BuildingBlocks.SharedKernel.csproj" />
+  </ItemGroup>
 </Project>

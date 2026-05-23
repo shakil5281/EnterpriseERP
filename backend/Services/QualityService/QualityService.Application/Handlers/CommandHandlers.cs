@@ -5,6 +5,8 @@ using QualityService.Domain;
 using QualityService.Contracts;
 using System.Text.Json;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace QualityService.Application.Handlers;
 
 public sealed class CommandHandlers(
@@ -48,7 +50,7 @@ public sealed class CommandHandlers(
             OldValue = oldValue is not null ? JsonSerializer.Serialize(oldValue) : null,
             NewValue = newValue is not null ? JsonSerializer.Serialize(newValue) : null,
             ActionBy = userId,
-            ActionAt = DateTime.UtcNow
+            ActionAt = BusinessTime.Now
         };
         db.QualityAuditLogs.Add(log);
         await Task.CompletedTask;
@@ -89,7 +91,7 @@ public sealed class CommandHandlers(
         checkpoint.CheckpointName = cmd.Request.CheckpointName;
         checkpoint.CheckpointType = cmd.Request.CheckpointType;
         checkpoint.UpdatedBy = cmd.Request.UpdatedBy;
-        checkpoint.UpdatedAt = DateTime.UtcNow;
+        checkpoint.UpdatedAt = BusinessTime.Now;
 
         db.QualityCheckpoints.Update(checkpoint);
         await uow.SaveChangesAsync(ct);
@@ -104,7 +106,7 @@ public sealed class CommandHandlers(
     {
         var checkpoint = await db.QualityCheckpoints.FindAsync([cmd.Id], ct) ?? throw new KeyNotFoundException("Checkpoint not found.");
         checkpoint.IsActive = true;
-        checkpoint.UpdatedAt = DateTime.UtcNow;
+        checkpoint.UpdatedAt = BusinessTime.Now;
 
         db.QualityCheckpoints.Update(checkpoint);
         await uow.SaveChangesAsync(ct);
@@ -117,7 +119,7 @@ public sealed class CommandHandlers(
     {
         var checkpoint = await db.QualityCheckpoints.FindAsync([cmd.Id], ct) ?? throw new KeyNotFoundException("Checkpoint not found.");
         checkpoint.IsActive = false;
-        checkpoint.UpdatedAt = DateTime.UtcNow;
+        checkpoint.UpdatedAt = BusinessTime.Now;
 
         db.QualityCheckpoints.Update(checkpoint);
         await uow.SaveChangesAsync(ct);
@@ -176,7 +178,7 @@ public sealed class CommandHandlers(
         defectType.DefectName = cmd.Request.DefectName;
         defectType.Severity = cmd.Request.Severity;
         defectType.UpdatedBy = cmd.Request.UpdatedBy;
-        defectType.UpdatedAt = DateTime.UtcNow;
+        defectType.UpdatedAt = BusinessTime.Now;
 
         db.DefectTypes.Update(defectType);
         await uow.SaveChangesAsync(ct);
@@ -262,7 +264,7 @@ public sealed class CommandHandlers(
         inspection.RejectQty = req.RejectQty;
         inspection.Remarks = req.Remarks;
         inspection.UpdatedBy = req.UpdatedBy;
-        inspection.UpdatedAt = DateTime.UtcNow;
+        inspection.UpdatedAt = BusinessTime.Now;
 
         db.QualityInspectionDefects.RemoveRange(inspection.Defects);
 
@@ -296,7 +298,7 @@ public sealed class CommandHandlers(
 
         inspection.Status = QualityInspectionStatuses.Submitted;
         inspection.UpdatedBy = cmd.UserId;
-        inspection.UpdatedAt = DateTime.UtcNow;
+        inspection.UpdatedAt = BusinessTime.Now;
 
         db.QualityInspections.Update(inspection);
         await uow.SaveChangesAsync(ct);
@@ -312,7 +314,7 @@ public sealed class CommandHandlers(
 
         inspection.Status = QualityInspectionStatuses.Approved;
         inspection.ApprovedBy = cmd.UserId;
-        inspection.ApprovedAt = DateTime.UtcNow;
+        inspection.ApprovedAt = BusinessTime.Now;
 
         // Auto determine result
         inspection.Result = inspection.RejectQty > 0 || inspection.DefectQty > (inspection.InspectedQty * 0.15) 
@@ -359,7 +361,7 @@ public sealed class CommandHandlers(
 
         inspection.Status = QualityInspectionStatuses.Cancelled;
         inspection.UpdatedBy = cmd.UserId;
-        inspection.UpdatedAt = DateTime.UtcNow;
+        inspection.UpdatedAt = BusinessTime.Now;
 
         db.QualityInspections.Update(inspection);
         await uow.SaveChangesAsync(ct);
@@ -419,7 +421,7 @@ public sealed class CommandHandlers(
         var rework = await db.QualityReworks.FindAsync([cmd.Id], ct) ?? throw new KeyNotFoundException("Rework sheet not found.");
         rework.Status = QualityReworkStatuses.Sent;
         rework.UpdatedBy = cmd.UserId;
-        rework.UpdatedAt = DateTime.UtcNow;
+        rework.UpdatedAt = BusinessTime.Now;
 
         db.QualityReworks.Update(rework);
         await uow.SaveChangesAsync(ct);
@@ -441,9 +443,9 @@ public sealed class CommandHandlers(
     {
         var rework = await db.QualityReworks.FindAsync([cmd.Id], ct) ?? throw new KeyNotFoundException("Rework sheet not found.");
         rework.Status = QualityReworkStatuses.Completed;
-        rework.CompletedAt = DateTime.UtcNow;
+        rework.CompletedAt = BusinessTime.Now;
         rework.UpdatedBy = cmd.UserId;
-        rework.UpdatedAt = DateTime.UtcNow;
+        rework.UpdatedAt = BusinessTime.Now;
 
         db.QualityReworks.Update(rework);
         await uow.SaveChangesAsync(ct);
@@ -577,7 +579,7 @@ public sealed class CommandHandlers(
 
         inspection.Status = QualityInspectionStatuses.Approved;
         inspection.ApprovedBy = cmd.UserId;
-        inspection.ApprovedAt = DateTime.UtcNow;
+        inspection.ApprovedAt = BusinessTime.Now;
 
         db.FinalInspections.Update(inspection);
         await uow.SaveChangesAsync(ct);
@@ -619,7 +621,7 @@ public sealed class CommandHandlers(
 
         inspection.Status = QualityInspectionStatuses.Cancelled;
         inspection.UpdatedBy = cmd.UserId;
-        inspection.UpdatedAt = DateTime.UtcNow;
+        inspection.UpdatedAt = BusinessTime.Now;
 
         db.FinalInspections.Update(inspection);
         await uow.SaveChangesAsync(ct);

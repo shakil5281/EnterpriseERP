@@ -74,7 +74,7 @@ export function evaluateFormula(formula: string, context: Record<string, number>
     }
 
     try {
-        // eslint-disable-next-line no-eval
+         
         return eval(processedFormula);
     } catch (e) {
         console.error("Formula evaluation failed:", e);

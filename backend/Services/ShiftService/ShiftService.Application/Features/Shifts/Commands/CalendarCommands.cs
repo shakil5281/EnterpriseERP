@@ -4,6 +4,8 @@ using ShiftService.Domain.Entities;
 using ShiftService.Application.DTOs;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace ShiftService.Application.Features.Shifts.Commands;
 
 public record CreateShiftCalendarCommand(
@@ -23,7 +25,7 @@ public class CalendarHandler(IShiftDbContext db) : IRequestHandler<CreateShiftCa
             CalendarDate = request.CalendarDate.Date,
             DayType = request.DayType,
             Remarks = request.Remarks,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = BusinessTime.Now
         };
 
         db.ShiftCalendars.Add(calendar);

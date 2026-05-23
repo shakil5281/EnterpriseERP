@@ -3,7 +3,7 @@
 import * as React from "react"
 import { format } from "date-fns"
 import { CalendarIcon } from "lucide-react"
-import { DateRange } from "react-day-picker"
+import { DateRange, Matcher } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -21,6 +21,11 @@ interface DateRangePickerProps {
     className?: string
     fromYear?: number
     toYear?: number
+    defaultMonth?: Date
+    numberOfMonths?: number
+    disabled?: Matcher | Matcher[]
+    fromDate?: Date
+    toDate?: Date
 }
 
 export function DateRangePicker({
@@ -29,7 +34,12 @@ export function DateRangePicker({
     placeholder = "Pick a date range",
     className,
     fromYear = 1960,
-    toYear = 2030
+    toYear = 2030,
+    defaultMonth,
+    numberOfMonths = 2,
+    disabled,
+    fromDate,
+    toDate,
 }: DateRangePickerProps) {
     return (
         <div className={cn("grid gap-2", className)}>
@@ -62,10 +72,13 @@ export function DateRangePicker({
                     <Calendar
                         initialFocus
                         mode="range"
-                        defaultMonth={date?.from}
+                        defaultMonth={defaultMonth ?? date?.from}
                         selected={date}
                         onSelect={setDate}
-                        numberOfMonths={2}
+                        numberOfMonths={numberOfMonths}
+                        disabled={disabled}
+                        startMonth={fromDate}
+                        endMonth={toDate}
                         fromYear={fromYear}
                         toYear={toYear}
                         captionLayout="dropdown"

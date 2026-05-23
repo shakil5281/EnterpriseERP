@@ -15,9 +15,6 @@ public class GetApplicableShiftQueryHandler(IShiftSelectionService selectionServ
         
         if (shift == null) return null;
 
-        return new ShiftDto(
-            shift.Id, shift.CompanyId, shift.ShiftCode, shift.ShiftName, shift.ShiftType,
-            shift.StartTime, shift.EndTime, shift.IsCrossDay, shift.IsGeneralDuty,
-            shift.IsDefault, shift.IsActive);
+        return ShiftDtoMapping.ToDto(shift);
     }
 }

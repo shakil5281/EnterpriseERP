@@ -26,6 +26,8 @@ public class EmployeeListQuery : PagedRequest
     public Guid? CompanyId { get; set; }
     public Guid? DepartmentId { get; set; }
     public string? Status { get; set; }
+    public string? Gender { get; set; }
+    public string? Religion { get; set; }
 }
 
 public class ManpowerListQuery : EmployeeListQuery
@@ -36,7 +38,6 @@ public class ManpowerListQuery : EmployeeListQuery
 
 public class ManpowerSummaryQuery : ManpowerListQuery
 {
-    public string? Gender { get; set; }
     public DateTime? JoinDateFrom { get; set; }
     public DateTime? JoinDateTo { get; set; }
 }
@@ -70,6 +71,12 @@ public sealed class EmployeeListItemDto
     public string? Email { get; init; }
     public Guid CompanyId { get; init; }
     public string Status { get; init; } = string.Empty;
+    public string? Gender { get; init; }
+    public string? Religion { get; init; }
+    public string? BloodGroup { get; init; }
+    public bool IsOtEnabled { get; init; }
+    public DateTime JoinDate { get; init; }
+    public string? Phone { get; init; }
     public string? DesignationName { get; init; }
     public string? DepartmentName { get; init; }
 }
@@ -86,6 +93,9 @@ public sealed class ManpowerListItemDto
     public DateTime JoinDate { get; init; }
     public string Status { get; init; } = string.Empty;
     public string? Phone { get; init; }
+    public string? Religion { get; init; }
+    public string? BloodGroup { get; init; }
+    public bool IsOtEnabled { get; init; }
     public decimal GrossSalary { get; init; }
 }
 
@@ -98,6 +108,8 @@ public sealed class EmployeeDetailsDto
     public string FullName { get; init; } = string.Empty;
     public string? BanglaName { get; init; }
     public string? Gender { get; init; }
+    public string? Religion { get; init; }
+    public string? BloodGroup { get; init; }
     public DateTime? DateOfBirth { get; init; }
     public string? NationalId { get; init; }
     public string? BirthCertificateNo { get; init; }
@@ -106,6 +118,29 @@ public sealed class EmployeeDetailsDto
     public DateTime JoinDate { get; init; }
     public string EmploymentType { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
+    public bool IsOtEnabled { get; init; }
+
+    public string? FatherNameEn { get; init; }
+    public string? FatherNameBn { get; init; }
+    public string? MotherNameEn { get; init; }
+    public string? MotherNameBn { get; init; }
+    public string? MaritalStatus { get; init; }
+    public string? SpouseNameEn { get; init; }
+    public string? SpouseNameBn { get; init; }
+    public string? SpouseOccupation { get; init; }
+    public string? SpouseContact { get; init; }
+    public string? EducationLevel { get; init; }
+    public string? Institution { get; init; }
+    public string? FieldOfStudy { get; init; }
+    public string? Skills { get; init; }
+    public string? Reference1Name { get; init; }
+    public string? Reference1Relation { get; init; }
+    public string? Reference1Phone { get; init; }
+    public string? Reference1Address { get; init; }
+    public string? Reference2Name { get; init; }
+    public string? Reference2Relation { get; init; }
+    public string? Reference2Phone { get; init; }
+    public string? Reference2Address { get; init; }
 
     public EmployeeJobInfoDto? CurrentJobInfo { get; init; }
     public EmployeeSalaryInfoDto? CurrentSalaryInfo { get; init; }
@@ -151,7 +186,8 @@ public record EmployeeJobInfoDto(
     Guid? DesignationId, string? DesignationName,
     Guid? GradeId, string? GradeName,
     Guid? SupervisorId, string? SupervisorName,
-    string? WorkLocation, DateTime EffectiveFrom);
+    string? WorkLocation, DateTime EffectiveFrom,
+    Guid? GroupId = null, string? GroupName = null);
 
 public record EmployeeSalaryInfoDto(
     decimal BasicSalary, decimal HouseRent, decimal MedicalAllowance,

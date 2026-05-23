@@ -1,7 +1,8 @@
+using Erp.BuildingBlocks.SharedKernel;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using ShiftService.Application.Common.Interfaces;
 using ShiftService.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
 
 namespace ShiftService.Application.Features.Shifts.Commands;
 
@@ -13,14 +14,20 @@ public record AssignTemporaryShiftCommand(
     Guid CompanyId, Guid EmployeeId, Guid ShiftId, DateTime ShiftDate,
     string? Reason, Guid? CreatedBy) : IRequest<Guid>;
 
+public record UpdateTemporaryShiftCommand(
+    Guid Id, Guid CompanyId, Guid EmployeeId, Guid ShiftId, DateTime ShiftDate,
+    string? Reason, Guid? UpdatedBy) : IRequest<bool>;
+
+public record DeleteTemporaryShiftCommand(Guid Id) : IRequest<bool>;
+
 public class AssignmentHandlers(IShiftDbContext db) :
     IRequestHandler<AssignEmployeeShiftCommand, Guid>,
     IRequestHandler<AssignTemporaryShiftCommand, Guid>,
+    IRequestHandler<UpdateTemporaryShiftCommand, bool>,
     IRequestHandler<DeleteTemporaryShiftCommand, bool>
 {
     public async Task<Guid> Handle(AssignEmployeeShiftCommand request, CancellationToken cancellationToken)
     {
-        // One employee can have only one current shift per company.
         var current = await db.EmployeeShiftAssignments
             .FirstOrDefaultAsync(a => a.CompanyId == request.CompanyId
                 && a.EmployeeId == request.EmployeeId
@@ -42,7 +49,7 @@ public class AssignmentHandlers(IShiftDbContext db) :
             EffectiveTo = request.EffectiveTo,
             IsCurrent = true,
             AssignedBy = request.AssignedBy,
-            AssignedAt = DateTime.UtcNow
+            AssignedAt = BusinessTime.Now
         };
 
         db.EmployeeShiftAssignments.Add(assignment);
@@ -52,7 +59,6 @@ public class AssignmentHandlers(IShiftDbContext db) :
 
     public async Task<Guid> Handle(AssignTemporaryShiftCommand request, CancellationToken cancellationToken)
     {
-        // Temporary shift overrides regular shift. Unique per company, employee, and date.
         var assignment = await db.TemporaryShiftAssignments
             .FirstOrDefaultAsync(a => a.CompanyId == request.CompanyId
                 && a.EmployeeId == request.EmployeeId
@@ -66,7 +72,7 @@ public class AssignmentHandlers(IShiftDbContext db) :
                 CompanyId = request.CompanyId,
                 EmployeeId = request.EmployeeId,
                 ShiftDate = request.ShiftDate.Date,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = BusinessTime.Now
             };
             db.TemporaryShiftAssignments.Add(assignment);
         }
@@ -79,6 +85,25 @@ public class AssignmentHandlers(IShiftDbContext db) :
         return assignment.Id;
     }
 
+    public async Task<bool> Handle(UpdateTemporaryShiftCommand request, CancellationToken cancellationToken)
+    {
+        var assignment = await db.TemporaryShiftAssignments.FindAsync([request.Id], cancellationToken);
+        if (assignment is null)
+        {
+            return false;
+        }
+
+        assignment.CompanyId = request.CompanyId;
+        assignment.EmployeeId = request.EmployeeId;
+        assignment.ShiftId = request.ShiftId;
+        assignment.ShiftDate = request.ShiftDate.Date;
+        assignment.Reason = request.Reason;
+        assignment.CreatedBy = request.UpdatedBy ?? assignment.CreatedBy;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     public async Task<bool> Handle(DeleteTemporaryShiftCommand request, CancellationToken cancellationToken)
     {
         var temp = await db.TemporaryShiftAssignments.FindAsync([request.Id], cancellationToken);
@@ -89,5 +114,3 @@ public class AssignmentHandlers(IShiftDbContext db) :
         return true;
     }
 }
-
-public record DeleteTemporaryShiftCommand(Guid Id) : IRequest<bool>;

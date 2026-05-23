@@ -22,6 +22,161 @@ namespace AttendanceService.Infrastructure.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("AttendanceService.Domain.Entities.AttendanceBillRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("BillDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("BillType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CompanyName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Department")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Designation")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EmployeeID")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("HrEmployeeId");
+
+                    b.Property<string>("EmployeeName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("InTime")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OutTime")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("PunchNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ShiftName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("TiffinCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "BillType", "BillDate");
+
+                    b.HasIndex("CompanyId", "EmployeeId", "BillType", "BillDate")
+                        .IsUnique();
+
+                    b.ToTable("AttendanceBillRecords", (string)null);
+                });
+
+            modelBuilder.Entity("AttendanceService.Domain.Entities.AttendanceProcessBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("FailedEmployees")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ProcessFromDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ProcessStatus")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ProcessToDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ProcessedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ProcessedEmployees")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TotalEmployees")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "StartedAt");
+
+                    b.ToTable("AttendanceProcessBatches");
+                });
+
+            modelBuilder.Entity("AttendanceService.Domain.Entities.AttendanceProcessError", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("AttendanceDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ErrorMessage")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BatchId", "AttendanceDate");
+
+                    b.ToTable("AttendanceProcessErrors");
+                });
+
             modelBuilder.Entity("AttendanceService.Domain.Entities.DailyAttendance", b =>
                 {
                     b.Property<Guid>("Id")
@@ -70,6 +225,9 @@ namespace AttendanceService.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("HrEmployeeId");
 
+                    b.Property<Guid?>("InPunchId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("InTime")
                         .HasColumnType("datetime2");
 
@@ -97,6 +255,9 @@ namespace AttendanceService.Infrastructure.Persistence.Migrations
                     b.Property<int>("OTMinutes")
                         .HasColumnType("int");
 
+                    b.Property<Guid?>("OutPunchId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("OutTime")
                         .HasColumnType("datetime2");
 
@@ -109,11 +270,11 @@ namespace AttendanceService.Infrastructure.Persistence.Migrations
                     b.Property<string>("Remarks")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("ShiftCode")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<Guid?>("ShiftId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ShiftName")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -128,6 +289,10 @@ namespace AttendanceService.Infrastructure.Persistence.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("InPunchId");
+
+                    b.HasIndex("OutPunchId");
 
                     b.HasIndex("CompanyId", "EmployeeId", "AttendanceDate")
                         .IsUnique();

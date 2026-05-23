@@ -1,5 +1,5 @@
+using AttendanceService.Application.Common;
 using AttendanceService.Application.Common.Interfaces;
-
 using AttendanceService.Infrastructure.Persistence.HrRead;
 
 using Microsoft.EntityFrameworkCore;
@@ -72,7 +72,7 @@ public sealed class HrEmployeeDirectory(HrReadDbContext db) : IEmployeeDirectory
 
             .Where(e => e.CompanyId == companyId && !e.IsDeleted)
 
-            .Select(e => new EmployeeDirectoryEntry(e.Id, e.PunchNumber, e.EmployeeID))
+            .Select(e => new EmployeeDirectoryEntry(e.Id, e.PunchNumber, e.EmployeeID, e.IsOtEnabled))
 
             .ToListAsync(cancellationToken);
 
@@ -135,8 +135,22 @@ public sealed class HrEmployeeDirectory(HrReadDbContext db) : IEmployeeDirectory
             return null;
         }
 
-        return await db.Employees.AsNoTracking()
+        var exactMatch = await db.Employees.AsNoTracking()
             .Where(e => e.CompanyId == companyId && !e.IsDeleted && e.EmployeeID == trimmed)
+            .Select(e => (Guid?)e.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (exactMatch.HasValue)
+        {
+            return exactMatch;
+        }
+
+        if (!EmployeeFilterMatcher.TryParseFilterPunchNumber(trimmed, out var punchNumber))
+        {
+            return null;
+        }
+
+        return await db.Employees.AsNoTracking()
+            .Where(e => e.CompanyId == companyId && !e.IsDeleted && e.PunchNumber == punchNumber)
             .Select(e => (Guid?)e.Id)
             .FirstOrDefaultAsync(cancellationToken);
     }
@@ -157,7 +171,7 @@ public sealed class HrEmployeeDirectory(HrReadDbContext db) : IEmployeeDirectory
 
             .OrderBy(e => e.EmployeeID)
 
-            .Select(e => new EmployeeDirectoryEntry(e.Id, e.PunchNumber, e.EmployeeID))
+            .Select(e => new EmployeeDirectoryEntry(e.Id, e.PunchNumber, e.EmployeeID, e.IsOtEnabled))
 
             .ToListAsync(cancellationToken);
 

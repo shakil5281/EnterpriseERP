@@ -3,18 +3,6 @@ using PayrollService.Contracts;
 
 namespace PayrollService.Application;
 
-public sealed class CreatePayrollPolicyCommandValidator : AbstractValidator<CreatePayrollPolicyCommand>
-{
-    public CreatePayrollPolicyCommandValidator()
-    {
-        RuleFor(x => x.Request.CompanyId).NotEmpty();
-        RuleFor(x => x.Request.PolicyName).NotEmpty().MaximumLength(150);
-        RuleFor(x => x.Request.SalaryCalculationType).NotEmpty();
-        RuleFor(x => x.Request.MonthDayCalculationType).NotEmpty();
-        RuleFor(x => x.Request.FixedMonthDays).NotNull().GreaterThan(0).When(x => x.Request.MonthDayCalculationType == "FixedDays");
-    }
-}
-
 public sealed class ProcessPayrollCommandValidator : AbstractValidator<ProcessPayrollCommand>
 {
     public ProcessPayrollCommandValidator()
@@ -44,6 +32,16 @@ public sealed class CreateSalaryIncrementCommandValidator : AbstractValidator<Cr
         RuleFor(x => x.Request.NewGrossSalary).GreaterThan(x => x.Request.OldGrossSalary);
         RuleFor(x => x.Request.EffectiveFrom).NotEmpty();
         RuleFor(x => x.Request.Reason).NotEmpty();
+    }
+}
+
+public sealed class AssignCompanyPayrollPolicyCommandValidator : AbstractValidator<AssignCompanyPayrollPolicyCommand>
+{
+    public AssignCompanyPayrollPolicyCommandValidator()
+    {
+        RuleFor(x => x.Request.CompanyId).NotEmpty();
+        RuleFor(x => x.Request.PolicyCode).NotEmpty();
+        RuleFor(x => x.Request.EffectiveFrom).NotEmpty();
     }
 }
 

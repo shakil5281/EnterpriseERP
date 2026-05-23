@@ -1,6 +1,8 @@
 using CuttingService.Domain;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace CuttingService.Application.Services;
 
 public sealed class CuttingBalanceService(ICuttingDbContext db) : ICuttingBalanceService
@@ -15,7 +17,7 @@ public sealed class CuttingBalanceService(ICuttingDbContext db) : ICuttingBalanc
                 .Where(x => x.CompanyId == plan.CompanyId && x.SizeName == row.SizeName && x.CuttingPlan!.OrderId == plan.OrderId && x.CuttingPlan.ColorName == plan.ColorName)
                 .SumAsync(x => x.PlanQty, cancellationToken);
             balance.BalanceQty = balance.OrderQty - balance.CutQty;
-            balance.UpdatedAt = DateTime.UtcNow;
+            balance.UpdatedAt = BusinessTime.Now;
         }
     }
 
@@ -25,7 +27,7 @@ public sealed class CuttingBalanceService(ICuttingDbContext db) : ICuttingBalanc
         if (balance.OrderQty == 0) balance.OrderQty = orderQty;
         balance.CutQty += output.OutputQty;
         balance.BalanceQty = balance.OrderQty - balance.CutQty;
-        balance.UpdatedAt = DateTime.UtcNow;
+        balance.UpdatedAt = BusinessTime.Now;
     }
 
     public async Task AddTransferAsync(CuttingPanelTransfer transfer, CancellationToken cancellationToken = default)
@@ -35,7 +37,7 @@ public sealed class CuttingBalanceService(ICuttingDbContext db) : ICuttingBalanc
         {
             var balance = await FindOrCreateAsync(transfer.CompanyId, transfer.OrderId, item.ColorName, item.SizeName, cancellationToken);
             balance.TransferredQty += item.TransferQty;
-            balance.UpdatedAt = DateTime.UtcNow;
+            balance.UpdatedAt = BusinessTime.Now;
         }
     }
 

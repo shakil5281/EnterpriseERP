@@ -4,6 +4,8 @@ using AuthService.Infrastructure.Entities;
 using AuthService.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace AuthService.Infrastructure.Repositories;
 
 public sealed class UserCompanyAccessRepository(AuthDbContext db) : IUserCompanyAccessRepository
@@ -18,7 +20,7 @@ public sealed class UserCompanyAccessRepository(AuthDbContext db) : IUserCompany
 
 	public async Task ReplaceAssignmentsAsync(Guid userId, IReadOnlyList<(Guid CompanyGuid, bool IsDefaultCompany)> items, Guid? actorUserId, CancellationToken cancellationToken = default)
 	{
-		DateTimeOffset now = DateTimeOffset.UtcNow;
+		DateTimeOffset now = BusinessTime.NowOffset;
 		foreach (UserCompanyAccess row in await db.UserCompanyAccesses.Where(x => x.UserId == userId && !x.IsDeleted).ToListAsync(cancellationToken))
 		{
 			row.IsDeleted = true;

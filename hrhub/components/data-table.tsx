@@ -119,7 +119,7 @@ export function DragHandle({ id }: { id: string | number }) {
   )
 }
 
-export const DraggableRow = React.memo(({ row, onRowClick }: { row: Row<any>, onRowClick?: (row: any) => void }) => {
+export const DraggableRow = React.memo(function DraggableRow({ row, onRowClick }: { row: Row<any>, onRowClick?: (row: any) => void }) {
   const rowId = row.original.id || row.id;
   const { transform, transition, setNodeRef, isDragging } = useSortable({
     id: rowId as UniqueIdentifier,

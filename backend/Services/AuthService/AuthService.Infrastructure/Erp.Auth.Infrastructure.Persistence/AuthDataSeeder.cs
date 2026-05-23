@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace AuthService.Infrastructure.Persistence;
 
 public static class AuthDataSeeder
@@ -98,7 +100,7 @@ public static class AuthDataSeeder
 					Id = Guid.NewGuid(),
 					Code = code,
 					Description = description,
-					CreatedAt = DateTimeOffset.UtcNow,
+					CreatedAt = BusinessTime.NowOffset,
 				});
 			}
 		}
@@ -118,7 +120,7 @@ public static class AuthDataSeeder
 					RoutePattern = route,
 					PermissionCode = permission,
 					IsMenuRoute = menu,
-					CreatedAt = DateTimeOffset.UtcNow,
+					CreatedAt = BusinessTime.NowOffset,
 				});
 			}
 		}
@@ -144,7 +146,7 @@ public static class AuthDataSeeder
 				Id = Guid.NewGuid(),
 				Name = roleName,
 				NormalizedName = roleName.ToUpperInvariant(),
-				CreatedAt = DateTimeOffset.UtcNow,
+				CreatedAt = BusinessTime.NowOffset,
 			};
 			var result = await roles.CreateAsync(role);
 			if (!result.Succeeded)
@@ -222,7 +224,7 @@ public static class AuthDataSeeder
 				IsActive = true,
 				Status = UserStatus.Active,
 				LockoutEnabled = true,
-				CreatedAt = DateTimeOffset.UtcNow,
+				CreatedAt = BusinessTime.NowOffset,
 			};
 			var create = await users.CreateAsync(admin, adminPassword);
 			if (!create.Succeeded)
@@ -271,7 +273,7 @@ public static class AuthDataSeeder
 			CompanyGuid = companyGuid,
 			IsDefaultCompany = existing.Count == 0,
 			IsActive = true,
-			CreatedAt = DateTimeOffset.UtcNow,
+			CreatedAt = BusinessTime.NowOffset,
 		});
 
 		await db.SaveChangesAsync(cancellationToken);
@@ -346,7 +348,7 @@ public static class AuthDataSeeder
 			{
 				RoleId = role.Id,
 				PermissionId = pid,
-				CreatedAt = DateTimeOffset.UtcNow,
+				CreatedAt = BusinessTime.NowOffset,
 			});
 		}
 
@@ -376,7 +378,7 @@ public static class AuthDataSeeder
 			{
 				RoleId = roleId,
 				PermissionId = pid,
-				CreatedAt = DateTimeOffset.UtcNow,
+				CreatedAt = BusinessTime.NowOffset,
 			});
 		}
 

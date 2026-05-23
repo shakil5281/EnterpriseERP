@@ -43,12 +43,36 @@ public sealed class HrDbContext(DbContextOptions<HrDbContext> options) : DbConte
             b.Property(x => x.FullName).HasMaxLength(150).IsRequired();
             b.Property(x => x.BanglaName).HasMaxLength(150);
             b.Property(x => x.Gender).HasMaxLength(20);
+            b.Property(x => x.Religion).HasMaxLength(50);
+            b.Property(x => x.BloodGroup).HasMaxLength(10);
             b.Property(x => x.NationalId).HasMaxLength(50);
             b.Property(x => x.BirthCertificateNo).HasMaxLength(50);
             b.Property(x => x.Phone).HasMaxLength(50);
             b.Property(x => x.Email).HasMaxLength(150);
             b.Property(x => x.EmploymentType).HasMaxLength(50);
             b.Property(x => x.Status).HasMaxLength(50);
+            b.Property(x => x.FatherNameEn).HasMaxLength(150);
+            b.Property(x => x.FatherNameBn).HasMaxLength(150);
+            b.Property(x => x.MotherNameEn).HasMaxLength(150);
+            b.Property(x => x.MotherNameBn).HasMaxLength(150);
+            b.Property(x => x.MaritalStatus).HasMaxLength(30);
+            b.Property(x => x.SpouseNameEn).HasMaxLength(150);
+            b.Property(x => x.SpouseNameBn).HasMaxLength(150);
+            b.Property(x => x.SpouseOccupation).HasMaxLength(100);
+            b.Property(x => x.SpouseContact).HasMaxLength(50);
+            b.Property(x => x.EducationLevel).HasMaxLength(50);
+            b.Property(x => x.Institution).HasMaxLength(150);
+            b.Property(x => x.FieldOfStudy).HasMaxLength(150);
+            b.Property(x => x.Skills).HasMaxLength(1000);
+            b.Property(x => x.Reference1Name).HasMaxLength(150);
+            b.Property(x => x.Reference1Relation).HasMaxLength(50);
+            b.Property(x => x.Reference1Phone).HasMaxLength(50);
+            b.Property(x => x.Reference1Address).HasMaxLength(250);
+            b.Property(x => x.Reference2Name).HasMaxLength(150);
+            b.Property(x => x.Reference2Relation).HasMaxLength(50);
+            b.Property(x => x.Reference2Phone).HasMaxLength(50);
+            b.Property(x => x.Reference2Address).HasMaxLength(250);
+            b.Property(x => x.IsOtEnabled).HasDefaultValue(true);
         });
 
         modelBuilder.Entity<EmployeeJobInfo>(b =>

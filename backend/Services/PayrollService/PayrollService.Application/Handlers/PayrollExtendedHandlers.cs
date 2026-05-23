@@ -2,6 +2,8 @@ using MediatR;
 using PayrollService.Contracts;
 using PayrollService.Domain.Entities;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace PayrollService.Application.Handlers;
 
 public sealed class SalaryAdvanceExtendedHandlers(IPayrollDbContext db) :
@@ -66,7 +68,7 @@ public sealed class SalaryAdvanceExtendedHandlers(IPayrollDbContext db) :
             {
                 CompanyId = r.CompanyId,
                 EmployeeId = employeeId,
-                AdvanceNo = $"{r.AdvanceNoPrefix ?? "ADV"}-{DateTime.UtcNow:yyyyMMdd}-{index:D4}",
+                AdvanceNo = $"{r.AdvanceNoPrefix ?? "ADV"}-{BusinessTime.Now:yyyyMMdd}-{index:D4}",
                 AdvanceAmount = r.AdvanceAmount,
                 BalanceAmount = r.AdvanceAmount,
                 AdvanceDate = r.AdvanceDate,
@@ -166,17 +168,16 @@ public sealed class PayrollBonusHandlers(
 {
     public async Task<ApiResponse<IReadOnlyList<PayrollBonusRowDto>>> Handle(GetPayrollBonusesQuery query, CancellationToken cancellationToken)
     {
-        var period = db.PayrollPeriods.FirstOrDefault(x =>
-            x.CompanyId == query.CompanyId && x.YearNo == query.YearNo && (!query.MonthNo.HasValue || x.MonthNo == query.MonthNo));
-        if (period is null)
+        var payrollQuery = db.EmployeePayrolls.Where(x => x.CompanyId == query.CompanyId && x.YearNo == query.YearNo);
+        if (query.MonthNo.HasValue)
         {
-            return ApiResponse<IReadOnlyList<PayrollBonusRowDto>>.Ok(Array.Empty<PayrollBonusRowDto>());
+            payrollQuery = payrollQuery.Where(x => x.MonthNo == query.MonthNo);
         }
 
         var employees = await employeeServiceClient.GetActiveEmployeesAsync(query.CompanyId, cancellationToken);
         var employeeMap = employees.ToDictionary(x => x.EmployeeId);
-        var rows = db.EmployeePayrolls
-            .Where(x => x.PayrollPeriodId == period.Id && x.FestivalBonusAmount > 0)
+        var rows = payrollQuery
+            .Where(x => x.FestivalBonusAmount > 0)
             .ToList()
             .Select(x =>
             {
@@ -187,8 +188,8 @@ public sealed class PayrollBonusHandlers(
                     employee?.EmployeeName,
                     query.BonusType ?? "Festival",
                     x.FestivalBonusAmount,
-                    period.YearNo,
-                    period.MonthNo,
+                    x.YearNo,
+                    x.MonthNo,
                     x.Status);
             })
             .ToList();
@@ -199,16 +200,11 @@ public sealed class PayrollBonusHandlers(
     public async Task<ApiResponse<PayrollBonusRowDto>> Handle(CreatePayrollBonusCommand command, CancellationToken cancellationToken)
     {
         var r = command.Request;
-        var period = db.PayrollPeriods.FirstOrDefault(x => x.CompanyId == r.CompanyId && x.YearNo == r.YearNo && x.MonthNo == r.MonthNo);
-        if (period is null)
-        {
-            return ApiResponse<PayrollBonusRowDto>.Fail("Payroll period not found.");
-        }
-
-        var payroll = db.EmployeePayrolls.FirstOrDefault(x => x.PayrollPeriodId == period.Id && x.EmployeeId == r.EmployeeId);
+        var payroll = db.EmployeePayrolls.FirstOrDefault(x =>
+            x.CompanyId == r.CompanyId && x.YearNo == r.YearNo && x.MonthNo == r.MonthNo && x.EmployeeId == r.EmployeeId);
         if (payroll is null)
         {
-            return ApiResponse<PayrollBonusRowDto>.Fail("Employee payroll not found for period. Process payroll first.");
+            return ApiResponse<PayrollBonusRowDto>.Fail("Employee payroll not found for month. Process payroll first.");
         }
 
         payroll.FestivalBonusAmount = r.Amount;
@@ -231,18 +227,14 @@ public sealed class PayrollBonusHandlers(
     public async Task<ApiResponse<FestivalBonusProcessResultDto>> Handle(ProcessFestivalBonusCommand command, CancellationToken cancellationToken)
     {
         var r = command.Request;
-        var period = db.PayrollPeriods.FirstOrDefault(x => x.CompanyId == r.CompanyId && x.YearNo == r.YearNo && x.MonthNo == r.MonthNo);
-        if (period is null)
-        {
-            return ApiResponse<FestivalBonusProcessResultDto>.Fail("Payroll period not found.");
-        }
-
         var bonusDate = new DateOnly(r.YearNo, r.MonthNo, 1);
         var processed = 0;
         var skipped = 0;
         decimal total = 0;
 
-        var payrollRows = db.EmployeePayrolls.Where(x => x.PayrollPeriodId == period.Id).ToList();
+        var payrollRows = db.EmployeePayrolls
+            .Where(x => x.CompanyId == r.CompanyId && x.YearNo == r.YearNo && x.MonthNo == r.MonthNo)
+            .ToList();
         foreach (var payroll in payrollRows)
         {
             var joinDate = await employeeServiceClient.GetEmployeeJoinDateAsync(r.CompanyId, payroll.EmployeeId, cancellationToken)
@@ -290,15 +282,10 @@ public sealed class PayrollBonusHandlers(
 
     public async Task<ApiResponse<IReadOnlyList<FestivalBonusBankSheetRowDto>>> Handle(GetFestivalBonusBankSheetQuery query, CancellationToken cancellationToken)
     {
-        var period = db.PayrollPeriods.FirstOrDefault(x => x.Id == query.PayrollPeriodId);
-        if (period is null)
-        {
-            return ApiResponse<IReadOnlyList<FestivalBonusBankSheetRowDto>>.Fail("Payroll period not found.");
-        }
-
-        var employees = await employeeServiceClient.GetActiveEmployeesAsync(period.CompanyId, cancellationToken);
+        var employees = await employeeServiceClient.GetActiveEmployeesAsync(query.CompanyId, cancellationToken);
         var rows = db.EmployeePayrolls
-            .Where(x => x.PayrollPeriodId == period.Id && x.FestivalBonusAmount > 0)
+            .Where(x => x.CompanyId == query.CompanyId && x.YearNo == query.YearNo && x.MonthNo == query.MonthNo &&
+                        x.FestivalBonusAmount > 0)
             .ToList()
             .Select(x =>
             {

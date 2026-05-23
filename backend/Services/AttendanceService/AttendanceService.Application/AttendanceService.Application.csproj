@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AttendanceService.Domain\AttendanceService.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.SharedKernel\Erp.BuildingBlocks.SharedKernel.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.Contracts\Erp.BuildingBlocks.Contracts.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.CommonResponses\Erp.BuildingBlocks.CommonResponses.csproj" />
   </ItemGroup>

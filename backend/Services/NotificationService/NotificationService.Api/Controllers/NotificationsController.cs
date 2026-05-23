@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using NotificationService.Domain.Entities;
 using NotificationService.Infrastructure.Persistence;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace NotificationService.Api.Controllers;
 
 [ApiController]
@@ -23,9 +25,9 @@ public class NotificationsController(NotificationDbContext context) : Controller
     public async Task<IActionResult> Send(Notification notification)
     {
         notification.Id = Guid.NewGuid();
-        notification.CreatedAt = DateTimeOffset.UtcNow;
+        notification.CreatedAt = BusinessTime.NowOffset;
         notification.Status = "Sent"; // Simplified for now
-        notification.SentAt = DateTime.UtcNow;
+        notification.SentAt = BusinessTime.Now;
         
         context.Notifications.Add(notification);
         await context.SaveChangesAsync();

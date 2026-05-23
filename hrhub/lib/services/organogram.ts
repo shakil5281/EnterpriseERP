@@ -153,7 +153,6 @@ export interface Shift {
 interface ShiftApi {
   id: string;
   companyId: string;
-  shiftCode: string;
   shiftName: string;
   shiftType: string;
   startTime: string;
@@ -168,7 +167,7 @@ function mapShift(row: ShiftApi, companyName?: string): Shift {
   return {
     id: stableIntFromGuid(row.id),
     entityId: row.id,
-    nameEn: row.shiftName || row.shiftCode,
+    nameEn: row.shiftName,
     nameBn: undefined,
     inTime: row.startTime,
     outTime: row.endTime,
@@ -418,6 +417,14 @@ export async function resolveDesignationGuid(
   if (!Number.isFinite(n)) return undefined;
   const all = await organogramService.getDesignations();
   return all.find((d) => d.id === n)?.entityId;
+}
+export async function resolveGroupGuid(groupId: string | number): Promise<string | undefined> {
+  if (typeof groupId === "string" && groupId.includes("-")) {
+    return groupId;
+  }
+  const n = typeof groupId === "string" ? parseInt(groupId, 10) : groupId;
+  if (!Number.isFinite(n)) return undefined;
+  return resolveGroupEntityId(n);
 }
 
 /** Load departments + sections for filter dropdowns (e.g. Company Organogram). */

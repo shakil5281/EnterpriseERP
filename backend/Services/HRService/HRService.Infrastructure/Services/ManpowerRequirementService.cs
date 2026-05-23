@@ -4,6 +4,8 @@ using HRService.Domain.Entities;
 using HRService.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace HRService.Infrastructure.Services;
 
 public sealed class ManpowerRequirementService(HrDbContext db) : IManpowerRequirementService
@@ -21,7 +23,7 @@ public sealed class ManpowerRequirementService(HrDbContext db) : IManpowerRequir
             ExpectedJoiningDate = dto.ExpectedJoiningDate,
             Status = "Pending",
             Remarks = dto.Remarks,
-            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedAt = BusinessTime.NowOffset,
             IsDeleted = false
         };
 
@@ -42,7 +44,7 @@ public sealed class ManpowerRequirementService(HrDbContext db) : IManpowerRequir
         req.ExpectedJoiningDate = dto.ExpectedJoiningDate;
         req.Status = dto.Status;
         req.Remarks = dto.Remarks;
-        req.UpdatedAt = DateTimeOffset.UtcNow;
+        req.UpdatedAt = BusinessTime.NowOffset;
 
         await db.SaveChangesAsync(cancellationToken);
     }
@@ -53,7 +55,7 @@ public sealed class ManpowerRequirementService(HrDbContext db) : IManpowerRequir
         if (req == null) return;
 
         req.IsDeleted = true;
-        req.DeletedAt = DateTimeOffset.UtcNow;
+        req.DeletedAt = BusinessTime.NowOffset;
         await db.SaveChangesAsync(cancellationToken);
     }
 

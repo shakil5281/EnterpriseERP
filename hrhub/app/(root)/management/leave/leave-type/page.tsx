@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { IconSettings, IconPlus, IconDotsVertical, IconEdit, IconTrash } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -220,11 +221,11 @@ export default function LeaveTypePage() {
                 </div>
                 <LeavePermissionGate permission="LEAVE_TYPE_MANAGE">
                     <Sheet open={isSheetOpen} onOpenChange={(open) => !open && handleCloseSheet()}>
-                        <SheetTrigger asChild>
-                            <Button className="gap-2" onClick={() => setIsSheetOpen(true)}>
-                                <IconPlus className="size-4" /> New Leave Type
-                            </Button>
-                        </SheetTrigger>
+                    <Button className="gap-2" asChild>
+                        <Link href="/management/leave/leave-type/create">
+                            <IconPlus className="size-4" /> Create Leave Type
+                        </Link>
+                    </Button>
                         <SheetContent>
                             <SheetHeader>
                                 <SheetTitle>{editingType ? "Edit Leave Type" : "Create Leave Type"}</SheetTitle>

@@ -60,8 +60,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
 
     return sidebarData.modules.filter(module => {
-      // @ts-ignore - roles property added dynamically or missing in type def
-      const requiredRoles = module.roles as string[] | undefined
+      const requiredRoles = (module as { roles?: string[] }).roles
       if (!requiredRoles || requiredRoles.length === 0) return true
       return hasAnyRole(requiredRoles)
     })

@@ -36,9 +36,9 @@ func (s *Service) CreateManualPunch(ctx context.Context, req ManualPunchRequest)
 	if source == "" {
 		source = "Manual"
 	}
-	pt := timeutil.InDhaka(req.PunchTime)
+	pt := timeutil.WallClock(req.PunchTime)
 	if pt.IsZero() {
-		pt = timeutil.Now()
+		pt = timeutil.WallClock(timeutil.Now())
 	}
 
 	rec := models.PunchRecord{

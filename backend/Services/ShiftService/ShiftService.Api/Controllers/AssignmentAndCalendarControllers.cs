@@ -45,12 +45,39 @@ public class TemporaryShiftsController(IMediator mediator) : ControllerBase
         return Ok(ApiResponse<Guid>.Ok(id, HttpContext.TraceIdentifier));
     }
 
+    [HttpGet("list")]
+    public async Task<ActionResult<ApiResponse<IEnumerable<TemporaryShiftAssignmentDto>>>> List(
+        [FromQuery] Guid companyId,
+        [FromQuery] DateTime? fromDate,
+        [FromQuery] DateTime? toDate,
+        [FromQuery] Guid? employeeId)
+    {
+        var data = await mediator.Send(new ListTemporaryShiftsQuery(companyId, fromDate, toDate, employeeId));
+        return Ok(ApiResponse<IEnumerable<TemporaryShiftAssignmentDto>>.Ok(data, HttpContext.TraceIdentifier));
+    }
+
     [HttpGet]
     public async Task<ActionResult<ApiResponse<TemporaryShiftAssignmentDto>>> GetByDate([FromQuery] Guid companyId, [FromQuery] Guid employeeId, [FromQuery] DateTime date)
     {
         var data = await mediator.Send(new GetTemporaryShiftByDateQuery(employeeId, companyId, date));
         if (data == null) return NotFound(ApiResponse<TemporaryShiftAssignmentDto>.Fail(["No temporary shift found for this date"], HttpContext.TraceIdentifier));
         return Ok(ApiResponse<TemporaryShiftAssignmentDto>.Ok(data, HttpContext.TraceIdentifier));
+    }
+
+    [HttpGet("{id}")]
+    public async Task<ActionResult<ApiResponse<TemporaryShiftAssignmentDto>>> GetById(Guid id)
+    {
+        var data = await mediator.Send(new GetTemporaryShiftByIdQuery(id));
+        if (data == null) return NotFound(ApiResponse<TemporaryShiftAssignmentDto>.Fail(["No temporary shift found"], HttpContext.TraceIdentifier));
+        return Ok(ApiResponse<TemporaryShiftAssignmentDto>.Ok(data, HttpContext.TraceIdentifier));
+    }
+
+    [HttpPut("{id}")]
+    public async Task<ActionResult<ApiResponse<bool>>> Update(Guid id, UpdateTemporaryShiftCommand command)
+    {
+        if (id != command.Id) return BadRequest(ApiResponse<bool>.Fail(["Route id and command id do not match"], HttpContext.TraceIdentifier));
+        var success = await mediator.Send(command);
+        return Ok(ApiResponse<bool>.Ok(success, HttpContext.TraceIdentifier));
     }
 
     [HttpDelete("{id}")]

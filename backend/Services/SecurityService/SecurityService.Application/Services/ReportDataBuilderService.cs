@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using SecurityService.Contracts;
 using SecurityService.Domain;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace SecurityService.Application.Services;
 
 public sealed class ReportDataBuilderService(ISecurityDbContext db, IMapper mapper, IImportExportServiceClient exporter) : IReportDataBuilderService
@@ -53,10 +55,10 @@ public sealed class ReportDataBuilderService(ISecurityDbContext db, IMapper mapp
     {
         object data = request.ReportName switch
         {
-            "daily-register" => await BuildDailyRegisterAsync(request.CompanyId, request.Date ?? DateOnly.FromDateTime(DateTime.UtcNow), cancellationToken),
-            "visitor-report" => await BuildVisitorReportAsync(request.CompanyId, request.FromDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date), request.ToDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date), cancellationToken),
-            "material-in-out" => await BuildMaterialInOutAsync(request.CompanyId, request.FromDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date), request.ToDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date), cancellationToken),
-            "vehicle-report" => await BuildVehicleReportAsync(request.CompanyId, request.FromDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date), request.ToDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date), cancellationToken),
+            "daily-register" => await BuildDailyRegisterAsync(request.CompanyId, request.Date ?? DateOnly.FromDateTime(BusinessTime.Now), cancellationToken),
+            "visitor-report" => await BuildVisitorReportAsync(request.CompanyId, request.FromDate ?? DateOnly.FromDateTime(BusinessTime.Now.Date), request.ToDate ?? DateOnly.FromDateTime(BusinessTime.Now.Date), cancellationToken),
+            "material-in-out" => await BuildMaterialInOutAsync(request.CompanyId, request.FromDate ?? DateOnly.FromDateTime(BusinessTime.Now.Date), request.ToDate ?? DateOnly.FromDateTime(BusinessTime.Now.Date), cancellationToken),
+            "vehicle-report" => await BuildVehicleReportAsync(request.CompanyId, request.FromDate ?? DateOnly.FromDateTime(BusinessTime.Now.Date), request.ToDate ?? DateOnly.FromDateTime(BusinessTime.Now.Date), cancellationToken),
             "returnable-pending" => await BuildReturnablePendingAsync(request.CompanyId, cancellationToken),
             _ => throw new InvalidOperationException("Unsupported report export request."),
         };

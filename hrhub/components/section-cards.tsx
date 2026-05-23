@@ -30,7 +30,7 @@ export function SectionCards() {
         value="45,678"
         icon={IconUserCheck}
         trend={{ value: "12.5%", label: "retention rate", isUp: true }}
-        chartData={chartData.map(d => ({ value: d.value + Math.random() * 20 }))}
+        chartData={chartData.map((d, i) => ({ value: d.value + (i + 1) * 4 }))}
         status="primary"
       />
       <SummaryCard

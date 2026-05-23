@@ -8,7 +8,7 @@ using ShiftService.Application.DTOs;
 namespace ShiftService.Api.Controllers;
 
 [ApiController]
-[Route("api/v1/[controller]")]
+[Route("api/v1/shifts")]
 public class ShiftsController(IMediator mediator) : ControllerBase
 {
     [HttpPost]
@@ -25,7 +25,27 @@ public class ShiftsController(IMediator mediator) : ControllerBase
         return Ok(ApiResponse<IEnumerable<ShiftDto>>.Ok(data, HttpContext.TraceIdentifier));
     }
 
-    [HttpGet("{id}")]
+    [HttpGet("evaluation")]
+    public async Task<ActionResult<ApiResponse<ShiftEvaluationDto>>> Evaluate(
+        [FromQuery] Guid companyId,
+        [FromQuery] Guid employeeId,
+        [FromQuery] DateTime date)
+    {
+        var data = await mediator.Send(new EvaluateShiftQuery(companyId, employeeId, date));
+        return Ok(ApiResponse<ShiftEvaluationDto>.Ok(data, HttpContext.TraceIdentifier));
+    }
+
+    [HttpGet("applicable")]
+    public async Task<ActionResult<ApiResponse<ShiftEvaluationDto>>> Applicable(
+        [FromQuery] Guid companyId,
+        [FromQuery] Guid employeeId,
+        [FromQuery] DateTime date)
+    {
+        var data = await mediator.Send(new EvaluateShiftQuery(companyId, employeeId, date));
+        return Ok(ApiResponse<ShiftEvaluationDto>.Ok(data, HttpContext.TraceIdentifier));
+    }
+
+    [HttpGet("{id:guid}")]
     public async Task<ActionResult<ApiResponse<ShiftDto>>> GetById(Guid id)
     {
         var data = await mediator.Send(new GetShiftByIdQuery(id));
@@ -33,7 +53,15 @@ public class ShiftsController(IMediator mediator) : ControllerBase
         return Ok(ApiResponse<ShiftDto>.Ok(data, HttpContext.TraceIdentifier));
     }
 
-    [HttpPut("{id}")]
+    [HttpGet("{id:guid}/detail")]
+    public async Task<ActionResult<ApiResponse<ShiftDetailDto>>> GetDetail(Guid id)
+    {
+        var data = await mediator.Send(new GetShiftDetailQuery(id));
+        if (data == null) return NotFound(ApiResponse<ShiftDetailDto>.Fail(["Shift not found"], HttpContext.TraceIdentifier));
+        return Ok(ApiResponse<ShiftDetailDto>.Ok(data, HttpContext.TraceIdentifier));
+    }
+
+    [HttpPut("{id:guid}")]
     public async Task<ActionResult<ApiResponse<bool>>> Update(Guid id, UpdateShiftCommand command)
     {
         if (id != command.Id) return BadRequest(ApiResponse<bool>.Fail(["ID mismatch"], HttpContext.TraceIdentifier));
@@ -41,14 +69,14 @@ public class ShiftsController(IMediator mediator) : ControllerBase
         return Ok(ApiResponse<bool>.Ok(success, HttpContext.TraceIdentifier));
     }
 
-    [HttpPatch("{id}/activate")]
+    [HttpPatch("{id:guid}/activate")]
     public async Task<ActionResult<ApiResponse<bool>>> Activate(Guid id)
     {
         var success = await mediator.Send(new ActivateShiftCommand(id));
         return Ok(ApiResponse<bool>.Ok(success, HttpContext.TraceIdentifier));
     }
 
-    [HttpPatch("{id}/deactivate")]
+    [HttpPatch("{id:guid}/deactivate")]
     public async Task<ActionResult<ApiResponse<bool>>> Deactivate(Guid id)
     {
         var success = await mediator.Send(new DeactivateShiftCommand(id));

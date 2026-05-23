@@ -3,6 +3,7 @@
 import * as React from "react"
 import { IconLoader, IconPlus, IconTrash } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
+import { employeeFormFieldsCn } from "@/components/hr/employee-form-fields"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { employeeService } from "@/lib/services/employee"
@@ -60,7 +61,7 @@ export function EmployeeDocumentsPanel({
   }
 
   return (
-    <div className="space-y-6">
+    <div className={employeeFormFieldsCn("space-y-6")}>
       <div className="grid gap-4 sm:grid-cols-2 max-w-xl">
         <div className="grid gap-2">
           <Label>Document type</Label>

@@ -11,13 +11,10 @@ public class GetShiftsByCompanyQueryHandler(IShiftDbContext db) : IRequestHandle
 {
     public async Task<IEnumerable<ShiftDto>> Handle(GetShiftsByCompanyQuery request, CancellationToken cancellationToken)
     {
-        return await db.Shifts
+        var shifts = await db.Shifts
             .AsNoTracking()
             .Where(s => s.CompanyId == request.CompanyId)
-            .Select(s => new ShiftDto(
-                s.Id, s.CompanyId, s.ShiftCode, s.ShiftName, s.ShiftType,
-                s.StartTime, s.EndTime, s.IsCrossDay, s.IsGeneralDuty,
-                s.IsDefault, s.IsActive))
             .ToListAsync(cancellationToken);
+        return shifts.Select(ShiftDtoMapping.ToDto);
     }
 }

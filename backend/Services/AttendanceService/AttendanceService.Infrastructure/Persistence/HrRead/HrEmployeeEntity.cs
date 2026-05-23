@@ -7,6 +7,7 @@ public sealed class HrEmployeeEntity
     public int PunchNumber { get; set; }
     public string EmployeeID { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
+    public bool IsOtEnabled { get; set; }
     public bool IsDeleted { get; set; }
 }
 

@@ -1,4 +1,9 @@
 **/.git
-**/.vscode
+**/.vs
 **/bin
 **/obj
+**/node_modules
+**/data
+**/*.md
+**/Services/*/Tests
+**/Services/*/*Tests

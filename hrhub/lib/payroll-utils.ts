@@ -1,7 +1,6 @@
 import { companyService, type Company } from "@/lib/services/company";
 import { payrollService } from "@/lib/services/payroll";
 import type {
-  PayrollPeriodDto,
   SalarySheetRowDto,
   EmployeePayrollDto,
   DailySalarySheetRowDto,
@@ -33,36 +32,18 @@ export function companyGuidFromSelection(
   return companies.find((c) => String(c.id) === selectedCompanyId)?.entityId;
 }
 
-export async function getPeriodIdForMonth(
-  companyGuid: string,
-  year: number,
-  month: number,
-): Promise<string | undefined> {
-  const periods = await payrollService.getPayrollPeriods(companyGuid);
-  return periods.find((p) => p.yearNo === year && p.monthNo === month)?.id;
+/** Stable key for legacy UI rows that still reference periodId. */
+export function payrollMonthKey(companyGuid: string, year: number, month: number): string {
+  return `${companyGuid}:${year}:${month}`;
 }
 
-export async function findOrCreatePayrollPeriod(
-  companyGuid: string,
-  year: number,
-  month: number,
-): Promise<PayrollPeriodDto> {
-  const existing = await getPeriodIdForMonth(companyGuid, year, month);
-  if (existing) {
-    const periods = await payrollService.getPayrollPeriods(companyGuid);
-    const found = periods.find((p) => p.id === existing);
-    if (found) return found;
-  }
-
-  const start = new Date(year, month - 1, 1);
-  const end = new Date(year, month, 0);
-  return payrollService.createPayrollPeriod({
-    companyId: companyGuid,
-    yearNo: year,
-    monthNo: month,
-    startDate: start.toISOString().slice(0, 10),
-    endDate: end.toISOString().slice(0, 10),
-  });
+export function parsePayrollMonthKey(key: string): { companyId: string; year: number; month: number } | null {
+  const parts = key.split(":");
+  if (parts.length !== 3) return null;
+  const year = parseInt(parts[1], 10);
+  const month = parseInt(parts[2], 10);
+  if (!parts[0] || Number.isNaN(year) || Number.isNaN(month)) return null;
+  return { companyId: parts[0], year, month };
 }
 
 /** Legacy table shape used by existing payroll pages. */

@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/sheet"
 import { requirementService, type ManpowerRequirement } from "@/lib/services/requirement"
 import { organogramService } from "@/lib/services/organogram"
+import { companyService, type Company } from "@/lib/services/company"
+import { NativeSelect } from "@/components/ui/native-select"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
@@ -41,8 +43,10 @@ export default function ManpowerRequirementPage() {
     const [isEditing, setIsEditing] = React.useState(false)
     const [currentId, setCurrentId] = React.useState<number | null>(null)
 
-    // Filter state
+    const [companies, setCompanies] = React.useState<Company[]>([])
+    const [selectedCompanyEntityId, setSelectedCompanyEntityId] = React.useState("")
     const [filterDepartment, setFilterDepartment] = React.useState("")
+    const [searchFilter, setSearchFilter] = React.useState("")
 
     // Form data
     const [departments, setDepartments] = React.useState<any[]>([])
@@ -54,22 +58,47 @@ export default function ManpowerRequirementPage() {
         note: ""
     })
 
+    const selectedCompanyRow = React.useMemo(
+        () => companies.find((c) => c.entityId === selectedCompanyEntityId),
+        [companies, selectedCompanyEntityId],
+    )
+
     const fetchRequirements = React.useCallback(async () => {
+        if (!selectedCompanyRow?.id) {
+            setRequirements([])
+            setIsLoading(false)
+            return
+        }
         setIsLoading(true)
         try {
-            const data = await requirementService.getRequirements()
+            const data = await requirementService.getRequirements({
+                companyId: selectedCompanyRow.id,
+                departmentId: filterDepartment ? parseInt(filterDepartment, 10) : undefined,
+            })
             setRequirements(data)
         } catch (error) {
             toast.error("Failed to load requirements")
         } finally {
             setIsLoading(false)
         }
+    }, [selectedCompanyRow?.id, filterDepartment])
+
+    React.useEffect(() => {
+        companyService.getAll().then((list) => {
+            setCompanies(list)
+            setSelectedCompanyEntityId((c) => c || list[0]?.entityId || "")
+        })
     }, [])
 
     React.useEffect(() => {
+        if (!selectedCompanyRow?.id) return
+        organogramService.getDepartments({ companyId: selectedCompanyRow.id }).then(setDepartments)
+    }, [selectedCompanyRow?.id])
+
+    React.useEffect(() => {
+        if (!selectedCompanyRow?.id) return
         fetchRequirements()
-        organogramService.getDepartments().then(setDepartments)
-    }, [fetchRequirements])
+    }, [selectedCompanyRow?.id, fetchRequirements])
 
     React.useEffect(() => {
         if (formData.departmentId) {
@@ -134,9 +163,20 @@ export default function ManpowerRequirementPage() {
 
     // Computed filtered requirements
     const filteredRequirements = React.useMemo(() => {
-        if (!filterDepartment) return requirements
-        return requirements.filter(r => r.departmentId.toString() === filterDepartment)
-    }, [requirements, filterDepartment])
+        let rows = requirements
+        if (filterDepartment) {
+            rows = rows.filter((r) => r.departmentId.toString() === filterDepartment)
+        }
+        if (searchFilter.trim()) {
+            const q = searchFilter.trim().toLowerCase()
+            rows = rows.filter(
+                (r) =>
+                    r.departmentName.toLowerCase().includes(q) ||
+                    r.designationName.toLowerCase().includes(q),
+            )
+        }
+        return rows
+    }, [requirements, filterDepartment, searchFilter])
 
     const columns: ColumnDef<ManpowerRequirement>[] = [
         {
@@ -243,32 +283,59 @@ export default function ManpowerRequirementPage() {
                 </Card>
             </div>
 
-            {/* Quick Filter Section */}
-            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-background/60 backdrop-blur-sm p-4 rounded-xl shadow-sm border border-border/50">
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                        <IconFilter className="size-5" />
-                        <span className="text-sm font-medium">Quick Filters:</span>
+            <Card className="border shadow-sm">
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <IconFilter className="size-4" /> Advanced filter
+                    </CardTitle>
+                    <CardDescription>Select company and filters, then apply.</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-4 items-end">
+                    <div className="space-y-1.5 min-w-[200px]">
+                        <Label className="text-[10px] font-bold uppercase text-muted-foreground">Company</Label>
+                        <NativeSelect
+                            className="h-10 w-full"
+                            value={selectedCompanyEntityId}
+                            onChange={(e) => {
+                                setSelectedCompanyEntityId(e.target.value)
+                                setFilterDepartment("")
+                            }}
+                        >
+                            <option value="">Select company</option>
+                            {companies.map((c) => (
+                                <option key={c.entityId} value={c.entityId}>{c.companyNameEn}</option>
+                            ))}
+                        </NativeSelect>
                     </div>
-                    <div className="relative">
-                        <select
-                            className="h-10 w-[240px] appearance-none rounded-lg border border-input bg-background pl-3 pr-10 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    <div className="space-y-1.5 min-w-[200px]">
+                        <Label className="text-[10px] font-bold uppercase text-muted-foreground">Department</Label>
+                        <NativeSelect
+                            className="h-10 w-full"
                             value={filterDepartment}
                             onChange={(e) => setFilterDepartment(e.target.value)}
+                            disabled={!selectedCompanyEntityId}
                         >
-                            <option value="">All Departments</option>
+                            <option value="">All departments</option>
                             {departments.map((d) => (
-                                <option key={d.id} value={d.id.toString()}>
-                                    {d.nameEn}
-                                </option>
+                                <option key={d.entityId} value={d.id}>{d.nameEn}</option>
                             ))}
-                        </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground">
-                            <IconBuildingSkyscraper className="size-4 opactiy-50" />
-                        </div>
+                        </NativeSelect>
                     </div>
-                </div>
-            </div>
+                    <div className="space-y-1.5 min-w-[200px]">
+                        <Label className="text-[10px] font-bold uppercase text-muted-foreground">Search</Label>
+                        <Input
+                            className="h-10"
+                            placeholder="Department or designation"
+                            value={searchFilter}
+                            onChange={(e) => setSearchFilter(e.target.value)}
+                        />
+                    </div>
+                    <Button variant="secondary" className="gap-2" onClick={() => fetchRequirements()} disabled={isLoading}>
+                        {isLoading ? <IconLoader className="size-4 animate-spin" /> : <IconFilter className="size-4" />}
+                        Apply filter
+                    </Button>
+                </CardContent>
+            </Card>
 
             <Card className="border-none shadow-xl rounded-2xl overflow-hidden bg-background">
                 <CardContent className="p-0">

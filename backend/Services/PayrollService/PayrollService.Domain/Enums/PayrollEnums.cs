@@ -34,6 +34,8 @@ public static class PayrollPermissions
     public const string FinalSettlementApprove = "FINAL_SETTLEMENT_APPROVE";
 }
 
+public enum SalaryProcessingMode { FullCompliance, NonCompliance, MultiSalaryOt }
+
 public enum SalaryCalculationType { Monthly, Daily, Hourly, PieceRate, Contract }
 public enum MonthDayCalculationType { CalendarDays, FixedDays, WorkingDays }
 public enum OvertimeCalculationType { BasicSalaryBased, GrossSalaryBased, FixedRate, None }

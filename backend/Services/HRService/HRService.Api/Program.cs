@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using Erp.BuildingBlocks.Hosting;
+using Erp.BuildingBlocks.SharedKernel;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddEnterpriseErpConnectionConfiguration();
@@ -119,9 +120,9 @@ await using (var scope = app.Services.CreateAsyncScope())
     if (!await db.Employees.AnyAsync())
     {
         var companyId = Guid.NewGuid();
-        var grade = new Grade { Id = Guid.NewGuid(), Name = "G1", CreatedAt = DateTimeOffset.UtcNow };
-        var dept = new Department { Id = Guid.NewGuid(), CompanyId = companyId, Name = "Operations", CreatedAt = DateTimeOffset.UtcNow };
-        var desig = new Designation { Id = Guid.NewGuid(), GradeId = grade.Id, Name = "Officer", CreatedAt = DateTimeOffset.UtcNow };
+        var grade = new Grade { Id = Guid.NewGuid(), Name = "G1", CreatedAt = BusinessTime.NowOffset };
+        var dept = new Department { Id = Guid.NewGuid(), CompanyId = companyId, Name = "Operations", CreatedAt = BusinessTime.NowOffset };
+        var desig = new Designation { Id = Guid.NewGuid(), GradeId = grade.Id, Name = "Officer", CreatedAt = BusinessTime.NowOffset };
         db.Grades.Add(grade);
         db.Departments.Add(dept);
         db.Designations.Add(desig);
@@ -135,10 +136,10 @@ await using (var scope = app.Services.CreateAsyncScope())
             EmployeeID = "EMP-0001",
             FullName = "Sample Employee",
             Email = "sample@erp.local",
-            JoinDate = DateTime.UtcNow.Date,
+            JoinDate = BusinessTime.Now.Date,
             EmploymentType = "Permanent",
             Status = "Active",
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = BusinessTime.Now,
         };
 
         emp.JobInfos.Add(new EmployeeJobInfo

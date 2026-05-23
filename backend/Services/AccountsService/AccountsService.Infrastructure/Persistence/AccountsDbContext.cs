@@ -2,6 +2,8 @@ using AccountsService.Application;
 using AccountsService.Domain;
 using Microsoft.EntityFrameworkCore;
 
+using Erp.BuildingBlocks.SharedKernel;
+
 namespace AccountsService.Infrastructure.Persistence;
 
 public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : DbContext(options), IAccountsDbContext
@@ -295,20 +297,20 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
 
     private void AddAuditEntries()
     {
-        foreach (var entry in ChangeTracker.Entries<AuditableEntity>().Where(x => x.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
+        foreach (var entry in ChangeTracker.Entries<AccountsService.Domain.AuditableEntity>().Where(x => x.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
-            if (entry.State == EntityState.Added) entry.Entity.CreatedAt = DateTime.UtcNow;
-            if (entry.State == EntityState.Modified) entry.Entity.UpdatedAt = DateTime.UtcNow;
+            if (entry.State == EntityState.Added) entry.Entity.CreatedAt = BusinessTime.Now;
+            if (entry.State == EntityState.Modified) entry.Entity.UpdatedAt = BusinessTime.Now;
             if (entry.State == EntityState.Deleted)
             {
                 entry.State = EntityState.Modified;
                 entry.Entity.IsDeleted = true;
-                entry.Entity.UpdatedAt = DateTime.UtcNow;
+                entry.Entity.UpdatedAt = BusinessTime.Now;
             }
         }
     }
 
-    private static void ConfigureAuditable<TEntity>(ModelBuilder modelBuilder) where TEntity : AuditableEntity
+    private static void ConfigureAuditable<TEntity>(ModelBuilder modelBuilder) where TEntity : AccountsService.Domain.AuditableEntity
     {
         modelBuilder.Entity<TEntity>(e =>
         {

@@ -38,6 +38,7 @@ import {
     type PunchMachine,
 } from "@/lib/services/punch-data"
 import { toast } from "sonner"
+import { useAuth } from "@/components/providers/auth-provider"
 
 function formatDateTime(value?: string | null): string {
     if (!value) return "—"
@@ -57,6 +58,7 @@ const defaultMachineForm = {
 }
 
 export default function PunchMachinesPage() {
+    const { user, loading: authLoading } = useAuth()
     const [companyEntityId, setCompanyEntityId] = React.useState("")
     const [punchCompanyId, setPunchCompanyId] = React.useState(1)
     const [machines, setMachines] = React.useState<PunchMachine[]>([])
@@ -90,8 +92,9 @@ export default function PunchMachinesPage() {
     }, [punchCompanyId])
 
     React.useEffect(() => {
-        if (companyEntityId) loadData()
-    }, [companyEntityId, loadData])
+        if (authLoading || !user || !companyEntityId) return
+        void loadData()
+    }, [authLoading, user, companyEntityId, loadData])
 
     const stats = React.useMemo(() => {
         const connected = machines.filter(

@@ -14,7 +14,7 @@ public sealed class AttendanceProcessBatch
     public ProcessStatus ProcessStatus { get; set; }
     public string? ErrorMessage { get; set; }
     public Guid? ProcessedBy { get; set; }
-    public DateTime StartedAt { get; set; } = DateTime.UtcNow;
+    public DateTime StartedAt { get; set; }
     public DateTime? FinishedAt { get; set; }
 }
 
@@ -26,5 +26,5 @@ public sealed class AttendanceProcessError
     public Guid? EmployeeId { get; set; }
     public DateTime AttendanceDate { get; set; }
     public string ErrorMessage { get; set; } = string.Empty;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
 }

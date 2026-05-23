@@ -1,40 +1,6 @@
 /** PayrollService API DTOs (camelCase JSON). */
 
-export interface PayrollPolicyDto {
-  id: string;
-  companyId: string;
-  policyName: string;
-  salaryCalculationType: string;
-  monthDayCalculationType: string;
-  fixedMonthDays?: number | null;
-  useAttendanceForSalary: boolean;
-  useApprovedAttendanceOnly: boolean;
-  allowOvertime: boolean;
-  overtimeCalculationType?: string | null;
-  overtimeMultiplier: number;
-  overtimeDivisor: number;
-  allowLateDeduction: boolean;
-  lateDeductionType?: string | null;
-  allowAbsentDeduction: boolean;
-  allowTiffinBill: boolean;
-  allowNightBill: boolean;
-  allowAttendanceBonus: boolean;
-  allowFestivalBonus: boolean;
-  allowEarnLeaveEncashment: boolean;
-  isActive: boolean;
-}
-
-export interface PayrollPeriodDto {
-  id: string;
-  companyId: string;
-  yearNo: number;
-  monthNo: number;
-  startDate: string;
-  endDate: string;
-  status: string;
-  isAttendanceLocked: boolean;
-  isPayrollLocked: boolean;
-}
+export type SalaryProcessingMode = "FullCompliance" | "NonCompliance" | "MultiSalaryOt";
 
 export interface SalarySheetRowDto {
   employeeId: string;
@@ -56,7 +22,9 @@ export interface SalarySheetRowDto {
 }
 
 export interface PayrollSummaryDto {
-  payrollPeriodId: string;
+  companyId: string;
+  yearNo: number;
+  monthNo: number;
   totalEmployees: number;
   grossSalary: number;
   totalEarnings: number;
@@ -85,10 +53,13 @@ export interface PayrollSummaryBreakdownDto {
 export interface EmployeePayrollDto {
   id: string;
   companyId: string;
-  payrollPeriodId: string;
+  yearNo: number;
+  monthNo: number;
   payrollRunId: string;
   employeeId: string;
+  processingMode: string;
   salaryCalculationType: string;
+  overtimeCalculationType?: string | null;
   grossSalary: number;
   basicSalary: number;
   totalDays: number;
@@ -172,6 +143,7 @@ export interface EmployeeSalaryDto {
   companyId: string;
   employeeId: string;
   salaryStructureId?: string | null;
+  salaryCalculationType: string;
   grossSalary: number;
   basicSalary: number;
   houseRent: number;
@@ -279,12 +251,6 @@ export interface PayrollBonusRowDto {
   status: string;
 }
 
-export interface PayrollLockCheckDto {
-  payrollPeriodId?: string | null;
-  isLocked: boolean;
-  status?: string | null;
-}
-
 export interface PayrollApprovalRequest {
   userId: string;
   remarks?: string | null;
@@ -296,4 +262,50 @@ export interface PayrollProcessRequest {
   monthNo: number;
   processedBy?: string | null;
   forceReprocess?: boolean;
+}
+
+export interface PayrollPolicyTemplateDto {
+  id: string;
+  policyCode: string;
+  policyName: string;
+  version: number;
+  complianceMode: string;
+  otBase: string;
+  otDivisor: number;
+  otMultiplier: number;
+  absentBase: string;
+  absentDayDivisor: string;
+  monthDayCalculationType: string;
+  requireAttendanceApproval: boolean;
+  summary: string;
+}
+
+export interface CompanyPayrollPolicyAssignmentDto {
+  id: string;
+  companyId: string;
+  policyTemplateId: string;
+  policyCode: string;
+  policyName: string;
+  policyVersion: number;
+  fixedOvertimeRate?: number | null;
+  effectiveFrom: string;
+  isActive: boolean;
+  assignedAt: string;
+}
+
+export interface CompanyPayrollPolicySummaryDto {
+  companyId: string;
+  policyCode: string;
+  policyName: string;
+  version: number;
+  fixedOvertimeRate?: number | null;
+  effectiveFrom?: string | null;
+}
+
+export interface AssignCompanyPayrollPolicyRequest {
+  companyId: string;
+  policyCode: string;
+  effectiveFrom: string;
+  assignedBy?: string | null;
+  fixedOvertimeRate?: number | null;
 }

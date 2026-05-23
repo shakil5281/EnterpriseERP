@@ -36,6 +36,9 @@ public sealed class PayrollBonusController(IMediator mediator) : ControllerBase
 
     [HttpGet("bank-sheet")]
     [Authorize(Policy = PayrollPermissions.BankSheetExport)]
-    public async Task<IActionResult> BankSheet([FromQuery] Guid periodId) =>
-        Ok(await mediator.Send(new GetFestivalBonusBankSheetQuery(periodId)));
+    public async Task<IActionResult> BankSheet(
+        [FromQuery] Guid companyId,
+        [FromQuery] int yearNo,
+        [FromQuery] int monthNo) =>
+        Ok(await mediator.Send(new GetFestivalBonusBankSheetQuery(companyId, yearNo, monthNo)));
 }

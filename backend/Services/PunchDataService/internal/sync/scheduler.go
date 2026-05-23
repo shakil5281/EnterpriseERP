@@ -69,4 +69,8 @@ func (s *Scheduler) runOnce(ctx context.Context) {
 			)
 		}
 	}
+	s.logger.Info("scheduled device sync finished",
+		"deviceCount", len(machines),
+		"nextRunIn", s.interval.String(),
+	)
 }

@@ -221,7 +221,7 @@ export default function SettingsPage() {
 
                     {/* Sidebar Navigation */}
                     <aside className="lg:sticky lg:top-32 h-fit">
-                        <TabsList className="flex lg:flex-col h-auto bg-transparent p-0 gap-8 w-full justify-start overflow-x-auto lg:overflow-visible no-scrollbar pb-4 lg:pb-0">
+                        <TabsList scrollable={false} className="flex lg:flex-col h-auto bg-transparent p-0 gap-8 w-full justify-start overflow-x-auto lg:overflow-visible no-scrollbar pb-4 lg:pb-0">
                             {SETTINGS_GROUPS.map((group) => (
                                 <div key={group.title} className="flex flex-col gap-2 min-w-max lg:min-w-0 w-full lg:w-auto">
                                     <h4 className="px-3 text-[10px] uppercase font-bold tracking-widest text-muted-foreground/60 mb-1 hidden lg:block">

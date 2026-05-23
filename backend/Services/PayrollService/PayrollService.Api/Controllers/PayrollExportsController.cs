@@ -14,9 +14,13 @@ public sealed class PayrollExportsController(IMediator mediator) : ControllerBas
 {
     [HttpGet("salary-sheet")]
     [Authorize(Policy = PayrollPermissions.SalarySheetView)]
-    public async Task<IActionResult> SalarySheet([FromQuery] Guid periodId, CancellationToken cancellationToken)
+    public async Task<IActionResult> SalarySheet(
+        [FromQuery] Guid companyId,
+        [FromQuery] int yearNo,
+        [FromQuery] int monthNo,
+        CancellationToken cancellationToken)
     {
-        var response = await mediator.Send(new GetSalarySheetQuery(periodId), cancellationToken);
+        var response = await mediator.Send(new GetSalarySheetQuery(companyId, yearNo, monthNo), cancellationToken);
         if (!response.Success || response.Data is null)
         {
             return BadRequest(response);
@@ -42,9 +46,13 @@ public sealed class PayrollExportsController(IMediator mediator) : ControllerBas
 
     [HttpGet("bank-sheet")]
     [Authorize(Policy = PayrollPermissions.BankSheetExport)]
-    public async Task<IActionResult> BankSheet([FromQuery] Guid periodId, CancellationToken cancellationToken)
+    public async Task<IActionResult> BankSheet(
+        [FromQuery] Guid companyId,
+        [FromQuery] int yearNo,
+        [FromQuery] int monthNo,
+        CancellationToken cancellationToken)
     {
-        var response = await mediator.Send(new GetBankSheetQuery(periodId), cancellationToken);
+        var response = await mediator.Send(new GetBankSheetQuery(companyId, yearNo, monthNo), cancellationToken);
         if (!response.Success || response.Data is null)
         {
             return BadRequest(response);
@@ -57,9 +65,14 @@ public sealed class PayrollExportsController(IMediator mediator) : ControllerBas
     }
 
     [HttpGet("summary")]
-    public async Task<IActionResult> Summary([FromQuery] Guid periodId, [FromQuery] string format = "xlsx", CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Summary(
+        [FromQuery] Guid companyId,
+        [FromQuery] int yearNo,
+        [FromQuery] int monthNo,
+        [FromQuery] string format = "xlsx",
+        CancellationToken cancellationToken = default)
     {
-        var response = await mediator.Send(new GetPayrollSummaryBreakdownQuery(periodId), cancellationToken);
+        var response = await mediator.Send(new GetPayrollSummaryBreakdownQuery(companyId, yearNo, monthNo), cancellationToken);
         if (!response.Success || response.Data is null)
         {
             return BadRequest(response);

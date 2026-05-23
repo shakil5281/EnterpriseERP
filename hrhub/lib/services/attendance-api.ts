@@ -216,6 +216,22 @@ export interface JobCardResponse {
   toDate: string;
 }
 
+export interface JobCardRosterItem {
+  employeeCard: number;
+  employeeId: string;
+  employeeName: string;
+  department: string;
+  section: string;
+  designation: string;
+}
+
+export interface PagedJobCardRoster {
+  items: JobCardRosterItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+}
+
 export interface DailyOtSheetRow {
   id: number;
   employeeCard: number;
@@ -248,7 +264,7 @@ export interface BackendDailyAttendance {
   attendanceDate: string;
   inTime: string | null;
   outTime: string | null;
-  shiftCode: string | null;
+  shiftName: string | null;
   lateMinutes: number;
   otMinutes: number;
   workingMinutes: number;
@@ -261,6 +277,9 @@ export interface ProcessDailyAttendanceResult {
   presentCount: number;
   absentCount: number;
   lateCount: number;
+  createdCount: number;
+  updatedCount: number;
+  skippedLockedCount: number;
 }
 
 export interface ProcessRangeResult {
@@ -269,6 +288,10 @@ export interface ProcessRangeResult {
   presentCount: number;
   absentCount: number;
   lateCount: number;
+  createdCount: number;
+  updatedCount: number;
+  skippedLockedCount: number;
+  batchId: string;
   errors: { date: string; message: string }[];
 }
 
@@ -302,15 +325,71 @@ function buildReportParams(q: AttendanceQuery): Record<string, string> {
   return params;
 }
 
-function mapDailySummary(raw: {
-  overallSummary: AttendanceSummary;
-  departmentSummaries: { id: number; name: string; departmentId?: number; totalEmployees: number; present: number; absent: number; late: number; onLeave: number; attendanceRate: number }[];
-  sectionSummaries: { id: number; name: string; sectionId?: number; totalEmployees: number; present: number; absent: number; late: number; onLeave: number; attendanceRate: number }[];
-  deptSectionSummaries: { id: number; name: string; departmentId?: number; sectionId?: number; totalEmployees: number; present: number; absent: number; late: number; onLeave: number; attendanceRate: number }[];
-  designationSummaries: { id: number; name: string; designationId?: number; totalEmployees: number; present: number; absent: number; late: number; onLeave: number; attendanceRate: number }[];
-  lineSummaries: DailySummaryResponse["lineSummaries"];
-  groupSummaries: DailySummaryResponse["groupSummaries"];
-}): DailySummaryResponse {
+type SummaryBucketRaw = {
+  id?: number;
+  Id?: number;
+  name?: string;
+  Name?: string;
+  departmentId?: number;
+  DepartmentId?: number;
+  sectionId?: number;
+  SectionId?: number;
+  designationId?: number;
+  DesignationId?: number;
+  totalEmployees?: number;
+  TotalEmployees?: number;
+  present?: number;
+  Present?: number;
+  absent?: number;
+  Absent?: number;
+  late?: number;
+  Late?: number;
+  onLeave?: number;
+  OnLeave?: number;
+  attendanceRate?: number;
+  AttendanceRate?: number;
+};
+
+function pickSummaryBucket(b: SummaryBucketRaw) {
+  return {
+    id: Number(b.id ?? b.Id ?? 0),
+    name: String(b.name ?? b.Name ?? ""),
+    departmentId: b.departmentId ?? b.DepartmentId,
+    sectionId: b.sectionId ?? b.SectionId,
+    designationId: b.designationId ?? b.DesignationId,
+    totalEmployees: Number(b.totalEmployees ?? b.TotalEmployees ?? 0),
+    present: Number(b.present ?? b.Present ?? 0),
+    absent: Number(b.absent ?? b.Absent ?? 0),
+    late: Number(b.late ?? b.Late ?? 0),
+    onLeave: Number(b.onLeave ?? b.OnLeave ?? 0),
+    attendanceRate: Number(b.attendanceRate ?? b.AttendanceRate ?? 0),
+  };
+}
+
+function normalizeDailySummaryRaw(raw: Record<string, unknown>) {
+  const overallRaw = (raw.overallSummary ?? raw.OverallSummary) as Record<string, unknown> | undefined;
+  const overallSummary: AttendanceSummary = {
+    totalHeadcount: Number(overallRaw?.totalHeadcount ?? overallRaw?.TotalHeadcount ?? 0),
+    presentCount: Number(overallRaw?.presentCount ?? overallRaw?.PresentCount ?? 0),
+    absentCount: Number(overallRaw?.absentCount ?? overallRaw?.AbsentCount ?? 0),
+    lateCount: Number(overallRaw?.lateCount ?? overallRaw?.LateCount ?? 0),
+    leaveCount: Number(overallRaw?.leaveCount ?? overallRaw?.LeaveCount ?? 0),
+    attendanceRate: Number(overallRaw?.attendanceRate ?? overallRaw?.AttendanceRate ?? 0),
+  };
+  const list = (key: string, alt: string) =>
+    ((raw[key] ?? raw[alt]) as SummaryBucketRaw[] | undefined) ?? [];
+  return {
+    overallSummary,
+    departmentSummaries: list("departmentSummaries", "DepartmentSummaries").map(pickSummaryBucket),
+    sectionSummaries: list("sectionSummaries", "SectionSummaries").map(pickSummaryBucket),
+    deptSectionSummaries: list("deptSectionSummaries", "DeptSectionSummaries").map(pickSummaryBucket),
+    designationSummaries: list("designationSummaries", "DesignationSummaries").map(pickSummaryBucket),
+    lineSummaries: list("lineSummaries", "LineSummaries") as DailySummaryResponse["lineSummaries"],
+    groupSummaries: list("groupSummaries", "GroupSummaries") as DailySummaryResponse["groupSummaries"],
+  };
+}
+
+function mapDailySummary(raw: ReturnType<typeof normalizeDailySummaryRaw>): DailySummaryResponse {
   return {
     overallSummary: raw.overallSummary,
     departmentSummaries: raw.departmentSummaries.map((d) => ({
@@ -415,8 +494,8 @@ export const attendanceApi = {
     const response = await api.get<unknown>(platformApiUrl("/api/v1/Attendance/daily-summary"), {
       params: buildReportParams(q),
     });
-    const raw = unwrapResponse<Parameters<typeof mapDailySummary>[0]>(response);
-    return mapDailySummary(raw);
+    const raw = unwrapResponse<Record<string, unknown>>(response);
+    return mapDailySummary(normalizeDailySummaryRaw(raw));
   },
 
   getJobCard: async (
@@ -430,6 +509,39 @@ export const attendanceApi = {
     };
     const response = await api.get<unknown>(platformApiUrl("/api/v1/Attendance/job-card"), { params });
     return unwrapResponse<JobCardResponse>(response);
+  },
+
+  getJobCardRoster: async (
+    q: AttendanceQuery,
+    opts: { page?: number; pageSize?: number } = {},
+  ) => {
+    const params = {
+      ...buildReportParams(q),
+      page: String(opts.page ?? 1),
+      pageSize: String(opts.pageSize ?? 1),
+    };
+    const response = await api.get<unknown>(platformApiUrl("/api/v1/Attendance/job-card/roster"), {
+      params,
+    });
+    const raw = unwrapResponse<Record<string, unknown>>(response);
+    const itemsRaw = (raw.items ?? raw.Items) as unknown[] | undefined;
+    const items = (itemsRaw ?? []).map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        employeeCard: Number(r.employeeCard ?? r.EmployeeCard ?? 0),
+        employeeId: String(r.employeeId ?? r.EmployeeId ?? ""),
+        employeeName: String(r.employeeName ?? r.EmployeeName ?? ""),
+        department: String(r.department ?? r.Department ?? ""),
+        section: String(r.section ?? r.Section ?? ""),
+        designation: String(r.designation ?? r.Designation ?? ""),
+      };
+    });
+    return {
+      items,
+      page: Number(raw.page ?? raw.Page ?? 1),
+      pageSize: Number(raw.pageSize ?? raw.PageSize ?? 1),
+      totalCount: Number(raw.totalCount ?? raw.TotalCount ?? 0),
+    } satisfies PagedJobCardRoster;
   },
 
   getMissingEntries: async (q: AttendanceQuery) => {

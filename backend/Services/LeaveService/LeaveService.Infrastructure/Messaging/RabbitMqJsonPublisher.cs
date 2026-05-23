@@ -1,8 +1,10 @@
 using System.Text;
 using System.Text.Json;
 using LeaveService.Application.Common.Interfaces;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Exceptions;
 
 namespace LeaveService.Infrastructure.Messaging;
 
@@ -17,7 +19,9 @@ public sealed class RabbitMqPublisherOptions
     public string ExchangeName { get; set; } = "erp.events";
 }
 
-public sealed class RabbitMqJsonPublisher(IOptions<RabbitMqPublisherOptions> options) : IIntegrationMessagePublisher, IDisposable
+public sealed class RabbitMqJsonPublisher(
+    IOptions<RabbitMqPublisherOptions> options,
+    ILogger<RabbitMqJsonPublisher> logger) : IIntegrationMessagePublisher, IDisposable
 {
     private readonly RabbitMqPublisherOptions _opt = options.Value;
     private IConnection? _connection;
@@ -25,19 +29,30 @@ public sealed class RabbitMqJsonPublisher(IOptions<RabbitMqPublisherOptions> opt
 
     public Task PublishJsonAsync(string routingKey, object payload, CancellationToken cancellationToken = default)
     {
-        lock (_lock)
+        try
         {
-            _connection ??= new ConnectionFactory
+            lock (_lock)
             {
-                HostName = _opt.HostName,
-                UserName = _opt.UserName,
-                Password = _opt.Password,
-            }.CreateConnection();
+                _connection ??= new ConnectionFactory
+                {
+                    HostName = _opt.HostName,
+                    UserName = _opt.UserName,
+                    Password = _opt.Password,
+                }.CreateConnection();
 
-            using var ch = _connection.CreateModel();
-            ch.ExchangeDeclare(_opt.ExchangeName, ExchangeType.Topic, durable: true);
-            var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));
-            ch.BasicPublish(_opt.ExchangeName, routingKey, body: body);
+                using var ch = _connection.CreateModel();
+                ch.ExchangeDeclare(_opt.ExchangeName, ExchangeType.Topic, durable: true);
+                var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));
+                ch.BasicPublish(_opt.ExchangeName, routingKey, body: body);
+            }
+        }
+        catch (BrokerUnreachableException ex)
+        {
+            logger.LogWarning(ex, "RabbitMQ unavailable; skipped publishing {RoutingKey}.", routingKey);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to publish {RoutingKey}; leave operation completed without event.", routingKey);
         }
 
         return Task.CompletedTask;

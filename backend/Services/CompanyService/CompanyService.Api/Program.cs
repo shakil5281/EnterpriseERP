@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using Erp.BuildingBlocks.Hosting;
+using Erp.BuildingBlocks.SharedKernel;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddEnterpriseErpConnectionConfiguration();
@@ -135,7 +136,7 @@ await using (var scope = app.Services.CreateAsyncScope())
             Id = Guid.NewGuid(),
             CompanyNameEn = "Default Company",
             Status = "Active",
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = BusinessTime.Now,
         });
         await db.SaveChangesAsync();
     }

@@ -26,7 +26,7 @@ public sealed class JwtTokenIssuer(IOptions<JwtOptions> options) : IJwtTokenIssu
 			throw new InvalidOperationException("Jwt:SigningKey must be configured and at least 32 characters.");
 		}
 
-		var expiresAtUtc = DateTime.UtcNow.AddMinutes((_options.AccessTokenMinutes <= 0) ? 15 : _options.AccessTokenMinutes);
+		var expiresAtUtc = DateTime.UtcNow.AddMinutes((_options.AccessTokenMinutes <= 0) ? 1440 : _options.AccessTokenMinutes);
 		var claims = new List<Claim>
 		{
 			new(ClaimTypes.NameIdentifier, user.Id.ToString()),
