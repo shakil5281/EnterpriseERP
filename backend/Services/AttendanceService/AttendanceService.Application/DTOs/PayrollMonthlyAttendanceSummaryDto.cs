@@ -17,6 +17,7 @@ public sealed record PayrollMonthlyAttendanceSummaryDto(
     decimal HolidayPresentDays,
     decimal WeeklyOffPresentDays,
     int OvertimeMinutes,
+    int OvertimeHours,
     decimal ApprovedTiffinDays,
     decimal ApprovedNightDutyDays,
     decimal MissingPunchDays);

@@ -1,15 +1,34 @@
 "use client"
 
-import { RouteGuard } from "@/components/auth/route-guard"
+import { useAuth } from "@/components/providers/auth-provider"
+import { usePathname, useRouter } from "next/navigation"
+import { useEffect } from "react"
+import { canAccessRoute } from "@/lib/auth/access-config"
+import { FullScreenLoading } from "@/components/loading-state"
 
 export default function MerchandisingLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  return (
-    <RouteGuard requiredRoles={["SuperAdmin", "Admin", "Merchandising", "Merchandiser"]}>
-      {children}
-    </RouteGuard>
-  )
+  const { user, loading } = useAuth()
+  const pathname = usePathname()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (loading || !user) return
+    if (!canAccessRoute(pathname, user.roles, user.permissions ?? [])) {
+      router.replace("/unauthorized")
+    }
+  }, [user, loading, pathname, router])
+
+  if (loading || !user) {
+    return <FullScreenLoading message="Verifying access..." />
+  }
+
+  if (!canAccessRoute(pathname, user.roles, user.permissions ?? [])) {
+    return <FullScreenLoading message="Access denied..." />
+  }
+
+  return <>{children}</>
 }

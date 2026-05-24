@@ -85,6 +85,38 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
         }
     }
 
+    private async Task EnsureGroupValidForCompanyAsync(Guid? groupId, Guid companyId, CancellationToken cancellationToken)
+    {
+        if (!groupId.HasValue || !db.Database.IsRelational())
+        {
+            return;
+        }
+
+        try
+        {
+            var groupCompanyId = await db.Database
+                .SqlQueryRaw<string>(
+                    "SELECT CAST(CompanyId AS varchar(36)) AS Value FROM CompanyServiceDB.dbo.Groups WHERE Id = {0}",
+                    groupId.Value)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(groupCompanyId)
+                || !Guid.TryParse(groupCompanyId, out var parsedCompanyId)
+                || parsedCompanyId != companyId)
+            {
+                throw new InvalidOperationException("Group not found or does not belong to this company.");
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch
+        {
+            // Company DB unavailable in some environments — skip validation.
+        }
+    }
+
     public async Task<Guid> CreateAsync(CreateEmployeeDto dto, CancellationToken cancellationToken = default)
     {
         await EnsureDepartmentAndDesignationExistAsync(dto.DepartmentId, dto.DesignationId, dto.CompanyId, cancellationToken);
@@ -265,38 +297,42 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
 
         await EnsureDepartmentAndDesignationExistAsync(dto.DepartmentId, dto.DesignationId, employee.CompanyId, cancellationToken);
 
-        var currentJob = employee.JobInfos.FirstOrDefault(j => j.IsCurrent);
-        if (currentJob != null &&
-            currentJob.DepartmentId == dto.DepartmentId &&
-            currentJob.SectionId == dto.SectionId &&
-            currentJob.DesignationId == dto.DesignationId &&
-            currentJob.GradeId == dto.GradeId &&
-            currentJob.GroupId == dto.GroupId &&
-            currentJob.SupervisorId == dto.SupervisorId &&
-            string.Equals(
-                NormalizeWorkLocation(currentJob.WorkLocation),
-                NormalizeWorkLocation(dto.WorkLocation),
-                StringComparison.OrdinalIgnoreCase))
+        var currentJob = await db.EmployeeJobInfos
+            .Where(j => j.EmployeeId == id && j.IsCurrent)
+            .OrderByDescending(j => j.EffectiveFrom)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (currentJob != null && JobPlacementMatches(currentJob, dto))
         {
-            return;
-        }
+            var workLocationMatches = WorkLocationMatches(currentJob.WorkLocation, dto.WorkLocation);
+            var groupMatches = currentJob.GroupId == dto.GroupId;
 
-        if (currentJob != null &&
-            currentJob.DepartmentId == dto.DepartmentId &&
-            currentJob.SectionId == dto.SectionId &&
-            currentJob.DesignationId == dto.DesignationId &&
-            currentJob.GradeId == dto.GradeId &&
-            currentJob.GroupId == dto.GroupId &&
-            currentJob.SupervisorId == dto.SupervisorId &&
-            !string.IsNullOrWhiteSpace(dto.WorkLocation))
-        {
-            currentJob.WorkLocation = dto.WorkLocation.Trim();
+            if (workLocationMatches && groupMatches)
+            {
+                return;
+            }
+
+            await EnsureGroupValidForCompanyAsync(dto.GroupId, employee.CompanyId, cancellationToken);
+
+            if (!groupMatches)
+            {
+                currentJob.GroupId = dto.GroupId;
+            }
+
+            if (!workLocationMatches)
+            {
+                currentJob.WorkLocation = string.IsNullOrWhiteSpace(dto.WorkLocation)
+                    ? null
+                    : dto.WorkLocation.Trim();
+            }
+
             await db.SaveChangesAsync(cancellationToken);
             return;
         }
 
         // Business Rule: Current job info only one record
-        var existingJobs = employee.JobInfos.Where(j => j.IsCurrent).ToList();
+        var existingJobs = await db.EmployeeJobInfos
+            .Where(j => j.EmployeeId == id && j.IsCurrent)
+            .ToListAsync(cancellationToken);
         var fromDepartmentId = existingJobs.Select(j => j.DepartmentId).FirstOrDefault();
         foreach (var job in existingJobs)
         {
@@ -315,7 +351,7 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
             CreatedAt = BusinessTime.NowOffset,
         });
 
-        employee.JobInfos.Add(new EmployeeJobInfo
+        db.EmployeeJobInfos.Add(new EmployeeJobInfo
         {
             Id = Guid.NewGuid(),
             CompanyId = employee.CompanyId,
@@ -336,6 +372,19 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
 
     private static string? NormalizeWorkLocation(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static bool WorkLocationMatches(string? current, string? next) =>
+        string.Equals(
+            NormalizeWorkLocation(current),
+            NormalizeWorkLocation(next),
+            StringComparison.OrdinalIgnoreCase);
+
+    private static bool JobPlacementMatches(EmployeeJobInfo job, TransferEmployeeDto dto) =>
+        job.DepartmentId == dto.DepartmentId &&
+        job.SectionId == dto.SectionId &&
+        job.DesignationId == dto.DesignationId &&
+        job.GradeId == dto.GradeId &&
+        job.SupervisorId == dto.SupervisorId;
 
     public async Task ChangeStatusAsync(Guid id, ChangeStatusDto dto, CancellationToken cancellationToken = default)
     {
@@ -384,18 +433,16 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
             return;
         }
 
-        if (currentSalary != null)
+        if (currentSalary != null && await TryUpdateSalaryRowAsync(
+                currentSalary.Id,
+                dto.BasicSalary,
+                dto.HouseRent,
+                dto.MedicalAllowance,
+                dto.ConveyanceAllowance,
+                dto.FoodAllowance,
+                grossSalary,
+                cancellationToken))
         {
-            await db.EmployeeSalaryInfos
-                .Where(s => s.Id == currentSalary.Id)
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(s => s.BasicSalary, dto.BasicSalary)
-                    .SetProperty(s => s.HouseRent, dto.HouseRent)
-                    .SetProperty(s => s.MedicalAllowance, dto.MedicalAllowance)
-                    .SetProperty(s => s.ConveyanceAllowance, dto.ConveyanceAllowance)
-                    .SetProperty(s => s.FoodAllowance, dto.FoodAllowance)
-                    .SetProperty(s => s.GrossSalary, grossSalary),
-                    cancellationToken);
             return;
         }
 
@@ -448,18 +495,16 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
             return;
         }
 
-        if (currentSalary != null)
+        if (currentSalary != null && await TryUpdateSalaryRowAsync(
+                currentSalary.Id,
+                basicSalary,
+                houseRent,
+                medicalAllowance,
+                conveyanceAllowance,
+                foodAllowance,
+                grossSalary,
+                cancellationToken))
         {
-            await db.EmployeeSalaryInfos
-                .Where(s => s.Id == currentSalary.Id)
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(s => s.BasicSalary, basicSalary)
-                    .SetProperty(s => s.HouseRent, houseRent)
-                    .SetProperty(s => s.MedicalAllowance, medicalAllowance)
-                    .SetProperty(s => s.ConveyanceAllowance, conveyanceAllowance)
-                    .SetProperty(s => s.FoodAllowance, foodAllowance)
-                    .SetProperty(s => s.GrossSalary, grossSalary),
-                    cancellationToken);
             return;
         }
 
@@ -479,6 +524,34 @@ public sealed class EmployeeService(HrDbContext db) : IEmployeeService
         });
 
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<bool> TryUpdateSalaryRowAsync(
+        Guid salaryRowId,
+        decimal basicSalary,
+        decimal houseRent,
+        decimal medicalAllowance,
+        decimal conveyanceAllowance,
+        decimal foodAllowance,
+        decimal grossSalary,
+        CancellationToken cancellationToken)
+    {
+        var row = await db.EmployeeSalaryInfos
+            .FirstOrDefaultAsync(s => s.Id == salaryRowId, cancellationToken);
+        if (row == null)
+        {
+            return false;
+        }
+
+        row.BasicSalary = basicSalary;
+        row.HouseRent = houseRent;
+        row.MedicalAllowance = medicalAllowance;
+        row.ConveyanceAllowance = conveyanceAllowance;
+        row.FoodAllowance = foodAllowance;
+        row.GrossSalary = grossSalary;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     private async Task NormalizeDuplicateCurrentSalariesAsync(Guid employeeId, CancellationToken cancellationToken)

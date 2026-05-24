@@ -135,7 +135,7 @@ export default function DailyInputPage() {
             header: "OT",
             cell: ({ row }) => (
                 <span className={cn("font-bold tabular-nums text-xs", row.original.otHours > 0 ? "text-primary" : "text-muted-foreground")}>
-                    {row.original.otHours.toFixed(2)}
+                    {row.original.otHours}
                 </span>
             )
         }

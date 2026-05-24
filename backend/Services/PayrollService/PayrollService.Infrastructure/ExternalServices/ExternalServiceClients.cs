@@ -149,7 +149,8 @@ public sealed class EmployeeServiceClient(HttpClient httpClient) : IEmployeeServ
         item.DesignationId,
         item.DesignationName,
         item.LineId,
-        item.LineName);
+        item.LineName,
+        item.IsOtEnabled);
 
     private static EmployeeSnapshot MapEmployee(HrEmployeeDetails item, Guid companyId) => new(
         item.Id,
@@ -167,7 +168,8 @@ public sealed class EmployeeServiceClient(HttpClient httpClient) : IEmployeeServ
         item.DesignationId,
         item.DesignationName,
         item.LineId,
-        item.LineName);
+        item.LineName,
+        item.IsOtEnabled);
 
     private sealed class HrApiResponse<T>
     {
@@ -230,6 +232,9 @@ public sealed class EmployeeServiceClient(HttpClient httpClient) : IEmployeeServ
 
         [JsonPropertyName("bankName")]
         public string? BankName { get; init; }
+
+        [JsonPropertyName("isOtEnabled")]
+        public bool IsOtEnabled { get; init; } = true;
     }
 
     private sealed class HrEmployeeDetails
@@ -281,6 +286,9 @@ public sealed class EmployeeServiceClient(HttpClient httpClient) : IEmployeeServ
 
         [JsonPropertyName("bankName")]
         public string? BankName { get; init; }
+
+        [JsonPropertyName("isOtEnabled")]
+        public bool IsOtEnabled { get; init; } = true;
 
         [JsonPropertyName("currentSalaryInfo")]
         public HrEmployeeSalaryInfo? CurrentSalaryInfo { get; init; }

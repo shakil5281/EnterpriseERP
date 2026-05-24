@@ -91,7 +91,8 @@ public sealed record EmployeeSnapshot(
     int? DesignationId = null,
     string? DesignationName = null,
     int? LineId = null,
-    string? LineName = null);
+    string? LineName = null,
+    bool IsOtEnabled = true);
 
 public sealed record AttendanceSummary(
     Guid CompanyId,
@@ -109,6 +110,7 @@ public sealed record AttendanceSummary(
     decimal HolidayPresentDays,
     decimal WeeklyOffPresentDays,
     int OvertimeMinutes,
+    int OvertimeHours,
     decimal ApprovedTiffinDays,
     decimal ApprovedNightDutyDays,
     decimal MissingPunchDays);

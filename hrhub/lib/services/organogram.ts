@@ -267,8 +267,13 @@ async function fetchFloorsInternal(companyGuid?: string): Promise<Floor[]> {
   });
 }
 
-async function resolveGroupEntityId(legacyId: number): Promise<string | undefined> {
-  const groups = await fetchGroupsInternal();
+async function resolveGroupEntityId(
+  legacyId: number,
+  companyId?: number,
+): Promise<string | undefined> {
+  const companyGuid =
+    companyId !== undefined ? await companyGuidFromLegacyCompanyId(companyId) : undefined;
+  const groups = await fetchGroupsInternal(companyGuid);
   return groups.find((g) => g.id === legacyId)?.entityId;
 }
 
@@ -418,13 +423,16 @@ export async function resolveDesignationGuid(
   const all = await organogramService.getDesignations();
   return all.find((d) => d.id === n)?.entityId;
 }
-export async function resolveGroupGuid(groupId: string | number): Promise<string | undefined> {
+export async function resolveGroupGuid(
+  groupId: string | number,
+  companyId?: number,
+): Promise<string | undefined> {
   if (typeof groupId === "string" && groupId.includes("-")) {
     return groupId;
   }
   const n = typeof groupId === "string" ? parseInt(groupId, 10) : groupId;
   if (!Number.isFinite(n)) return undefined;
-  return resolveGroupEntityId(n);
+  return resolveGroupEntityId(n, companyId);
 }
 
 /** Load departments + sections for filter dropdowns (e.g. Company Organogram). */

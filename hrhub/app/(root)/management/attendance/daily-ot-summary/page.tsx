@@ -86,7 +86,7 @@ export default function DailyOTSummaryPage() {
                     <div className="flex flex-col gap-1.5 min-w-[140px]">
                         <div className="flex items-center justify-between">
                             <span className="text-sm font-bold text-foreground">
-                                {row.original.totalOtHours.toFixed(1)} <span className="text-xs font-normal text-muted-foreground">hrs</span>
+                                {row.original.totalOtHours} <span className="text-xs font-normal text-muted-foreground">hrs</span>
                             </span>
                             <span className="text-xs text-muted-foreground font-medium">
                                 {percent.toFixed(1)}%

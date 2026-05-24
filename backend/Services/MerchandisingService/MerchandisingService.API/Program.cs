@@ -6,6 +6,7 @@ using MerchandisingService.API.Middleware;
 using MerchandisingService.Application;
 using MerchandisingService.Infrastructure;
 using MerchandisingService.Infrastructure.Persistence;
+using MerchandisingService.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,7 @@ builder.Host.UseSerilog((_, cfg) => cfg.WriteTo.Console());
 builder.Services.AddMerchandisingApplication();
 builder.Services.AddMerchandisingInfrastructure(builder.Configuration);
 builder.Services.AddEnterpriseTenantSecurity(builder.Configuration);
+builder.Services.AddScoped<ITenantCompanyAccessResolver, AuthDbTenantCompanyAccessResolver>();
 builder.Services.AddControllers();
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddEndpointsApiExplorer();
@@ -47,9 +49,9 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-var jwtKey = builder.Configuration["Jwt:SigningKey"] ?? "dev_signing_key_at_least_32_chars_long";
-var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "erp_auth_service";
-var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "erp_platform";
+var jwtKey = builder.Configuration["Jwt:SigningKey"] ?? "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+";
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "AuthService";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "Erp.Platform";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>
@@ -71,9 +73,20 @@ builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionAuthorizat
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddAuthorization();
 
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("default", policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+    options.AddPolicy("default", policy =>
+    {
+        if (corsOrigins.Length > 0)
+        {
+            policy.WithOrigins(corsOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+        }
+        else
+        {
+            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+        }
+    });
 });
 
 builder.Services.AddHealthChecks().AddDbContextCheck<MerchandisingDbContext>("merchandising-db");

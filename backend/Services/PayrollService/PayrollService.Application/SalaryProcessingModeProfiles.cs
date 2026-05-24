@@ -87,6 +87,7 @@ public static class SalaryProcessingModeProfiles
             HolidayPresentDays: 0,
             WeeklyOffPresentDays: 0,
             OvertimeMinutes: 0,
+            OvertimeHours: 0,
             ApprovedTiffinDays: 0,
             ApprovedNightDutyDays: 0,
             MissingPunchDays: 0);

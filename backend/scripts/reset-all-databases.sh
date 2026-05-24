@@ -5,9 +5,9 @@
 set -euo pipefail
 
 BACKEND="$(cd "$(dirname "$0")/.." && pwd)"
-SQLSERVER="localhost"
+SQLSERVER="unity3\\SQLEXPRESS"
 SQLUSER="sa"
-SQLPASS="shakil52814542A"
+SQLPASS="123580"
 GO_JWT="dev_signing_key_at_least_32_chars_long_for_erp_local"
 CONN_BASE="Server=${SQLSERVER};User Id=${SQLUSER};Password=${SQLPASS};Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true"
 

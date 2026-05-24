@@ -58,6 +58,7 @@ export const sidebarData = {
             name: "Management",
             logo: IconUsersGroup,
             plan: "Module",
+            accessPath: "/management",
             roles: ["SuperAdmin", "Admin", "HR", "Management", "IT Officer", "HR Officer"],
             navMain: [
                 { title: "Dashboard", url: "/", icon: IconDashboard },
@@ -203,6 +204,7 @@ export const sidebarData = {
             name: "Production",
             logo: IconBuildingFactory2,
             plan: "Module",
+            accessPath: "/production",
             roles: ["SuperAdmin", "Admin", "Production", "ProductionManager"],
             navMain: [
                 { title: "Dashboard", url: "/production/dashboard", icon: IconDashboard },
@@ -271,6 +273,7 @@ export const sidebarData = {
             name: "Accounts",
             logo: IconCalculator,
             plan: "Module",
+            accessPath: "/accounts",
             roles: ["SuperAdmin", "Admin", "Accounts", "Accountant", "Account Officer"],
             navMain: [
                 { title: "Dashboard", url: "/accounts/dashboard", icon: IconDashboard },
@@ -358,6 +361,7 @@ export const sidebarData = {
             name: "Cutting",
             logo: IconScissors,
             plan: "Module",
+            accessPath: "/cutting",
             roles: ["SuperAdmin", "Admin", "Cutting"],
             navMain: [
                 { title: "Dashboard", url: "/cutting/dashboard", icon: IconDashboard },
@@ -398,6 +402,7 @@ export const sidebarData = {
             name: "Store",
             logo: IconPackages,
             plan: "Module",
+            accessPath: "/store",
             roles: ["SuperAdmin", "Admin", "Store", "StoreKeeper"],
             navMain: [
                 { title: "Dashboard", url: "/store/dashboard", icon: IconDashboard },
@@ -463,6 +468,7 @@ export const sidebarData = {
             name: "Merchandising",
             logo: IconShirt,
             plan: "Module",
+            accessPath: "/merchandising",
             roles: ["SuperAdmin", "Admin", "Merchandising", "Merchandiser"],
             navMain: [
                 { title: "Command Center", url: "/merchandising/dashboard", icon: IconDashboard },

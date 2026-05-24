@@ -165,6 +165,11 @@ public sealed class ProcessPayrollHandler(
                     DateTime.DaysInMonth(request.YearNo, request.MonthNo));
             }
 
+            if (!employee.IsOtEnabled)
+            {
+                attendance = attendance with { OvertimeMinutes = 0, OvertimeHours = 0 };
+            }
+
             var advanceDeduction = await salaryAdvanceService.GetDeductibleInstallmentAsync(
                 request.CompanyId, employee.EmployeeId, request.YearNo, request.MonthNo, cancellationToken);
             var otherDeductions = db.PayrollDeductionEntries

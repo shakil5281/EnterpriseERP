@@ -52,18 +52,18 @@ services:
       dockerfile: Platform.Host/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
-      ConnectionStrings__AuthDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=AuthServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__CompanyDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=CompanyServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__HrDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=HRServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__AttendanceDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=AttendanceServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__LeaveDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=LeaveServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__ShiftDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=ShiftServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__PayrollDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=PayrollServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__NotificationDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=NotificationServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__QualityDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=QualityServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__FinishingDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=FinishingServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__SecurityDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=SecurityServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__AccountsDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=AccountsServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__AuthDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=AuthServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__CompanyDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=CompanyServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__HrDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=HRServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__AttendanceDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=AttendanceServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__LeaveDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=LeaveServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__ShiftDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=ShiftServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__PayrollDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=PayrollServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__NotificationDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=NotificationServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__QualityDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=QualityServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__FinishingDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=FinishingServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__SecurityDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=SecurityServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__AccountsDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=AccountsServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
       ConnectionStrings__Redis: "redis:6379"
       RabbitMQ__HostName: rabbitmq
       RabbitMQ__UserName: erp
@@ -88,7 +88,7 @@ services:
       context: ../../Services/PunchDataService
       dockerfile: Dockerfile
     environment:
-      PUNCHDATA_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=PunchDataDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      PUNCHDATA_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=PunchDataDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
       PUNCHDATA_SERVER_ADDRESS: ":5050"
       PUNCHDATA_JWT_SIGNINGKEY: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
     extra_hosts:
@@ -104,8 +104,8 @@ services:
       context: ../../Services/ImportExportService
       dockerfile: Dockerfile
     environment:
-      IMPORTEXPORT_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=ImportExportDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      IMPORTEXPORT_COMPANY_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=CompanyServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=shakil52814542A;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      IMPORTEXPORT_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=ImportExportDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      IMPORTEXPORT_COMPANY_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=CompanyServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
       IMPORTEXPORT_SERVER_ADDRESS: ":8060"
       IMPORTEXPORT_REDIS: "redis:6379"
       IMPORTEXPORT_JWT_SIGNINGKEY: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"

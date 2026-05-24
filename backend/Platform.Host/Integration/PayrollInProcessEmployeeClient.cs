@@ -103,7 +103,8 @@ public sealed class PayrollInProcessEmployeeClient(IEmployeeReadService employee
             EmployeeCode: item.EmployeeID,
             EmployeeName: item.FullName,
             DepartmentName: item.DepartmentName,
-            DesignationName: item.DesignationName);
+            DesignationName: item.DesignationName,
+            IsOtEnabled: item.IsOtEnabled);
 
     private static EmployeeSnapshot MapDetails(EmployeeDetailsDto details)
     {
@@ -125,7 +126,8 @@ public sealed class PayrollInProcessEmployeeClient(IEmployeeReadService employee
             null,
             job?.DesignationName,
             null,
-            null);
+            null,
+            details.IsOtEnabled);
     }
 
     private static EmployeeSalary MapSalary(

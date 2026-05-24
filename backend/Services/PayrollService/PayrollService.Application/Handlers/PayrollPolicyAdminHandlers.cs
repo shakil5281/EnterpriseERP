@@ -144,7 +144,8 @@ public sealed class PayrollPolicyAdminHandlers(
             0,
             0,
             0,
-            (int)(query.Request.OvertimeHours * 60),
+            0,
+            (int)query.Request.OvertimeHours,
             0,
             0,
             0);

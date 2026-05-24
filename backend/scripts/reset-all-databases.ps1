@@ -1,14 +1,14 @@
 # Reset all ERP SQL Server databases and re-apply EF Core migrations.
 # Uses backend/Configuration/connectionstrings.json (via each API's AddEnterpriseErpConnectionConfiguration).
-# Requires: dotnet ef, sqlcmd, SQL Server at localhost (see $SqlServer below).
+# Requires: dotnet ef, sqlcmd, SQL Server at unity3\SQLEXPRESS (see $SqlServer below).
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $Backend = $Root
 
-$SqlServer = "localhost"
+$SqlServer = "unity3\SQLEXPRESS"
 $SqlUser = "sa"
-$SqlPassword = "shakil52814542A"
+$SqlPassword = "123580"
 
 $Databases = @(
     "AuthServiceDB",
@@ -117,7 +117,7 @@ function Invoke-GoMigrate($serviceDir, $envPrefix) {
             param($d, $jwt)
             Set-Location $d
             $env:PUNCHDATA_JWT_SIGNINGKEY = $jwt
-            $env:PUNCHDATA_CONNECTIONSTRING = "Server=localhost;Database=PunchDataDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true"
+            $env:PUNCHDATA_CONNECTIONSTRING = "Server=unity3\SQLEXPRESS;Database=PunchDataDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true"
             & go run ./cmd/server 2>&1
         } -ArgumentList $dir, $goJwt
         Wait-Job $job -Timeout 45 | Out-Null
@@ -135,8 +135,8 @@ try {
         param($d, $jwt)
         Set-Location $d
         $env:IMPORTEXPORT_JWT_SIGNINGKEY = $jwt
-        $env:IMPORTEXPORT_CONNECTIONSTRING = "Server=localhost;Database=ImportExportDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true"
-        $env:IMPORTEXPORT_COMPANY_CONNECTIONSTRING = "Server=localhost;Database=CompanyServiceDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true"
+        $env:IMPORTEXPORT_CONNECTIONSTRING = "Server=unity3\SQLEXPRESS;Database=ImportExportDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true"
+        $env:IMPORTEXPORT_COMPANY_CONNECTIONSTRING = "Server=unity3\SQLEXPRESS;Database=CompanyServiceDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true"
         & go run ./cmd/api 2>&1
     } -ArgumentList (Get-Location).Path, $goJwt
     Wait-Job $job -Timeout 45 | Out-Null

@@ -3,6 +3,7 @@ using AttendanceService.Application.Common.Interfaces;
 using AttendanceService.Application.DTOs;
 using AttendanceService.Domain.Entities;
 using AttendanceService.Domain.Enums;
+using Erp.BuildingBlocks.SharedKernel;
 using Microsoft.EntityFrameworkCore;
 
 namespace AttendanceService.Application.Features.Attendance;
@@ -68,7 +69,10 @@ public static class AttendanceReportHelper
 
     public static string FormatDate(DateTime value) => value.ToString("yyyy-MM-dd");
 
-    public static decimal ToOtHours(int otMinutes) => Math.Round(otMinutes / 60m, 2);
+    public static decimal ToOtHours(int otMinutes) => OvertimeHourRules.ConvertMinutesToHours(otMinutes);
+
+    public static decimal ResolveOtHours(int otMinutes, bool isOtEnabled) =>
+        OvertimeHourRules.ResolveOtHours(otMinutes, isOtEnabled);
 
     public static bool IsPresent(AttendanceStatus status) =>
         status is AttendanceStatus.Present or AttendanceStatus.Late or AttendanceStatus.EarlyOut;

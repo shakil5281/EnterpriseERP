@@ -475,17 +475,19 @@ async function syncEmployeePlacement(
   const currentDesignation = currentJob?.designationId
     ? stableIntFromGuid(currentJob.designationId)
     : 0;
-  const currentGroup = currentJob?.groupId
-    ? stableIntFromGuid(currentJob.groupId)
-    : 0;
   const currentLine = currentJob?.workLocation?.trim().toLowerCase() ?? "";
   const nextLine = workLocation?.trim().toLowerCase() ?? "";
+  const nextGroupGuid = data.groupId
+    ? await resolveGroupGuid(data.groupId, data.companyId)
+    : null;
+  const currentGroupGuid = currentJob?.groupId ?? null;
+  const groupChanged = (currentGroupGuid ?? null) !== (nextGroupGuid ?? null);
 
   const placementChanged =
     currentDept !== (data.departmentId ?? 0) ||
     currentSection !== (data.sectionId ?? 0) ||
     currentDesignation !== (data.designationId ?? 0) ||
-    currentGroup !== (data.groupId ?? 0) ||
+    groupChanged ||
     currentLine !== nextLine;
 
   if (!placementChanged) return;
@@ -494,7 +496,7 @@ async function syncEmployeePlacement(
     departmentId: data.departmentId,
     sectionId: data.sectionId,
     designationId: data.designationId,
-    groupId: data.groupId,
+    groupGuid: nextGroupGuid,
     workLocation,
     effectiveFrom: data.joinDate || new Date().toISOString(),
     companyId: data.companyId,
@@ -1104,7 +1106,7 @@ export const employeeService = {
       : undefined;
     const designationId = await resolveDesignationGuid(data.designationId);
     const groupId = data.groupId
-      ? await resolveGroupGuid(data.groupId)
+      ? await resolveGroupGuid(data.groupId, data.companyId)
       : undefined;
     if (!departmentId || !designationId) {
       throw new Error("Department and designation are required.");
@@ -1277,6 +1279,7 @@ export const employeeService = {
       sectionId?: number;
       designationId?: number;
       groupId?: number;
+      groupGuid?: string | null;
       gradeId?: string;
       supervisorId?: string;
       workLocation?: string;
@@ -1286,6 +1289,12 @@ export const employeeService = {
     },
   ) => {
     const id = await resolveEmployeeGuid(employeeId, data.companyId);
+    const resolvedGroupGuid =
+      data.groupGuid !== undefined
+        ? data.groupGuid
+        : data.groupId
+          ? await resolveGroupGuid(data.groupId, data.companyId)
+          : null;
     await api.post(`hr/Employees/${encodeURIComponent(id)}/transfer`, {
       departmentId: data.departmentId
         ? await resolveDepartmentGuid(data.departmentId)
@@ -1296,7 +1305,7 @@ export const employeeService = {
       designationId: data.designationId
         ? await resolveDesignationGuid(data.designationId)
         : null,
-      groupId: data.groupId ? await resolveGroupGuid(data.groupId) : null,
+      groupId: resolvedGroupGuid,
       gradeId: data.gradeId || null,
       supervisorId: data.supervisorId || null,
       workLocation: data.workLocation || null,

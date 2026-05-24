@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { sidebarData } from "./data/sidebar-data"
+import { canAccessRoute } from "@/lib/auth/access-config"
 
 import { useAuth } from "@/components/providers/auth-provider"
 import { Avatar, AvatarImage } from "../ui/avatar"
@@ -60,6 +61,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
 
     return sidebarData.modules.filter(module => {
+      const accessPath = (module as { accessPath?: string }).accessPath
+      if (accessPath) {
+        return canAccessRoute(accessPath, user.roles, user.permissions ?? [])
+      }
+
       const requiredRoles = (module as { roles?: string[] }).roles
       if (!requiredRoles || requiredRoles.length === 0) return true
       return hasAnyRole(requiredRoles)

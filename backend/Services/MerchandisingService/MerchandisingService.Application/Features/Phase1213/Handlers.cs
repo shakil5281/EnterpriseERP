@@ -367,9 +367,18 @@ public sealed class Phase1213ReportQueryHandlers(IMerchandisingDbContext db) :
         var rows = await db.Orders
             .Where(x => x.CompanyId == query.CompanyId)
             .GroupBy(x => x.OrderStatus)
-            .Select(g => new OrderPipelineReportRowDto(g.Key, g.Count(), g.Sum(x => x.TotalOrderQty), g.Sum(x => x.TotalValue)))
+            .Select(g => new
+            {
+                OrderStatus = g.Key,
+                OrderCount = g.Count(),
+                TotalQuantity = g.Sum(x => x.TotalOrderQty),
+                TotalValue = g.Sum(x => x.TotalValue),
+            })
             .OrderBy(x => x.OrderStatus)
             .ToListAsync(cancellationToken);
-        return rows;
+
+        return rows
+            .Select(x => new OrderPipelineReportRowDto(x.OrderStatus, x.OrderCount, x.TotalQuantity, x.TotalValue))
+            .ToList();
     }
 }

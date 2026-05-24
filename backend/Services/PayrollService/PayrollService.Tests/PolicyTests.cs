@@ -55,7 +55,7 @@ public sealed class PolicyTemplateCalculationTests
             SalaryCalculationType = "Monthly",
         };
         var attendance = new AttendanceSummary(
-            Guid.NewGuid(), Guid.NewGuid(), 2026, 5, true, 31, 26, 25, 2, 0, 0, 0, 0, 0, 1800, 0, 0, 0);
+            Guid.NewGuid(), Guid.NewGuid(), 2026, 5, true, 31, 26, 25, 2, 0, 0, 0, 0, 0, 1800, 30, 0, 0, 0);
 
         var result = payrollCalculator.Calculate(ComplianceSettings(), salary, attendance, new PayrollCalculationInputs(), "Monthly");
 
@@ -82,7 +82,7 @@ public sealed class PolicyTemplateCalculationTests
             SalaryCalculationType = "Monthly",
         };
         var attendance = new AttendanceSummary(
-            Guid.NewGuid(), Guid.NewGuid(), 2026, 5, true, 31, 26, 25, 2, 0, 0, 0, 0, 0, 1800, 0, 0, 0);
+            Guid.NewGuid(), Guid.NewGuid(), 2026, 5, true, 31, 26, 25, 2, 0, 0, 0, 0, 0, 1800, 30, 0, 0, 0);
 
         var result = payrollCalculator.Calculate(NonComplianceGrossOtSettings(), salary, attendance, new PayrollCalculationInputs(), "Monthly");
 

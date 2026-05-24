@@ -94,7 +94,7 @@ public sealed class PayrollCalculationService(
         }
 
         var totalDays = ResolveTotalDays(settings, attendance);
-        var overtimeHours = decimal.Round(attendance.OvertimeMinutes / 60m, 2, MidpointRounding.AwayFromZero);
+        var overtimeHours = (decimal)attendance.OvertimeHours;
         var fixedOt = (decimal)(settings.FixedOvertimeRate ?? 0);
         var (otRate, otAmount) = overtimeCalculationService.Calculate(settings, salary, overtimeHours, fixedOt);
 

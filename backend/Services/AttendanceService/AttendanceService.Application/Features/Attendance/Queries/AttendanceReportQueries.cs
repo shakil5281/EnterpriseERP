@@ -1,6 +1,7 @@
 using MediatR;
 using AttendanceService.Application.Common.Interfaces;
 using AttendanceService.Application.DTOs;
+using AttendanceService.Application.Features.Attendance;
 using AttendanceService.Domain.Enums;
 
 namespace AttendanceService.Application.Features.Attendance.Queries;
@@ -16,18 +17,21 @@ public record GetDailyOtSummaryQuery(AttendanceFilterDto Filter) : IRequest<IRea
 
 public sealed class GetDailyReportQueryHandler(
     IAttendanceDbContext db,
-    IAttendanceEmployeeQuery employeeQuery) : IRequestHandler<GetDailyReportQuery, IReadOnlyList<DailyReportRowDto>>
+    IAttendanceEmployeeQuery employeeQuery,
+    IEmployeeDirectory employeeDirectory) : IRequestHandler<GetDailyReportQuery, IReadOnlyList<DailyReportRowDto>>
 {
     public async Task<IReadOnlyList<DailyReportRowDto>> Handle(GetDailyReportQuery request, CancellationToken cancellationToken)
     {
         var rows = await AttendanceReportHelper.LoadAttendancesAsync(db, request.Filter, employeeQuery, cancellationToken);
         var profiles = await employeeQuery.GetProfilesAsync(AttendanceReportHelper.ToEmployeeFilter(request.Filter), cancellationToken);
+        var employees = await employeeDirectory.GetEmployeesByIdAsync(request.Filter.CompanyId, cancellationToken);
         var legacyCompanyId = AttendanceReportHelper.LegacyCompanyId(request.Filter.CompanyId);
         var index = 1;
 
         return rows.Select(a =>
         {
             profiles.TryGetValue(a.EmployeeId, out var profile);
+            var isOtEnabled = employees.TryGetValue(a.EmployeeId, out var employee) && employee.IsOtEnabled;
             return new DailyReportRowDto(
                 index++,
                 a.PunchNumber > 0 ? a.PunchNumber : profile?.PunchNumber ?? 0,
@@ -42,7 +46,7 @@ public sealed class GetDailyReportQueryHandler(
                 AttendanceReportHelper.FormatTime(a.InTime),
                 AttendanceReportHelper.FormatTime(a.OutTime),
                 a.Status.ToString(),
-                AttendanceReportHelper.ToOtHours(a.OvertimeMinutes));
+                AttendanceReportHelper.ResolveOtHours(a.OvertimeMinutes, isOtEnabled));
         }).ToList();
     }
 }
@@ -248,6 +252,9 @@ public sealed class GetJobCardQueryHandler(
             return null;
         }
 
+        var employees = await employeeDirectory.GetEmployeesByIdAsync(request.Filter.CompanyId, cancellationToken);
+        var isOtEnabled = employees.TryGetValue(employeeGuid.Value, out var employeeEntry) && employeeEntry.IsOtEnabled;
+
         var dayRows = rows.Select(a => new JobCardDayRowDto(
             AttendanceReportHelper.FormatDate(a.AttendanceDate),
             a.AttendanceDate.ToString("dddd"),
@@ -256,7 +263,7 @@ public sealed class GetJobCardQueryHandler(
             AttendanceReportHelper.FormatTime(a.OutTime),
             a.LateMinutes,
             a.EarlyOutMinutes,
-            AttendanceReportHelper.ToOtHours(a.OvertimeMinutes),
+            AttendanceReportHelper.ResolveOtHours(a.OvertimeMinutes, isOtEnabled),
             Math.Round(a.WorkingMinutes / 60m, 2),
             a.ShiftName,
             null,
@@ -268,7 +275,7 @@ public sealed class GetJobCardQueryHandler(
             rows.Count(r => AttendanceReportHelper.IsAbsent(r.Status)),
             rows.Count(r => r.DayType == DayType.WeeklyOff),
             rows.Count(r => r.DayType == DayType.Holiday),
-            rows.Sum(r => AttendanceReportHelper.ToOtHours(r.OvertimeMinutes)),
+            rows.Sum(r => AttendanceReportHelper.ResolveOtHours(r.OvertimeMinutes, isOtEnabled)),
             rows.Sum(r => r.LateMinutes),
             rows.Sum(r => r.EarlyOutMinutes));
 
@@ -398,18 +405,27 @@ public sealed class GetAbsenteeismRecordsQueryHandler(
 
 public sealed class GetDailyOtSheetQueryHandler(
     IAttendanceDbContext db,
-    IAttendanceEmployeeQuery employeeQuery) : IRequestHandler<GetDailyOtSheetQuery, IReadOnlyList<DailyOtSheetRowDto>>
+    IAttendanceEmployeeQuery employeeQuery,
+    IEmployeeDirectory employeeDirectory) : IRequestHandler<GetDailyOtSheetQuery, IReadOnlyList<DailyOtSheetRowDto>>
 {
     public async Task<IReadOnlyList<DailyOtSheetRowDto>> Handle(GetDailyOtSheetQuery request, CancellationToken cancellationToken)
     {
         var rows = await AttendanceReportHelper.LoadAttendancesAsync(db, request.Filter, employeeQuery, cancellationToken);
-        var otRows = rows.Where(r => r.OvertimeMinutes > 0).ToList();
+        var employees = await employeeDirectory.GetEmployeesByIdAsync(request.Filter.CompanyId, cancellationToken);
+        var otRows = rows
+            .Where(r =>
+            {
+                var isOtEnabled = employees.TryGetValue(r.EmployeeId, out var e) && e.IsOtEnabled;
+                return AttendanceReportHelper.ResolveOtHours(r.OvertimeMinutes, isOtEnabled) > 0;
+            })
+            .ToList();
         var profiles = await employeeQuery.GetProfilesAsync(AttendanceReportHelper.ToEmployeeFilter(request.Filter), cancellationToken);
         var index = 1;
 
         return otRows.Select(a =>
         {
             profiles.TryGetValue(a.EmployeeId, out var profile);
+            var isOtEnabled = employees.TryGetValue(a.EmployeeId, out var e) && e.IsOtEnabled;
             return new DailyOtSheetRowDto(
                 index++,
                 a.PunchNumber > 0 ? a.PunchNumber : profile?.PunchNumber ?? 0,
@@ -422,7 +438,7 @@ public sealed class GetDailyOtSheetQueryHandler(
                 AttendanceReportHelper.FormatDate(a.AttendanceDate),
                 AttendanceReportHelper.FormatTime(a.InTime),
                 AttendanceReportHelper.FormatTime(a.OutTime),
-                AttendanceReportHelper.ToOtHours(a.OvertimeMinutes),
+                AttendanceReportHelper.ResolveOtHours(a.OvertimeMinutes, isOtEnabled),
                 a.Status.ToString());
         }).ToList();
     }
@@ -430,12 +446,20 @@ public sealed class GetDailyOtSheetQueryHandler(
 
 public sealed class GetDailyOtSummaryQueryHandler(
     IAttendanceDbContext db,
-    IAttendanceEmployeeQuery employeeQuery) : IRequestHandler<GetDailyOtSummaryQuery, IReadOnlyList<DailyOtSummaryRowDto>>
+    IAttendanceEmployeeQuery employeeQuery,
+    IEmployeeDirectory employeeDirectory) : IRequestHandler<GetDailyOtSummaryQuery, IReadOnlyList<DailyOtSummaryRowDto>>
 {
     public async Task<IReadOnlyList<DailyOtSummaryRowDto>> Handle(GetDailyOtSummaryQuery request, CancellationToken cancellationToken)
     {
         var rows = await AttendanceReportHelper.LoadAttendancesAsync(db, request.Filter, employeeQuery, cancellationToken);
-        var otRows = rows.Where(r => r.OvertimeMinutes > 0).ToList();
+        var employees = await employeeDirectory.GetEmployeesByIdAsync(request.Filter.CompanyId, cancellationToken);
+        var otRows = rows
+            .Where(r =>
+            {
+                var isOtEnabled = employees.TryGetValue(r.EmployeeId, out var e) && e.IsOtEnabled;
+                return AttendanceReportHelper.ResolveOtHours(r.OvertimeMinutes, isOtEnabled) > 0;
+            })
+            .ToList();
         var profiles = await employeeQuery.GetProfilesAsync(AttendanceReportHelper.ToEmployeeFilter(request.Filter), cancellationToken);
 
         return otRows
@@ -452,7 +476,11 @@ public sealed class GetDailyOtSummaryQueryHandler(
                     i + 1,
                     name,
                     g.Select(x => x.EmployeeId).Distinct().Count(),
-                    g.Sum(x => AttendanceReportHelper.ToOtHours(x.OvertimeMinutes)),
+                    g.Sum(x =>
+                    {
+                        var isOtEnabled = employees.TryGetValue(x.EmployeeId, out var e) && e.IsOtEnabled;
+                        return AttendanceReportHelper.ResolveOtHours(x.OvertimeMinutes, isOtEnabled);
+                    }),
                     name);
             })
             .ToList();

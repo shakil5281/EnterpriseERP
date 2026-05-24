@@ -324,7 +324,7 @@ export default function DailyAttendanceReportPage() {
             row.original.otHours > 0 ? "text-primary" : "text-muted-foreground opacity-50",
           )}
         >
-          {row.original.otHours.toFixed(2)}
+          {row.original.otHours}
         </span>
       ),
     },

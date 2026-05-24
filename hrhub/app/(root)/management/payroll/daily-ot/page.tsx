@@ -138,7 +138,7 @@ export default function DailyOTSheetPage() {
             cell: ({ row }) => (
                 <div className="flex flex-col">
                     <span className="font-black text-emerald-600 text-sm tabular-nums underline decoration-emerald-200 decoration-2 underline-offset-4">
-                        {row.original.otHours.toFixed(2)}h
+                        {row.original.otHours}h
                     </span>
                 </div>
             )

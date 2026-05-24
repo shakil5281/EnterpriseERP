@@ -1,7 +1,8 @@
-using AttendanceService.Application.Common;
 using AttendanceService.Application.Common.Interfaces;
 using AttendanceService.Application.DTOs;
+using AttendanceService.Application.Features.Attendance;
 using AttendanceService.Domain.Enums;
+using Erp.BuildingBlocks.SharedKernel;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,8 +16,9 @@ public sealed record GetApprovedMonthlyAttendanceSummaryQuery(
 
 public sealed record IsMonthlyAttendanceApprovedQuery(Guid CompanyId, int Year, int Month) : IRequest<bool>;
 
-public sealed class PayrollMonthlyAttendanceQueryHandlers(IAttendanceDbContext db)
-    :
+public sealed class PayrollMonthlyAttendanceQueryHandlers(
+    IAttendanceDbContext db,
+    IEmployeeDirectory employeeDirectory) :
     IRequestHandler<GetApprovedMonthlyAttendanceSummaryQuery, PayrollMonthlyAttendanceSummaryDto?>,
     IRequestHandler<IsMonthlyAttendanceApprovedQuery, bool>
 {
@@ -37,7 +39,10 @@ public sealed class PayrollMonthlyAttendanceQueryHandlers(IAttendanceDbContext d
             return null;
         }
 
-        return BuildSummary(request.CompanyId, request.EmployeeId, request.Year, request.Month, rows);
+        var employees = await employeeDirectory.GetEmployeesByIdAsync(request.CompanyId, cancellationToken);
+        var isOtEnabled = employees.TryGetValue(request.EmployeeId, out var employee) && employee.IsOtEnabled;
+
+        return BuildSummary(request.CompanyId, request.EmployeeId, request.Year, request.Month, rows, isOtEnabled);
     }
 
     public async Task<bool> Handle(IsMonthlyAttendanceApprovedQuery request, CancellationToken cancellationToken)
@@ -58,7 +63,8 @@ public sealed class PayrollMonthlyAttendanceQueryHandlers(IAttendanceDbContext d
         Guid employeeId,
         int year,
         int month,
-        IReadOnlyList<Domain.Entities.DailyAttendance> rows)
+        IReadOnlyList<Domain.Entities.DailyAttendance> rows,
+        bool isOtEnabled)
     {
         var totalDays = DateTime.DaysInMonth(year, month);
         var presentStatuses = new HashSet<AttendanceStatus>
@@ -82,6 +88,9 @@ public sealed class PayrollMonthlyAttendanceQueryHandlers(IAttendanceDbContext d
         decimal Missing() => rows.Count(x => x.Status == AttendanceStatus.MissingPunch);
         var workingDays = rows.Count(x => x.DayType == DayType.WorkingDay || x.DayType == DayType.SpecialWorkingDay);
 
+        var overtimeMinutes = isOtEnabled ? rows.Sum(x => x.OvertimeMinutes) : 0;
+        var overtimeHours = rows.Sum(r => OvertimeHourRules.ResolveOtHours(r.OvertimeMinutes, isOtEnabled));
+
         return new PayrollMonthlyAttendanceSummaryDto(
             companyId,
             employeeId,
@@ -97,7 +106,8 @@ public sealed class PayrollMonthlyAttendanceQueryHandlers(IAttendanceDbContext d
             Late(),
             HolidayPresent(),
             WeeklyOffPresent(),
-            rows.Sum(x => x.OvertimeMinutes),
+            overtimeMinutes,
+            overtimeHours,
             0,
             0,
             Missing());

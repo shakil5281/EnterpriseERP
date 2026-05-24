@@ -18,7 +18,7 @@ export const routeRules: RouteRule[] = [
   { path: "/accounts", permissions: ["accounts.module.access"], roles: ["Accounts", "Accountant", "Account Officer"] },
   { path: "/production", permissions: ["production.read"], roles: ["Production", "ProductionManager"] },
   { path: "/store", permissions: ["store.read"], roles: ["Store", "StoreKeeper"] },
-  { path: "/merchandising", permissions: ["merchandising.read"], roles: ["Merchandising", "Merchandiser"] },
+  { path: "/merchandising", permissions: ["merchandising.read"], roles: ["Admin", "Merchandising", "Merchandiser"] },
   { path: "/cutting", permissions: ["cutting.read"], roles: ["Cutting"] },
 ];
 

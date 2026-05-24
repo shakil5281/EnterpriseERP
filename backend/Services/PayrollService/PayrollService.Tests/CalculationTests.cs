@@ -54,7 +54,7 @@ public sealed class CalculationTests
             AllowAttendanceBonus = true,
         };
         var salary = new EmployeeSalary { GrossSalary = 30000, BasicSalary = 15600 };
-        var attendance = new AttendanceSummary(Guid.NewGuid(), Guid.NewGuid(), 2026, 5, true, 31, 26, 25, 1, 0, 0, 0, 0, 0, 120, 2, 1, 0);
+        var attendance = new AttendanceSummary(Guid.NewGuid(), Guid.NewGuid(), 2026, 5, true, 31, 26, 25, 1, 0, 0, 0, 0, 0, 120, 2, 2, 1, 0);
 
         var result = service.Calculate(settings, salary, attendance, new PayrollCalculationInputs());
 
@@ -90,7 +90,7 @@ public sealed class CalculationTests
         var service = new PayrollCalculationService(new OvertimeCalculationService(), new BonusCalculationService());
         var settings = SalaryProcessingModeProfiles.ForMode(SalaryProcessingMode.MultiSalaryOt);
         var salary = new EmployeeSalary { GrossSalary = 30000, BasicSalary = 15600, SalaryCalculationType = "Daily" };
-        var attendance = new AttendanceSummary(Guid.NewGuid(), Guid.NewGuid(), 2026, 5, true, 30, 26, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        var attendance = new AttendanceSummary(Guid.NewGuid(), Guid.NewGuid(), 2026, 5, true, 30, 26, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
         var result = service.Calculate(settings, salary, attendance, new PayrollCalculationInputs(), "Daily");
 
@@ -104,7 +104,7 @@ public sealed class CalculationTests
         var service = new PayrollCalculationService(new OvertimeCalculationService(), new BonusCalculationService());
         var settings = SalaryProcessingModeProfiles.ForMode(SalaryProcessingMode.MultiSalaryOt, "BasicSalaryBased");
         var salary = new EmployeeSalary { GrossSalary = 30000, BasicSalary = 20800, SalaryCalculationType = "Hourly" };
-        var attendance = new AttendanceSummary(Guid.NewGuid(), Guid.NewGuid(), 2026, 5, true, 30, 26, 20, 0, 0, 0, 0, 0, 0, 120, 0, 0, 0);
+        var attendance = new AttendanceSummary(Guid.NewGuid(), Guid.NewGuid(), 2026, 5, true, 30, 26, 20, 0, 0, 0, 0, 0, 0, 120, 2, 0, 0, 0);
 
         var result = service.Calculate(settings, salary, attendance, new PayrollCalculationInputs(), "Hourly");
 
@@ -269,7 +269,7 @@ public sealed class PayrollProcessIntegrationTests
     private sealed class FakeAttendanceClient(Guid configuredCompanyId, Guid configuredEmployeeId, bool monthlyApproved = true) : IAttendanceServiceClient
     {
         public Task<AttendanceSummary?> GetApprovedMonthlySummaryAsync(Guid companyId, Guid employeeId, int year, int month, CancellationToken cancellationToken = default) =>
-            Task.FromResult<AttendanceSummary?>(new AttendanceSummary(configuredCompanyId, configuredEmployeeId, year, month, true, 31, 26, 26, 0, 0, 0, 0, 0, 0, 120, 2, 1, 0));
+            Task.FromResult<AttendanceSummary?>(new AttendanceSummary(configuredCompanyId, configuredEmployeeId, year, month, true, 31, 26, 26, 0, 0, 0, 0, 0, 0, 120, 2, 2, 1, 0));
 
         public Task<bool> IsMonthlyAttendanceApprovedAsync(Guid companyId, int year, int month, CancellationToken cancellationToken = default) =>
             Task.FromResult(monthlyApproved);

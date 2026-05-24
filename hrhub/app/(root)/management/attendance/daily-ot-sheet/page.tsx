@@ -143,7 +143,7 @@ export default function DailyOTSheetPage() {
             header: "OT Hours",
             cell: ({ row }) => (
                 <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-bold">
-                    {row.original.otHours.toFixed(1)} hrs
+                    {row.original.otHours} hrs
                 </Badge>
             )
         }
