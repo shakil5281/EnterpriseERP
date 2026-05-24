@@ -4,7 +4,7 @@
 param(
     [string]$Server = "unity3\SQLEXPRESS",
     [string]$User = "sa",
-    [string]$Password = "123580"
+    [string]$Password = "shakil52814542A"
 )
 
 $ErrorActionPreference = "Stop"

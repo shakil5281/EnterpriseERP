@@ -26,6 +26,32 @@ dotnet run --project Services\MerchandisingService\MerchandisingService.API
 
 Swagger is available at `/swagger`. Health is available at `/health`.
 
+## Platform integration
+
+For local development with hrhub, run **Platform.Host** on port **5000** (auth + YARP proxy) and **MerchandisingService** on port **5288**:
+
+```bash
+dotnet run --project Platform.Host/EnterpriseERP.Platform.Host.csproj
+dotnet run --project Services/MerchandisingService/MerchandisingService.API
+```
+
+Platform.Host proxies `/api/v1/merchandising/*` → `http://127.0.0.1:5288/`. hrhub uses `NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1`.
+
+Optional satellite services (proxied from Platform.Host):
+
+| Service | Port | Path |
+|---------|------|------|
+| MerchandisingService | 5288 | `/api/v1/merchandising/*` |
+| ProcurementService | 5060 | `/api/v1/procurement/*` |
+| InventoryService | 5041 | `/api/v1/inventory/*` |
+
+Apply migrations before first run:
+
+```bash
+dotnet ef database update --project Services/MerchandisingService/MerchandisingService.Infrastructure \
+  --startup-project Services/MerchandisingService/MerchandisingService.API --context MerchandisingDbContext
+```
+
 ## Configuration
 
 `MerchandisingService.API/appsettings.json` contains:

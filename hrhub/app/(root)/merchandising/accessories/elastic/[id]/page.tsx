@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import AccessoryProcurementMatrix from "@/components/merchandising/AccessoryProcurementMatrix"
-
-export default function ElasticDetailPage() {
-    return <AccessoryProcurementMatrix title="Elastic" accessoryType="elastic" />
+export default function AccessoryDetailRedirectPage() {
+    redirect("/merchandising/bookings")
 }

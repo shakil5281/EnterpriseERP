@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import GenericAccessoryListPage from "@/components/merchandising/GenericAccessoryListPage"
-
-export default function PolyBookingListPage() {
-    return <GenericAccessoryListPage title="Poly Booking" slug="poly-booking" />
+export default function PolyBookingRedirectPage() {
+    redirect("/merchandising/bookings?type=trims&subType=PolyBooking")
 }

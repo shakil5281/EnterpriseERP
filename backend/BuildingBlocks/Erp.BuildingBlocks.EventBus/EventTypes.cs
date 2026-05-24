@@ -48,4 +48,44 @@ public static class EventTypes
     public const string PayrollRunPosted = "erp.payroll.run.posted.v1";
 
     public const string PunchLogCollected = "erp.punch.log.collected.v1";
+
+    public const string MerchandisingBuyerCreated = "erp.merchandising.buyer.created.v1";
+
+    public const string MerchandisingStyleCreated = "erp.merchandising.style.created.v1";
+
+    public const string MerchandisingOrderConfirmed = "erp.merchandising.order.confirmed.v1";
+
+    public const string MerchandisingOrderCancelled = "erp.merchandising.order.cancelled.v1";
+
+    public const string MerchandisingBomCreated = "erp.merchandising.bom.created.v1";
+
+    public const string MerchandisingCostingCreated = "erp.merchandising.costing.created.v1";
+
+    public const string MerchandisingSampleApproved = "erp.merchandising.sample.approved.v1";
+
+    public const string MerchandisingShipmentPlanCreated = "erp.merchandising.shipment-plan.created.v1";
+
+    public const string MerchandisingSampleSubmitted = "erp.merchandising.sample.submitted.v1";
+
+    public const string MerchandisingQuotationCreated = "erp.merchandising.quotation.created.v1";
+
+    public const string MerchandisingQuotationConverted = "erp.merchandising.quotation.converted.v1";
+
+    public const string MerchandisingCostingSubmitted = "erp.merchandising.costing.submitted.v1";
+
+    public const string MerchandisingTnaGenerated = "erp.merchandising.tna.generated.v1";
+
+    public const string MerchandisingMaterialBookingCreated = "erp.merchandising.booking.created.v1";
+
+    public const string MerchandisingRequisitionCreated = "erp.merchandising.requisition.created.v1";
+
+    public const string MerchandisingRequisitionSubmitted = "erp.merchandising.requisition.submitted.v1";
+
+    public const string MerchandisingCuttingStarted = "CuttingStarted";
+
+    public const string MerchandisingProductionStarted = "ProductionStarted";
+
+    public const string MerchandisingProductionCompleted = "ProductionCompleted";
+
+    public const string MerchandisingShipmentCompleted = "ShipmentCompleted";
 }

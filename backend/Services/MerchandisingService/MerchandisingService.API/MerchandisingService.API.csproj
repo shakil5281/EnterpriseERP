@@ -20,6 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\CommonSecurity\Erp.BuildingBlocks.CommonSecurity.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.Hosting\Erp.BuildingBlocks.Hosting.csproj" />
     <ProjectReference Include="..\MerchandisingService.Application\MerchandisingService.Application.csproj" />
     <ProjectReference Include="..\MerchandisingService.Contracts\MerchandisingService.Contracts.csproj" />

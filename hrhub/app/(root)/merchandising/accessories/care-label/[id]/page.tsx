@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import AccessoryProcurementMatrix from "@/components/merchandising/AccessoryProcurementMatrix"
-
-export default function CareLabelDetailPage() {
-    return <AccessoryProcurementMatrix title="Care Label" accessoryType="care-label" />
+export default function AccessoryDetailRedirectPage() {
+    redirect("/merchandising/bookings")
 }

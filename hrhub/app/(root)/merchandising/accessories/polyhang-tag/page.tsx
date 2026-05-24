@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import GenericAccessoryListPage from "@/components/merchandising/GenericAccessoryListPage"
-
-export default function PolyhangTagListPage() {
-    return <GenericAccessoryListPage title="Polyhang Tag" slug="polyhang-tag" />
+export default function PolyhangTagBookingRedirectPage() {
+    redirect("/merchandising/bookings?type=trims&subType=PolyhangTag")
 }

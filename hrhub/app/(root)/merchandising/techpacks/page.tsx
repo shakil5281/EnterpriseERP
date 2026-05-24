@@ -1,238 +1,145 @@
 "use client"
 
 import * as React from "react"
-
 import {
     IconFileText,
     IconLoader2,
-    IconFileUpload,
-    IconEye,
-    IconTrash,
-    IconHistory
+    IconExternalLink,
 } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-    DialogFooter
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 import { NativeSelect } from "@/components/ui/native-select"
-import { merchandisingService, Style, TechPack } from "@/lib/services/merchandising"
+import { merchandisingService } from "@/lib/services/merchandising"
+import type { Style, StyleDocument } from "@/lib/types/merchandising"
+import { useCompanyContext } from "@/components/providers/company-context"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
-import { format } from "date-fns"
 
 export default function TechPacksPage() {
-    const [techPacks, setTechPacks] = React.useState<TechPack[]>([])
+    const { activeCompanyId } = useCompanyContext()
     const [styles, setStyles] = React.useState<Style[]>([])
+    const [selectedStyleId, setSelectedStyleId] = React.useState("")
+    const [documents, setDocuments] = React.useState<StyleDocument[]>([])
     const [loading, setLoading] = React.useState(true)
-    const [isUploadOpen, setIsUploadOpen] = React.useState(false)
-    const [uploadData, setUploadData] = React.useState<Partial<TechPack>>({
-        styleId: 0,
-        version: "1.0",
-        fileUrl: ""
-    })
 
-    const fetchData = React.useCallback(async () => {
+    const fetchStyles = React.useCallback(async () => {
+        if (!activeCompanyId) return
         try {
-            setLoading(true)
-            const packs = await merchandisingService.getAllTechPacks(1)
-            setTechPacks(packs)
-
-            // Also load styles for the upload dialog
-            const buyers = await merchandisingService.getBuyers(1)
-            if (buyers.length > 0) {
-                const stylesList = await merchandisingService.getStyles(buyers[0].id)
-                setStyles(stylesList)
-            }
+            const styleRows = await merchandisingService.getStyles(activeCompanyId)
+            setStyles(styleRows)
+            if (!selectedStyleId && styleRows.length > 0) setSelectedStyleId(styleRows[0].id)
         } catch (error) {
             console.error(error)
-            toast.error("Failed to load tech packs")
+            toast.error("Failed to load styles")
+        }
+    }, [activeCompanyId, selectedStyleId])
+
+    const fetchDocuments = React.useCallback(async () => {
+        if (!activeCompanyId || !selectedStyleId) return
+        try {
+            setLoading(true)
+            const docs = await merchandisingService.getStyleDocuments(selectedStyleId, activeCompanyId)
+            setDocuments(docs.filter((d) => d.documentType.toLowerCase().includes("tech") || d.documentType === "TechPack"))
+        } catch (error) {
+            console.error(error)
+            toast.error("Failed to load style documents")
         } finally {
             setLoading(false)
         }
-    }, [])
+    }, [activeCompanyId, selectedStyleId])
 
     React.useEffect(() => {
-        fetchData()
-    }, [fetchData])
+        fetchStyles()
+    }, [fetchStyles])
 
-    const handleUpload = async () => {
-        if (!uploadData.styleId || uploadData.styleId === 0) {
-            toast.error("Please select a style")
-            return
-        }
-        if (!uploadData.fileUrl || uploadData.fileUrl.trim() === "") {
-            toast.error("Please provide a specification URL or file path")
-            return
-        }
-        try {
-            setLoading(true)
-            await merchandisingService.createTechPack({
-                ...uploadData
-            })
-            toast.success("Tech Pack registered successfully")
-            setIsUploadOpen(false)
-            fetchData()
-        } catch (error) {
-            console.error(error)
-            toast.error("Failed to register tech pack")
-        } finally {
-            setLoading(false)
-        }
-    }
+    React.useEffect(() => {
+        if (selectedStyleId) fetchDocuments()
+    }, [selectedStyleId, fetchDocuments])
 
-    const handleDelete = async (id: number) => {
-        try {
-            await merchandisingService.deleteTechPack(id)
-            toast.success("Tech Pack deleted")
-            fetchData()
-        } catch (error) {
-            console.error(error)
-            toast.error("Delete failed")
-        }
-    }
+    const selectedStyle = styles.find((s) => s.id === selectedStyleId)
 
-    const columns: ColumnDef<TechPack>[] = [
+    const columns: ColumnDef<StyleDocument>[] = [
         {
             id: "sl",
             header: "SL",
-            cell: ({ row }) => <span className="text-xs font-mono opacity-60">{(row.index + 1).toString().padStart(2, '0')}</span>,
-            size: 40
+            cell: ({ row }) => <span className="text-xs font-mono opacity-60">{(row.index + 1).toString().padStart(2, "0")}</span>,
+            size: 40,
         },
         {
-            accessorKey: "style.styleNumber",
-            header: "Style REF",
+            accessorKey: "fileName",
+            header: "Document",
             cell: ({ row }) => (
                 <div className="flex flex-col">
-                    <span className="font-bold">{row.original.style?.styleNumber || "N/A"}</span>
-                    <span className="text-[10px] text-muted-foreground uppercase">{row.original.style?.productType}</span>
+                    <span className="font-bold">{row.original.fileName}</span>
+                    <span className="text-[10px] text-muted-foreground uppercase">{selectedStyle?.styleNo}</span>
                 </div>
-            )
+            ),
+        },
+        {
+            accessorKey: "documentType",
+            header: "Type",
+            cell: ({ row }) => (
+                <Badge variant="secondary" className="font-bold text-[10px]">
+                    {row.original.documentType}
+                </Badge>
+            ),
         },
         {
             accessorKey: "version",
             header: "Version",
-            cell: ({ row }) => (
-                <Badge variant="secondary" className="font-bold text-[10px]">
-                    V:{row.getValue("version")}
-                </Badge>
-            )
-        },
-        {
-            accessorKey: "uploadDate",
-            header: "Released",
-            cell: ({ row }) => (
-                <span className="text-xs text-muted-foreground">
-                    {format(new Date(row.getValue("uploadDate")), "MMM dd, yyyy")}
-                </span>
-            )
+            cell: ({ row }) => <span className="text-xs">{row.original.version ?? "—"}</span>,
         },
         {
             id: "actions",
             header: () => <div className="text-right">Actions</div>,
             cell: ({ row }) => (
-                <div className="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-primary shadow-sm hover:bg-primary/10">
-                        <IconEye className="size-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(row.original.id)}>
-                        <IconTrash className="size-4" />
+                <div className="flex justify-end">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" asChild>
+                        <a href={row.original.fileUrl} target="_blank" rel="noreferrer">
+                            <IconExternalLink className="size-4" />
+                        </a>
                     </Button>
                 </div>
-            )
-        }
+            ),
+        },
     ]
 
     return (
         <div className="flex flex-col gap-6 py-6 animate-in fade-in duration-500">
-            {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6">
                 <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20">
+                    <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">
                         <IconFileText className="size-6" />
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight">Tech Packs</h1>
-                        <p className="text-muted-foreground text-sm">Technical specifications and design archives</p>
+                        <p className="text-muted-foreground text-sm">Style documents from the merchandising API</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="font-bold" onClick={fetchData}>
+                    <NativeSelect className="h-9 w-56" value={selectedStyleId} onChange={(e) => setSelectedStyleId(e.target.value)}>
+                        <option value="">Select style</option>
+                        {styles.map((s) => (
+                            <option key={s.id} value={s.id}>{s.styleNo}</option>
+                        ))}
+                    </NativeSelect>
+                    <Button variant="outline" size="sm" className="font-bold" onClick={fetchDocuments}>
                         <IconLoader2 className={cn("size-3.5 mr-2", loading && "animate-spin")} />
                         Sync
                     </Button>
-                    <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
-                        <DialogTrigger asChild>
-                            <Button size="sm" className="gap-2 shadow-md">
-                                <IconFileUpload className="size-4" />
-                                Register Pack
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[500px]">
-                            <DialogHeader>
-                                <DialogTitle>Register Tech Pack</DialogTitle>
-                                <DialogDescription>Associate a technical specification file with a style</DialogDescription>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                <div className="space-y-2">
-                                    <Label className="text-xs">Associated Style</Label>
-                                    <NativeSelect
-                                        value={uploadData.styleId}
-                                        onChange={(e) => setUploadData({ ...uploadData, styleId: parseInt(e.target.value) })}
-                                    >
-                                        <option value="0">Select Style Reference</option>
-                                        {styles.map(s => (
-                                            <option key={s.id} value={s.id}>{s.styleNumber} - {s.productType}</option>
-                                        ))}
-                                    </NativeSelect>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-xs">Version Number</Label>
-                                        <Input
-                                            value={uploadData.version}
-                                            placeholder="e.g. 1.2"
-                                            onChange={(e) => setUploadData({ ...uploadData, version: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-xs">Specification URL</Label>
-                                        <Input
-                                            value={uploadData.fileUrl}
-                                            placeholder="https://..."
-                                            onChange={(e) => setUploadData({ ...uploadData, fileUrl: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                            <DialogFooter>
-                                <Button variant="outline" size="sm" onClick={() => setIsUploadOpen(false)}>Cancel</Button>
-                                <Button size="sm" onClick={handleUpload}>Save Technical Pack</Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
                 </div>
             </div>
 
             <div className="px-6">
                 <DataTable
                     columns={columns}
-                    data={techPacks}
+                    data={documents}
                     isLoading={loading}
-                    searchKey="style_styleNumber"
+                    searchKey="fileName"
                     showTabs={false}
-                    enableDrag={true}
-                    enableSelection={true}
+                    enableSelection={false}
                 />
             </div>
         </div>

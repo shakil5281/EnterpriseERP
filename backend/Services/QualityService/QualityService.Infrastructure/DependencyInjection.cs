@@ -24,7 +24,7 @@ public static class DependencyInjection
         {
             var connectionString = config.GetConnectionString("QualityDb")
                 ?? config.GetConnectionString("DefaultConnection") 
-                ?? "Server=unity3\\SQLEXPRESS;Database=EnterpriseERP_QualityDb;Trusted_Connection=True;TrustServerCertificate=True;";
+                ?? "Server=localhost;Database=EnterpriseERP_QualityDb;Trusted_Connection=True;TrustServerCertificate=True;";
             services.AddDbContext<QualityDbContext>(opt => opt.UseSqlServer(connectionString));
         }
 

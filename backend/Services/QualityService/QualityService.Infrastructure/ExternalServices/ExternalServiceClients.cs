@@ -10,7 +10,7 @@ public sealed class MerchandisingServiceClient(HttpClient http) : IMerchandising
     {
         try
         {
-            var response = await http.GetAsync($"/api/v1/orders/{orderId}?companyId={companyId}", ct);
+            var response = await http.GetAsync($"/api/v1/merchandising/orders/{orderId}?companyId={companyId}", ct);
             return response.IsSuccessStatusCode;
         }
         catch
@@ -24,7 +24,7 @@ public sealed class MerchandisingServiceClient(HttpClient http) : IMerchandising
     {
         try
         {
-            var response = await http.GetAsync($"/api/v1/orders/{orderId}/breakdown?companyId={companyId}&color={colorName}&size={sizeName}", ct);
+            var response = await http.GetAsync($"/api/v1/merchandising/orders/{orderId}/color-size-breakdown?companyId={companyId}&color={colorName}&size={sizeName}", ct);
             return response.IsSuccessStatusCode;
         }
         catch

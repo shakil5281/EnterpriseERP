@@ -17,6 +17,16 @@ public sealed class UnitOfWork(MerchandisingDbContext db) : IUnitOfWork
     public IRepository<OrderCosting> Costings { get; } = new EfRepository<OrderCosting>(db);
     public IRepository<Sample> Samples { get; } = new EfRepository<Sample>(db);
     public IRepository<ShipmentPlan> ShipmentPlans { get; } = new EfRepository<ShipmentPlan>(db);
+    public IRepository<Quotation> Quotations { get; } = new EfRepository<Quotation>(db);
+    public IRepository<MaterialBooking> MaterialBookings { get; } = new EfRepository<MaterialBooking>(db);
+    public IRepository<PurchaseRequisition> Requisitions { get; } = new EfRepository<PurchaseRequisition>(db);
+    public IRepository<TnaCalendar> TnaCalendars { get; } = new EfRepository<TnaCalendar>(db);
+    public IRepository<TnaTemplate> TnaTemplates { get; } = new EfRepository<TnaTemplate>(db);
+    public IRepository<StyleDocument> StyleDocuments { get; } = new EfRepository<StyleDocument>(db);
+    public IRepository<OrderDocument> OrderDocuments { get; } = new EfRepository<OrderDocument>(db);
+    public IRepository<CommunicationLog> CommunicationLogs { get; } = new EfRepository<CommunicationLog>(db);
+    public IRepository<ApprovalRequest> ApprovalRequests { get; } = new EfRepository<ApprovalRequest>(db);
+    public IRepository<ShipmentExecution> ShipmentExecutions { get; } = new EfRepository<ShipmentExecution>(db);
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => db.SaveChangesAsync(cancellationToken);
 }

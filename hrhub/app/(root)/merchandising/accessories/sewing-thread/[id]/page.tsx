@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import AccessoryProcurementMatrix from "@/components/merchandising/AccessoryProcurementMatrix"
-
-export default function SewingThreadDetailPage() {
-    return <AccessoryProcurementMatrix title="Sewing Thread" accessoryType="sewing-thread" />
+export default function AccessoryDetailRedirectPage() {
+    redirect("/merchandising/bookings")
 }

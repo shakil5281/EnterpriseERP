@@ -6,7 +6,7 @@ using Erp.BuildingBlocks.SharedKernel;
 
 namespace MerchandisingService.Infrastructure.Persistence;
 
-public sealed class MerchandisingDbContext(DbContextOptions<MerchandisingDbContext> options) : DbContext(options), IMerchandisingDbContext
+public sealed partial class MerchandisingDbContext(DbContextOptions<MerchandisingDbContext> options) : DbContext(options), IMerchandisingDbContext
 {
     public DbSet<Buyer> Buyers => Set<Buyer>();
     public DbSet<Season> Seasons => Set<Season>();
@@ -166,7 +166,7 @@ public sealed class MerchandisingDbContext(DbContextOptions<MerchandisingDbConte
             e.Property(x => x.SellingPrice).HasPrecision(18, 4);
             e.Property(x => x.ProfitAmount).HasPrecision(18, 4);
             e.Property(x => x.ProfitPercent).HasPrecision(18, 2);
-            e.Property(x => x.ApprovalStatus).HasMaxLength(50).HasDefaultValue("Draft");
+            e.Property(x => x.ApprovalStatus).HasMaxLength(50).HasDefaultValue(CostingApprovalStatuses.Draft);
             e.HasOne(x => x.Order).WithOne(x => x.Costing).HasForeignKey<OrderCosting>(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -211,7 +211,12 @@ public sealed class MerchandisingDbContext(DbContextOptions<MerchandisingDbConte
         });
 
         Seed(modelBuilder);
+        ConfigureExtendedEntities(modelBuilder);
+        ConfigurePhase1213Entities(modelBuilder);
     }
+
+    partial void ConfigureExtendedEntities(ModelBuilder modelBuilder);
+    partial void ConfigurePhase1213Entities(ModelBuilder modelBuilder);
 
     private void AddAuditEntries()
     {

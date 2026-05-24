@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import GenericAccessoryListPage from "@/components/merchandising/GenericAccessoryListPage"
-
-export default function ElasticListPage() {
-    return <GenericAccessoryListPage title="Elastic" slug="elastic" />
+export default function ElasticBookingRedirectPage() {
+    redirect("/merchandising/bookings?type=trims&subType=Elastic")
 }

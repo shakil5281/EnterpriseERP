@@ -53,6 +53,22 @@ public static class AuthDataSeeder
 		("production.read", "View production"),
 		("store.read", "View store"),
 		("merchandising.read", "View merchandising"),
+		("merchandising.buyer.manage", "Manage merchandising buyers"),
+		("merchandising.style.manage", "Manage merchandising styles and catalog"),
+		("merchandising.order.create", "Create merchandising orders"),
+		("merchandising.order.update", "Update merchandising orders"),
+		("merchandising.order.confirm", "Confirm merchandising orders"),
+		("merchandising.order.cancel", "Cancel merchandising orders"),
+		("merchandising.bom.manage", "Manage merchandising BOM"),
+		("merchandising.costing.manage", "Manage merchandising costing"),
+		("merchandising.sample.manage", "Manage merchandising samples"),
+		("merchandising.shipment.manage", "Manage merchandising shipment plans"),
+		("merchandising.report.view", "View merchandising reports"),
+		("merchandising.master.manage", "Manage merchandising master data"),
+		("merchandising.quotation.manage", "Manage merchandising quotations"),
+		("merchandising.tna.manage", "Manage merchandising TNA"),
+		("merchandising.booking.manage", "Manage merchandising material bookings"),
+		("merchandising.requisition.manage", "Manage merchandising requisitions"),
 		("cutting.read", "View cutting"),
 	];
 
@@ -206,6 +222,50 @@ public static class AuthDataSeeder
 			cancellationToken);
 		await AssignPermissionsToRoleAsync(db, roles, "User",
 			["company.read", "hr.employees.read", "attendance.read", "leave.read"],
+			cancellationToken);
+
+		var merchandisingPermissions = new[]
+		{
+			"merchandising.read",
+			"merchandising.buyer.manage",
+			"merchandising.style.manage",
+			"merchandising.order.create",
+			"merchandising.order.update",
+			"merchandising.order.confirm",
+			"merchandising.order.cancel",
+			"merchandising.bom.manage",
+			"merchandising.costing.manage",
+			"merchandising.sample.manage",
+			"merchandising.shipment.manage",
+			"merchandising.report.view",
+		};
+		await AssignPermissionsToRoleAsync(db, roles, "Merchandising", merchandisingPermissions, cancellationToken);
+		await EnsurePermissionsForRoleAsync(db, roles, "Merchandising", merchandisingPermissions, cancellationToken);
+		await AssignPermissionsToRoleAsync(db, roles, "Merchandiser",
+			[
+				"merchandising.read",
+				"merchandising.buyer.manage",
+				"merchandising.style.manage",
+				"merchandising.order.create",
+				"merchandising.order.update",
+				"merchandising.bom.manage",
+				"merchandising.sample.manage",
+				"merchandising.shipment.manage",
+				"merchandising.report.view",
+			],
+			cancellationToken);
+		await EnsurePermissionsForRoleAsync(db, roles, "Merchandiser",
+			[
+				"merchandising.read",
+				"merchandising.buyer.manage",
+				"merchandising.style.manage",
+				"merchandising.order.create",
+				"merchandising.order.update",
+				"merchandising.bom.manage",
+				"merchandising.sample.manage",
+				"merchandising.shipment.manage",
+				"merchandising.report.view",
+			],
 			cancellationToken);
 
 		var adminPassword = Environment.GetEnvironmentVariable("ERP_SEED_SUPERADMIN_PASSWORD") ?? "ChangeMe!Erp2026";

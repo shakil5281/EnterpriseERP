@@ -1,651 +1,841 @@
 import api from '@/lib/api';
+import { unwrapApiData } from '@/lib/api-response';
+import { getActiveCompanyHeaderValue } from '@/lib/active-company-storage';
+import { downloadBlob } from '@/lib/services/api-helpers';
 
-export interface Buyer {
-    id: number;
-    companyId: number;
-    branchId: number;
-    name: string;
-    country: string;
-    contactPerson: string;
-    email: string;
-    phone: string;
-    paymentTerms: string;
-    currency: string;
-    leadTime?: number;
-    isActive?: boolean;
+export type * from '@/lib/types/merchandising';
+
+import type {
+  AddQuotationNegotiationRequest,
+  ApprovalRequest,
+  ApproveStepRequest,
+  BomCalculationResult,
+  BomItem,
+  BookingAllocation,
+  BookingStatusReportRow,
+  Buyer,
+  BuyerContact,
+  BuyerComplianceRule,
+  BuyerPaymentTerm,
+  BuyerPurchaseOrder,
+  ColorSizeBreakdown,
+  CommunicationLog,
+  ConvertQuotationToOrderRequest,
+  CreateApprovalRequestRequest,
+  CreateBomItemRequest,
+  CreateBuyerPoRequest,
+  CreateBuyerRequest,
+  CreateColorSizeBreakdownRequest,
+  CreateCommunicationLogRequest,
+  CreateMasterDataRequest,
+  CreateMaterialBookingRequest,
+  CreateOrderCostingRequest,
+  CreateOrderDocumentRequest,
+  CreateOrderRequest,
+  ColorImportResultDto,
+  OrderImportPreviewDto,
+  OrderImportResultDto,
+  OrderImportRowDto,
+  CreatePurchaseRequisitionRequest,
+  CreateQuotationRequest,
+  CreateSampleCostingRequest,
+  CreateSampleRequest,
+  CreateShipmentPlanRequest,
+  CreateStyleDocumentRequest,
+  CreateStyleRequest,
+  FabricBookingDetail,
+  GarmentItem,
+  Guid,
+  MasterDataDto,
+  MasterDataResource,
+  MaterialBooking,
+  Order,
+  OrderAssignment,
+  OrderCommercialTerms,
+  OrderCosting,
+  OrderDetails,
+  OrderDocument,
+  OrderPipelineReportRow,
+  PackingList,
+  ProgramOrderWorksheet,
+  PurchaseRequisition,
+  Quotation,
+  QuotationNegotiation,
+  RejectStepRequest,
+  Sample,
+  SampleCosting,
+  Season,
+  ShipmentExecution,
+  ShipmentPlan,
+  Style,
+  StyleBomItem,
+  StyleDocument,
+  StyleVersion,
+  TnaCalendar,
+  TnaDelayLog,
+  TnaDelayReportRow,
+  TnaMilestone,
+  TnaTemplate,
+  TrimsBookingDetail,
+  UpdateBomItemRequest,
+  UpdateBuyerPoRequest,
+  UpdateBuyerRequest,
+  UpdateColorSizeBreakdownRequest,
+  UpdateMasterDataRequest,
+  UpdateOrderRequest,
+  UpdateQuotationRequest,
+  UpdateShipmentPlanRequest,
+  UpdateStyleRequest,
+} from '@/lib/types/merchandising';
+
+const BASE = 'merchandising';
+
+function companyGuid(companyId?: Guid): Guid {
+  if (companyId?.includes('-')) return companyId;
+  return getActiveCompanyHeaderValue() ?? companyId ?? '';
 }
 
-export interface Brand {
-    id: number;
-    buyerId: number;
-    name: string;
+function params(companyId?: Guid, extra?: Record<string, string | undefined>): Record<string, string> {
+  const out: Record<string, string> = { companyId: companyGuid(companyId) };
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) {
+      if (v !== undefined && v !== '') out[k] = v;
+    }
+  }
+  return out;
 }
 
-export interface Style {
-    id: number;
-    companyId: number;
-    branchId: number;
-    buyerId: number;
-    brandId?: number;
-    styleNumber: string;
-    productType: string;
-    season: string;
-    fabricType: string;
-    gsm: string;
-}
-
-export interface FabricColorPantone {
-    id: number;
-    companyId?: number;
-    branchId?: number;
-    colorName: string;
-    pantoneCode?: string;
-    isActive?: boolean;
-}
-
-export interface ProgramOrder {
-    id: number;
-    companyId: number;
-    branchId: number;
-    programNumber: string;
-    buyerName: string;
-    customerName: string;
-    fabricDescription: string;
-    programName: string;
-    orderDate: string;
-    factoryName: string;
-    factoryAddress: string;
-    articles: ProgramArticle[];
-    items?: ProgramArticle[]; // alias used by some pages
-    buyerId?: number;
-}
-
-export interface ProgramArticle {
-    id?: number;
-    styleId?: number;
-    oldArticleNo: string;
-    newArticleNo: string;
-    packType: number;
-    itemName: string;
-    totalQty: number;
-    colors: ProgramColor[];
-}
-
-export interface ProgramColor {
-    id?: number;
-    colorId?: number;
-    colorName: string;
-    sizeBreakdowns: ProgramSizeBreakdown[];
-}
-
-export interface ProgramSizeBreakdown {
-    id?: number;
-    sizeM: number;
-    sizeL: number;
-    sizeXL: number;
-    sizeXXL: number;
-    sizeXXXL: number;
-    size3XL: number;
-    size4XL: number;
-    size5XL: number;
-    size6XL: number;
-    rowTotal: number;
-    buyerPackingNumber: string;
-    buttonColor?: string;
-    buttonColorId?: number;
-    buttonQty?: number;
-    buttonType?: string;
-    buttonSize?: string;
-    unit?: string;
-    status?: string;
-}
-
-// Accessory Interfaces
-export interface BaseBooking {
-    id: number;
-    programOrderId: number;
-    orderReference?: string;
-    unit: string;
-    status: string;
-    supplier: string;
-    deliveryDate: string;
-    requiredQuantity: number;
-    programOrder?: ProgramOrder;
-}
-
-export interface ButtonBooking extends BaseBooking {
-    itemName?: string;
-    articleNo?: string;
-    buttonType: string;
-    buttonSize: string;
-    buttonColor: string;
-}
-
-export interface ZipperBooking extends BaseBooking {
-    zipperType: string;
-    zipperSize: string;
-    color: string;
-    length: string;
-}
-
-export interface MainLabelBooking extends BaseBooking {
-    material: string;
-    printDetails: string;
-}
-
-export interface CareLabelBooking extends BaseBooking {
-    material: string;
-    printDetails: string;
-}
-
-export interface PolyBooking extends BaseBooking {
-    polyType: string;
-    size: string;
-    printDetails: string;
-}
-
-export interface ThreadBooking extends BaseBooking {
-    threadType: string;
-    colorCode: string;
-    brand: string;
-}
-
-export interface StyleOrder {
-    id: number;
-    poNumber: string;
-    orderQuantity: number;
-    style?: Style;
-    buyer?: Buyer;
-}
-
-export interface FabricBooking {
-    id: number;
-    orderId: number;
-    fabricType: string;
-    requiredQuantity: number;
-    issuedQuantity: number;
-    unit: string;
-    status: string;
-    supplier: string;
-    deliveryDate: string;
-    styleOrder?: StyleOrder;
-}
-
-export interface TechPack {
-    id: number;
-    styleId: number;
-    version: string;
-    fileUrl: string;
-    uploadDate: string;
-    style?: Style;
-}
-
-export type OrderSizeBreakdown = ProgramSizeBreakdown;
-
-export interface AccessoriesBooking {
-    id: number;
-    orderId: number;
-    itemName: string;
-    quantity: number;
-    unit: string;
-    status: string;
-    supplier: string;
-    deliveryDate: string;
-    styleOrder?: StyleOrder;
-}
-
-export interface SnapButtonBooking extends BaseBooking {
-    snapType: string;
-    snapSize: string;
-    color: string;
-}
-
-export interface AccessoryRequirement {
-    id?: number;
-    programSizeBreakdownId: number;
-    accessoryType: string;
-    masterColorId?: number;
-    masterColorName?: string;
-    requiredQuantity?: number;
-    specification?: string;
-}
-
-export interface AccessoryOrderSummary {
-    orderId: number;
-    programNumber: string;
-    accessories: {
-        accessoryType: string;
-        totalRequiredQuantity: number;
-        mappedColors: number;
-        totalSizeBreakdowns: number;
-    }[];
+async function downloadCsv(path: string, filename: string, companyId?: Guid, extra?: Record<string, string | undefined>) {
+  const res = await api.get(path, { params: params(companyId, extra), responseType: 'blob' });
+  downloadBlob(res.data, filename, 'text/csv');
 }
 
 export const merchandisingService = {
-    // Buyers
-    async getBuyers(companyId: number) {
-        const response = await api.get<Buyer[]>(`/Merchandising/buyers/${companyId}`);
-        return response.data;
-    },
-    async createBuyer(buyer: Partial<Buyer>) {
-        const response = await api.post<Buyer>(`/Merchandising/buyers`, buyer);
-        return response.data;
-    },
-    async updateBuyer(id: number, buyer: Partial<Buyer>) {
-        const response = await api.put(`/Merchandising/buyers/${id}`, buyer);
-        return response.data;
-    },
-    async deleteBuyer(id: number) {
-        const response = await api.delete(`/Merchandising/buyers/${id}`);
-        return response.data;
-    },
+  /* ── Buyers ── */
+  async getBuyers(companyId?: Guid): Promise<Buyer[]> {
+    const res = await api.get(`${BASE}/buyers`, { params: params(companyId) });
+    return unwrapApiData<Buyer[]>(res.data);
+  },
 
-    // Styles
-    async getStyles(buyerId: number) {
-        const response = await api.get<Style[]>(`/Merchandising/styles/buyer/${buyerId}`);
-        return response.data;
-    },
-    async createStyle(style: Partial<Style>) {
-        const response = await api.post<Style>(`/Merchandising/styles`, style);
-        return response.data;
-    },
-    async updateStyle(id: number, style: Partial<Style>) {
-        const response = await api.put(`/Merchandising/styles/${id}`, style);
-        return response.data;
-    },
-    async deleteStyle(id: number) {
-        const response = await api.delete(`/Merchandising/styles/${id}`);
-        return response.data;
-    },
+  async getBuyerById(id: Guid, companyId?: Guid): Promise<Buyer> {
+    const res = await api.get(`${BASE}/buyers/${id}`, { params: params(companyId) });
+    return unwrapApiData<Buyer>(res.data);
+  },
 
-    // Brands
-    async getBrandsByCompany(companyId: number) {
-        const response = await api.get<Brand[]>(`/Merchandising/brands/${companyId}`);
-        return response.data;
-    },
-    async getBrands(buyerId: number) {
-        const response = await api.get<Brand[]>(`/Merchandising/brands/buyer/${buyerId}`);
-        return response.data;
-    },
-    async createBrand(brand: Partial<Brand>) {
-        const response = await api.post<Brand>(`/Merchandising/brands`, brand);
-        return response.data;
-    },
-    async updateBrand(id: number, brand: Partial<Brand>) {
-        const response = await api.put(`/Merchandising/brands/${id}`, brand);
-        return response.data;
-    },
-    async deleteBrand(id: number) {
-        const response = await api.delete(`/Merchandising/brands/${id}`);
-        return response.data;
-    },
+  async createBuyer(payload: CreateBuyerRequest): Promise<Buyer> {
+    const res = await api.post(`${BASE}/buyers`, payload);
+    return unwrapApiData<Buyer>(res.data);
+  },
 
-    // Master Data (MerchandisingMaster)
-    async getColors(companyId: number) {
-        const response = await api.get<FabricColorPantone[]>(`/MerchandisingMaster/colors/${companyId}`);
-        return response.data;
-    },
-    async createColor(color: Partial<FabricColorPantone>) {
-        const response = await api.post<FabricColorPantone>(`/MerchandisingMaster/colors`, color);
-        return response.data;
-    },
-    async updateColor(color: Partial<FabricColorPantone>) {
-        const response = await api.put(`/MerchandisingMaster/colors`, color);
-        return response.data;
-    },
-    async deleteColor(id: number) {
-        const response = await api.delete(`/MerchandisingMaster/colors/${id}`);
-        return response.data;
-    },
-    async importColors(file: File, companyId: number, branchId: number) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('companyId', companyId.toString());
-        formData.append('branchId', branchId.toString());
-        const response = await api.post<any>(`/MerchandisingMaster/colors/import`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        return response.data;
-    },
-    async downloadColorTemplate() {
-        const response = await api.get(`/MerchandisingMaster/colors/template`, { responseType: 'blob' });
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `Color_Template.xlsx`);
-        document.body.appendChild(link);
-        link.click();
-        window.URL.revokeObjectURL(url);
-    },
-    async getSeasons(companyId: number) {
-        const response = await api.get<any[]>(`/MerchandisingMaster/seasons/${companyId}`);
-        return response.data;
-    },
-    async getFabricGsms(companyId: number) {
-        const response = await api.get<any[]>(`/MerchandisingMaster/fabric-gsms/${companyId}`);
-        return response.data;
-    },
-    async getSuppliers(companyId: number) {
-        const response = await api.get<any[]>(`/MerchandisingMaster/suppliers/${companyId}`);
-        return response.data;
-    },
+  async updateBuyer(id: Guid, payload: UpdateBuyerRequest): Promise<Buyer> {
+    const res = await api.put(`${BASE}/buyers/${id}`, payload);
+    return unwrapApiData<Buyer>(res.data);
+  },
 
-    // Costing
-    async getCosting(styleId: number) {
-        const response = await api.get<any>(`/Merchandising/costing/${styleId}`);
-        return response.data;
-    },
-    async saveCosting(data: any) {
-        const response = await api.post<any>(`/Merchandising/costing`, data);
-        return response.data;
-    },
+  async activateBuyer(id: Guid): Promise<Buyer> {
+    const res = await api.patch(`${BASE}/buyers/${id}/activate`);
+    return unwrapApiData<Buyer>(res.data);
+  },
 
-    // Fabric Bookings
-    async getAllFabricBookings(companyId: number) {
-        const response = await api.get<FabricBooking[]>(`/Merchandising/fabric-bookings/${companyId}`);
-        return response.data;
-    },
-    async createFabricBooking(data: Partial<FabricBooking>) {
-        const response = await api.post<FabricBooking>(`/Merchandising/fabric-bookings`, data);
-        return response.data;
-    },
-    async updateFabricBooking(id: number, data: Partial<FabricBooking>) {
-        const response = await api.put(`/Merchandising/fabric-bookings/${id}`, data);
-        return response.data;
-    },
-    async deleteFabricBooking(id: number) {
-        const response = await api.delete(`/Merchandising/fabric-bookings/${id}`);
-        return response.data;
-    },
+  async deactivateBuyer(id: Guid): Promise<Buyer> {
+    const res = await api.patch(`${BASE}/buyers/${id}/deactivate`);
+    return unwrapApiData<Buyer>(res.data);
+  },
 
-    // Tech Packs
-    async getAllTechPacks(companyId: number) {
-        const response = await api.get<TechPack[]>(`/Merchandising/tech-packs/${companyId}`);
-        return response.data;
-    },
-    async createTechPack(data: Partial<TechPack>) {
-        const response = await api.post<TechPack>(`/Merchandising/tech-packs`, data);
-        return response.data;
-    },
-    async deleteTechPack(id: number) {
-        const response = await api.delete(`/Merchandising/tech-packs/${id}`);
-        return response.data;
-    },
+  async getBuyerContacts(buyerId: Guid): Promise<BuyerContact[]> {
+    const res = await api.get(`${BASE}/buyers/${buyerId}/contacts`);
+    return unwrapApiData<BuyerContact[]>(res.data);
+  },
 
-    // Knit Machines
-    async getKnitMachines(companyId: number) {
-        const response = await api.get<any[]>(`/MerchandisingMaster/knit-machines/${companyId}`);
-        return response.data;
-    },
+  async createBuyerContact(payload: {
+    companyId: Guid;
+    buyerId: Guid;
+    name: string;
+    email?: string;
+    phone?: string;
+    role?: string;
+  }): Promise<BuyerContact> {
+    const res = await api.post(`${BASE}/buyers/contacts`, payload);
+    return unwrapApiData<BuyerContact>(res.data);
+  },
 
-    // Global Order Summary
-    async getGlobalOrderSummary(companyId: number) {
-        const response = await api.get<any>(`/OrderSheet/${companyId}/global-summary`);
-        return response.data;
-    },
+  async createBuyerPaymentTerm(payload: {
+    companyId: Guid;
+    buyerId: Guid;
+    termName: string;
+    days: number;
+    description?: string;
+  }): Promise<BuyerPaymentTerm> {
+    const res = await api.post(`${BASE}/buyers/payment-terms`, payload);
+    return unwrapApiData<BuyerPaymentTerm>(res.data);
+  },
 
-    // Program Orders
-    async getProgramOrders(companyId: number) {
-        return this.getAllProgramOrders(companyId);
-    },
+  async createBuyerComplianceRule(payload: {
+    companyId: Guid;
+    buyerId: Guid;
+    ruleName: string;
+    ruleType: string;
+    description?: string;
+    isMandatory: boolean;
+  }): Promise<BuyerComplianceRule> {
+    const res = await api.post(`${BASE}/buyers/compliance-rules`, payload);
+    return unwrapApiData<BuyerComplianceRule>(res.data);
+  },
 
-    // Program Orders
-    async getProgramOrder(id: number) {
-        const response = await api.get<ProgramOrder>(`/OrderSheet/detail/${id}`);
-        return response.data;
-    },
+  /* ── Catalog: seasons, garment items, styles ── */
+  async getSeasons(companyId?: Guid): Promise<Season[]> {
+    const res = await api.get(`${BASE}/seasons`, { params: params(companyId) });
+    return unwrapApiData<Season[]>(res.data);
+  },
 
-    async getAllProgramOrders(companyId: number) {
-        const response = await api.get<ProgramOrder[]>(`/OrderSheet/${companyId}`);
-        return response.data;
-    },
+  async createSeason(payload: {
+    companyId: Guid;
+    seasonCode: string;
+    seasonName: string;
+    yearNo?: number;
+  }): Promise<Season> {
+    const res = await api.post(`${BASE}/seasons`, payload);
+    return unwrapApiData<Season>(res.data);
+  },
 
-    async createProgramOrder(order: Partial<ProgramOrder>) {
-        const response = await api.post<ProgramOrder>(`/OrderSheet`, order);
-        return response.data;
-    },
+  async getGarmentItems(companyId?: Guid): Promise<GarmentItem[]> {
+    const res = await api.get(`${BASE}/garment-items`, { params: params(companyId) });
+    return unwrapApiData<GarmentItem[]>(res.data);
+  },
 
-    async updateProgramOrder(id: number, order: ProgramOrder) {
-        const response = await api.put(`/OrderSheet/${id}`, order);
-        return response.data;
-    },
+  async createGarmentItem(payload: {
+    companyId: Guid;
+    itemCode: string;
+    itemName: string;
+    category?: string;
+  }): Promise<GarmentItem> {
+    const res = await api.post(`${BASE}/garment-items`, payload);
+    return unwrapApiData<GarmentItem>(res.data);
+  },
 
-    async deleteProgramOrder(id: number) {
-        const response = await api.delete(`/OrderSheet/${id}`);
-        return response.data;
-    },
+  async getStyles(companyId?: Guid, buyerId?: Guid): Promise<Style[]> {
+    const res = await api.get(`${BASE}/styles`, {
+      params: params(companyId, buyerId ? { buyerId } : undefined),
+    });
+    return unwrapApiData<Style[]>(res.data);
+  },
 
-    async exportOrder(id: number) {
-        const response = await api.get(`/OrderSheet/export/${id}`, { responseType: 'blob' });
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `Order_Sheet_${id}.xlsx`);
-        document.body.appendChild(link);
-        link.click();
-        window.URL.revokeObjectURL(url);
-    },
+  async getStyleById(id: Guid, companyId?: Guid): Promise<Style> {
+    const res = await api.get(`${BASE}/styles/${id}`, { params: params(companyId) });
+    return unwrapApiData<Style>(res.data);
+  },
 
-    async downloadOrderTemplate() {
-        const response = await api.get(`/OrderSheet/template`, { responseType: 'blob' });
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `Order_Sheet_Template.xlsx`);
-        document.body.appendChild(link);
-        link.click();
-        window.URL.revokeObjectURL(url);
-    },
+  async createStyle(payload: CreateStyleRequest): Promise<Style> {
+    const res = await api.post(`${BASE}/styles`, payload);
+    return unwrapApiData<Style>(res.data);
+  },
 
-    async previewProgramOrder(file: File) {
-        const formData = new FormData();
-        formData.append('file', file);
-        const response = await api.post<any>(`/OrderSheet/preview`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        return response.data;
-    },
+  async updateStyle(id: Guid, payload: UpdateStyleRequest): Promise<Style> {
+    const res = await api.put(`${BASE}/styles/${id}`, payload);
+    return unwrapApiData<Style>(res.data);
+  },
 
-    async importProgramOrders(data: any, companyId: number, branchId: number) {
-        const response = await api.post(`/OrderSheet/import`, data);
-        return response.data;
-    },
+  async getStyleVersions(styleId: Guid): Promise<StyleVersion[]> {
+    const res = await api.get(`${BASE}/styles/${styleId}/versions`);
+    return unwrapApiData<StyleVersion[]>(res.data);
+  },
 
-    // Modular Accessory Bookings - Buttons
-    async getButtonBookingsByProgram(programId: number) {
-        const response = await api.get<ButtonBooking[]>(`/Merchandising/button-bookings/program/${programId}`);
-        return response.data;
-    },
-    async getAllButtonBookings(companyId: number) {
-        const response = await api.get<ButtonBooking[]>(`/Merchandising/button-bookings/${companyId}`);
-        return response.data;
-    },
-    async createButtonBooking(data: Partial<ButtonBooking>) {
-        const response = await api.post(`/Merchandising/button-bookings`, data);
-        return response.data;
-    },
-    async updateButtonBooking(id: number, data: Partial<ButtonBooking>) {
-        const response = await api.put(`/Merchandising/button-bookings/${id}`, data);
-        return response.data;
-    },
-    async deleteButtonBooking(id: number) {
-        const response = await api.delete(`/Merchandising/button-bookings/${id}`);
-        return response.data;
-    },
+  async createStyleVersion(payload: {
+    companyId: Guid;
+    styleId: Guid;
+    versionNo: number;
+    description?: string;
+    effectiveDate: string;
+  }): Promise<StyleVersion> {
+    const res = await api.post(`${BASE}/styles/versions`, payload);
+    return unwrapApiData<StyleVersion>(res.data);
+  },
 
-    // Modular Accessory Bookings - Zippers
-    async getAllZipperBookings(companyId: number) {
-        const response = await api.get<ZipperBooking[]>(`/Merchandising/zipper-bookings/${companyId}`);
-        return response.data;
-    },
-    async createZipperBooking(data: Partial<ZipperBooking>) {
-        const response = await api.post(`/Merchandising/zipper-bookings`, data);
-        return response.data;
-    },
+  async getStyleBomItems(styleId: Guid): Promise<StyleBomItem[]> {
+    const res = await api.get(`${BASE}/styles/${styleId}/bom-items`);
+    return unwrapApiData<StyleBomItem[]>(res.data);
+  },
 
-    // Modular Accessory Bookings - Main Labels
-    async getAllMainLabelBookings(companyId: number) {
-        const response = await api.get<MainLabelBooking[]>(`/Merchandising/main-label-bookings/${companyId}`);
-        return response.data;
-    },
-    async createMainLabelBooking(data: Partial<MainLabelBooking>) {
-        const response = await api.post(`/Merchandising/main-label-bookings`, data);
-        return response.data;
-    },
-    async updateMainLabelBooking(id: number, data: Partial<MainLabelBooking>) {
-        const response = await api.put(`/Merchandising/main-label-bookings/${id}`, data);
-        return response.data;
-    },
-    async deleteMainLabelBooking(id: number) {
-        const response = await api.delete(`/Merchandising/main-label-bookings/${id}`);
-        return response.data;
-    },
+  async createStyleBomItem(payload: {
+    companyId: Guid;
+    styleId: Guid;
+    itemType: string;
+    itemCode?: string;
+    itemName: string;
+    unitName: string;
+    consumption: number;
+    wastagePercent: number;
+    unitPrice: number;
+  }): Promise<StyleBomItem> {
+    const res = await api.post(`${BASE}/styles/bom-items`, payload);
+    return unwrapApiData<StyleBomItem>(res.data);
+  },
 
-    // Modular Accessory Bookings - Care Labels
-    async getAllCareLabelBookings(companyId: number) {
-        const response = await api.get<CareLabelBooking[]>(`/Merchandising/care-label-bookings/${companyId}`);
-        return response.data;
-    },
-    async createCareLabelBooking(data: Partial<CareLabelBooking>) {
-        const response = await api.post(`/Merchandising/care-label-bookings`, data);
-        return response.data;
-    },
+  /* ── Master data (colors, sizes, units, suppliers, brands, …) ── */
+  async getMasterData(resource: MasterDataResource, companyId?: Guid): Promise<MasterDataDto[]> {
+    const res = await api.get(`${BASE}/master/${resource}`, { params: params(companyId) });
+    return unwrapApiData<MasterDataDto[]>(res.data);
+  },
 
-    // Modular Accessory Bookings - Poly
-    async getAllPolyBookings(companyId: number) {
-        const response = await api.get<PolyBooking[]>(`/Merchandising/poly-bookings/${companyId}`);
-        return response.data;
-    },
-    async createPolyBooking(data: Partial<PolyBooking>) {
-        const response = await api.post(`/Merchandising/poly-bookings`, data);
-        return response.data;
-    },
+  async getMasterDataById(resource: MasterDataResource, id: Guid, companyId?: Guid): Promise<MasterDataDto> {
+    const res = await api.get(`${BASE}/master/${resource}/${id}`, { params: params(companyId) });
+    return unwrapApiData<MasterDataDto>(res.data);
+  },
 
-    // Aggregated Accessories Bookings (Fixes 404 on Summary Page)
-    async getAllAccessoriesBookings(companyId: number): Promise<AccessoriesBooking[]> {
-        const [buttons, zippers, mainLabels, careLabels, polys, threads, snaps] = await Promise.all([
-            this.getAllButtonBookings(companyId),
-            this.getAllZipperBookings(companyId),
-            this.getAllMainLabelBookings(companyId),
-            this.getAllCareLabelBookings(companyId),
-            this.getAllPolyBookings(companyId),
-            this.getAllThreadBookings(companyId),
-            this.getAllSnapButtonBookings(companyId)
-        ]);
+  async createMasterData(resource: MasterDataResource, payload: CreateMasterDataRequest): Promise<MasterDataDto> {
+    const res = await api.post(`${BASE}/master/${resource}`, payload);
+    return unwrapApiData<MasterDataDto>(res.data);
+  },
 
-        const mapBase = (bookings: BaseBooking[], name: string): AccessoriesBooking[] => 
-            bookings.map(b => ({
-                id: b.id,
-                orderId: b.programOrderId,
-                itemName: name,
-                quantity: b.requiredQuantity,
-                unit: b.unit,
-                status: b.status,
-                supplier: b.supplier,
-                deliveryDate: b.deliveryDate
-            }));
+  async updateMasterData(resource: MasterDataResource, id: Guid, payload: UpdateMasterDataRequest): Promise<MasterDataDto> {
+    const res = await api.put(`${BASE}/master/${resource}/${id}`, payload);
+    return unwrapApiData<MasterDataDto>(res.data);
+  },
 
-        return [
-            ...buttons.map(b => ({
-                id: b.id,
-                orderId: b.programOrderId,
-                itemName: b.itemName || "Button",
-                quantity: b.requiredQuantity,
-                unit: b.unit,
-                status: b.status,
-                supplier: b.supplier,
-                deliveryDate: b.deliveryDate
-            })),
-            ...mapBase(zippers, "Zipper"),
-            ...mapBase(mainLabels, "Main Label"),
-            ...mapBase(careLabels, "Care Label"),
-            ...mapBase(polys, "Poly Booking"),
-            ...mapBase(threads, "Sewing Thread"),
-            ...mapBase(snaps, "Snap Button")
-        ];
-    },
-    async getOrders(companyId: number): Promise<StyleOrder[]> {
-        const response = await api.get<any[]>(`/OrderSheet/${companyId}`);
-        return response.data.map(p => ({
-            id: p.id,
-            poNumber: p.programNumber,
-            orderQuantity: p.totalQty,
-            style: { styleNumber: p.programNumber } as any
-        }));
-    },
-    async createAccessoriesBooking(data: Partial<AccessoriesBooking>) {
-        const itemName = data.itemName?.toLowerCase() || "";
-        const payload = {
-            programOrderId: data.orderId,
-            unit: data.unit,
-            status: data.status,
-            supplier: data.supplier,
-            deliveryDate: data.deliveryDate,
-            requiredQuantity: data.quantity,
-            itemName: data.itemName // for buttons
-        };
+  async deleteMasterData(resource: MasterDataResource, id: Guid): Promise<boolean> {
+    const res = await api.delete(`${BASE}/master/${resource}/${id}`);
+    return unwrapApiData<boolean>(res.data);
+  },
 
-        if (itemName.includes("button")) return this.createButtonBooking(payload);
-        if (itemName.includes("zipper")) return this.createZipperBooking(payload);
-        if (itemName.includes("main label")) return this.createMainLabelBooking(payload);
-        if (itemName.includes("care label")) return this.createCareLabelBooking(payload);
-        if (itemName.includes("poly")) return this.createPolyBooking(payload);
-        if (itemName.includes("thread")) return this.createThreadBooking(payload);
+  async downloadColorImportTemplate(): Promise<void> {
+    const res = await api.get(`${BASE}/master/colors/template`, { responseType: 'blob' });
+    downloadBlob(res.data, 'color-import-template.csv', 'text/csv');
+  },
 
-        // Fallback for others (will likely 404 until modularized)
-        const response = await api.post(`/Merchandising/accessories-bookings`, data);
-        return response.data;
-    },
-    async updateAccessoriesBooking(id: number, data: Partial<AccessoriesBooking>) {
-        const response = await api.put(`/Merchandising/accessories-bookings/${id}`, data);
-        return response.data;
-    },
-    async deleteAccessoriesBooking(id: number) {
-        const response = await api.delete(`/Merchandising/accessories-bookings/${id}`);
-        return response.data;
-    },
+  async importColors(file: File, companyId?: Guid): Promise<ColorImportResultDto> {
+    const cid = companyId ?? getActiveCompanyHeaderValue();
+    if (!cid) throw new Error('No active company selected');
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.post(`${BASE}/master/colors/import`, formData, {
+      params: { companyId: cid },
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return unwrapApiData<ColorImportResultDto>(res.data);
+  },
 
-    // Modular Accessory Bookings - Thread
-    async getAllThreadBookings(companyId: number) {
-        const response = await api.get<ThreadBooking[]>(`/Merchandising/thread-bookings/${companyId}`);
-        return response.data;
-    },
-    async createThreadBooking(data: Partial<ThreadBooking>) {
-        const response = await api.post(`/Merchandising/thread-bookings`, data);
-        return response.data;
-    },
+  getColors: (companyId?: Guid) => merchandisingService.getMasterData('colors', companyId),
+  getSizes: (companyId?: Guid) => merchandisingService.getMasterData('sizes', companyId),
+  getUnits: (companyId?: Guid) => merchandisingService.getMasterData('units', companyId),
+  getSuppliers: (companyId?: Guid) => merchandisingService.getMasterData('suppliers', companyId),
+  getBrands: (companyId?: Guid) => merchandisingService.getMasterData('brands', companyId),
+  getBrandsByBuyer: async (buyerId: Guid, companyId?: Guid): Promise<MasterDataDto[]> => {
+    const brands = await merchandisingService.getBrands(companyId);
+    return brands.filter((b) => b.extra === buyerId);
+  },
 
-    // Snap Button Bookings
-    async getAllSnapButtonBookings(companyId: number) {
-        const response = await api.get<SnapButtonBooking[]>(`/Merchandising/snap-button-bookings/${companyId}`);
-        return response.data;
-    },
-    async createSnapButtonBooking(data: Partial<SnapButtonBooking>) {
-        const response = await api.post(`/Merchandising/snap-button-bookings`, data);
-        return response.data;
-    },
-    async updateSnapButtonBooking(id: number, data: Partial<SnapButtonBooking>) {
-        const response = await api.put(`/Merchandising/snap-button-bookings/${id}`, data);
-        return response.data;
-    },
-    async deleteSnapButtonBooking(id: number) {
-        const response = await api.delete(`/Merchandising/snap-button-bookings/${id}`);
-        return response.data;
-    },
+  /* ── Orders ── */
+  async getOrders(companyId?: Guid, buyerId?: Guid, status?: string): Promise<Order[]> {
+    const res = await api.get(`${BASE}/orders`, {
+      params: params(companyId, { buyerId, status }),
+    });
+    return unwrapApiData<Order[]>(res.data);
+  },
 
-    // Generic Accessory Matrix
-    async getAccessoryRequirements(orderId: number, type: string) {
-        const response = await api.get<AccessoryRequirement[]>(`/AccessoriesMatrix/${orderId}/${type}`);
-        return response.data;
-    },
-    async saveAccessoryRequirements(orderId: number, type: string, data: AccessoryRequirement[]) {
-        const response = await api.post(`/AccessoriesMatrix/${orderId}/${type}`, data);
-        return response.data;
-    },
-    async getAccessoryOrderSummary(orderId: number) {
-        const response = await api.get<AccessoryOrderSummary>(`/AccessoriesMatrix/order-summary/${orderId}`);
-        return response.data;
-    }
+  async getOrderById(id: Guid, companyId?: Guid): Promise<Order> {
+    const res = await api.get(`${BASE}/orders/${id}`, { params: params(companyId) });
+    return unwrapApiData<Order>(res.data);
+  },
+
+  async getOrderDetails(orderId: Guid): Promise<OrderDetails> {
+    const res = await api.get(`${BASE}/orders/${orderId}/details`);
+    return unwrapApiData<OrderDetails>(res.data);
+  },
+
+  async createOrder(payload: CreateOrderRequest): Promise<Order> {
+    const res = await api.post(`${BASE}/orders`, payload);
+    return unwrapApiData<Order>(res.data);
+  },
+
+  async updateOrder(id: Guid, payload: UpdateOrderRequest): Promise<Order> {
+    const res = await api.put(`${BASE}/orders/${id}`, payload);
+    return unwrapApiData<Order>(res.data);
+  },
+
+  async confirmOrder(id: Guid, createRequisition = false): Promise<Order> {
+    const res = await api.patch(`${BASE}/orders/${id}/confirm`, null, {
+      params: { createRequisition: String(createRequisition) },
+    });
+    return unwrapApiData<Order>(res.data);
+  },
+
+  async cancelOrder(id: Guid): Promise<Order> {
+    const res = await api.patch(`${BASE}/orders/${id}/cancel`);
+    return unwrapApiData<Order>(res.data);
+  },
+
+  async getOrderWorksheet(orderId: Guid): Promise<ProgramOrderWorksheet> {
+    const res = await api.get(`${BASE}/orders/${orderId}/worksheet`);
+    return unwrapApiData<ProgramOrderWorksheet>(res.data);
+  },
+
+  async copyStyleBomToOrder(orderId: Guid, companyId: Guid): Promise<BomItem[]> {
+    const res = await api.post(`${BASE}/orders/${orderId}/copy-style-bom`, { companyId });
+    return unwrapApiData<BomItem[]>(res.data);
+  },
+
+  async createOrderAssignment(orderId: Guid, payload: {
+    companyId: Guid;
+    assignedTo: string;
+    role: string;
+  }): Promise<OrderAssignment> {
+    const res = await api.post(`${BASE}/orders/${orderId}/assignment`, payload);
+    return unwrapApiData<OrderAssignment>(res.data);
+  },
+
+  async createOrderCommercialTerms(orderId: Guid, payload: {
+    companyId: Guid;
+    paymentTerms?: string;
+    incoterms?: string;
+    lcBank?: string;
+    commission: number;
+  }): Promise<OrderCommercialTerms> {
+    const res = await api.post(`${BASE}/orders/${orderId}/commercial-terms`, payload);
+    return unwrapApiData<OrderCommercialTerms>(res.data);
+  },
+
+  /* ── Buyer POs ── */
+  async getBuyerPos(orderId: Guid): Promise<BuyerPurchaseOrder[]> {
+    const res = await api.get(`${BASE}/orders/${orderId}/buyer-pos`);
+    return unwrapApiData<BuyerPurchaseOrder[]>(res.data);
+  },
+
+  async createBuyerPo(orderId: Guid, payload: CreateBuyerPoRequest): Promise<BuyerPurchaseOrder> {
+    const res = await api.post(`${BASE}/orders/${orderId}/buyer-pos`, payload);
+    return unwrapApiData<BuyerPurchaseOrder>(res.data);
+  },
+
+  async updateBuyerPo(id: Guid, payload: UpdateBuyerPoRequest): Promise<BuyerPurchaseOrder> {
+    const res = await api.put(`${BASE}/buyer-pos/${id}`, payload);
+    return unwrapApiData<BuyerPurchaseOrder>(res.data);
+  },
+
+  /* ── Color / size breakdown ── */
+  async getColorSizeBreakdown(orderId: Guid): Promise<ColorSizeBreakdown[]> {
+    const res = await api.get(`${BASE}/orders/${orderId}/color-size-breakdown`);
+    return unwrapApiData<ColorSizeBreakdown[]>(res.data);
+  },
+
+  async createColorSizeBreakdown(orderId: Guid, payload: CreateColorSizeBreakdownRequest): Promise<ColorSizeBreakdown> {
+    const res = await api.post(`${BASE}/orders/${orderId}/color-size-breakdown`, payload);
+    return unwrapApiData<ColorSizeBreakdown>(res.data);
+  },
+
+  async updateColorSizeBreakdown(id: Guid, payload: UpdateColorSizeBreakdownRequest): Promise<ColorSizeBreakdown> {
+    const res = await api.put(`${BASE}/color-size-breakdown/${id}`, payload);
+    return unwrapApiData<ColorSizeBreakdown>(res.data);
+  },
+
+  async deleteColorSizeBreakdown(id: Guid): Promise<boolean> {
+    const res = await api.delete(`${BASE}/color-size-breakdown/${id}`);
+    return unwrapApiData<boolean>(res.data);
+  },
+
+  /* ── BOM ── */
+  async getBomItems(orderId: Guid): Promise<BomItem[]> {
+    const res = await api.get(`${BASE}/orders/${orderId}/bom-items`);
+    return unwrapApiData<BomItem[]>(res.data);
+  },
+
+  async createBomItem(orderId: Guid, payload: CreateBomItemRequest): Promise<BomItem> {
+    const res = await api.post(`${BASE}/orders/${orderId}/bom-items`, payload);
+    return unwrapApiData<BomItem>(res.data);
+  },
+
+  async updateBomItem(id: Guid, payload: UpdateBomItemRequest): Promise<BomItem> {
+    const res = await api.put(`${BASE}/bom-items/${id}`, payload);
+    return unwrapApiData<BomItem>(res.data);
+  },
+
+  async deleteBomItem(id: Guid): Promise<boolean> {
+    const res = await api.delete(`${BASE}/bom-items/${id}`);
+    return unwrapApiData<boolean>(res.data);
+  },
+
+  async calculateBom(orderId: Guid): Promise<BomCalculationResult> {
+    const res = await api.post(`${BASE}/orders/${orderId}/bom-calculate`);
+    return unwrapApiData<BomCalculationResult>(res.data);
+  },
+
+  /* ── Costing ── */
+  async getOrderCosting(orderId: Guid): Promise<OrderCosting | null> {
+    const res = await api.get(`${BASE}/orders/${orderId}/costing`);
+    return unwrapApiData<OrderCosting | null>(res.data);
+  },
+
+  async createOrderCosting(orderId: Guid, payload: CreateOrderCostingRequest): Promise<OrderCosting> {
+    const res = await api.post(`${BASE}/orders/${orderId}/costing`, payload);
+    return unwrapApiData<OrderCosting>(res.data);
+  },
+
+  async updateOrderCosting(orderId: Guid, payload: CreateOrderCostingRequest): Promise<OrderCosting> {
+    const res = await api.put(`${BASE}/orders/${orderId}/costing`, payload);
+    return unwrapApiData<OrderCosting>(res.data);
+  },
+
+  async submitCostingApproval(orderId: Guid, notes?: string): Promise<OrderCosting> {
+    const res = await api.post(`${BASE}/orders/${orderId}/costing/submit-approval`, { notes });
+    return unwrapApiData<OrderCosting>(res.data);
+  },
+
+  /* ── Order import / export ── */
+  async previewOrderImport(file: File, companyId?: Guid): Promise<OrderImportPreviewDto> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.post(`${BASE}/orders/import/preview`, formData, {
+      params: companyId ? { companyId } : undefined,
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return unwrapApiData<OrderImportPreviewDto>(res.data);
+  },
+
+  async importOrders(payload: { companyId: Guid; rows: OrderImportRowDto[] }): Promise<OrderImportResultDto> {
+    const res = await api.post(`${BASE}/orders/import`, payload);
+    return unwrapApiData<OrderImportResultDto>(res.data);
+  },
+
+  async downloadOrderImportTemplate(): Promise<void> {
+    const res = await api.get(`${BASE}/orders/template`, { responseType: 'blob' });
+    downloadBlob(res.data, 'merchandising-orders-import-template.csv', 'text/csv');
+  },
+
+  async exportOrder(orderId: Guid): Promise<void> {
+    const res = await api.get(`${BASE}/orders/${orderId}/export`, { responseType: 'blob' });
+    downloadBlob(res.data, `order-${orderId}.xlsx`);
+  },
+
+  /* ── Samples ── */
+  async getSamples(companyId?: Guid, styleId?: Guid): Promise<Sample[]> {
+    const res = await api.get(`${BASE}/samples`, {
+      params: params(companyId, styleId ? { styleId } : undefined),
+    });
+    return unwrapApiData<Sample[]>(res.data);
+  },
+
+  async createSample(payload: CreateSampleRequest): Promise<Sample> {
+    const res = await api.post(`${BASE}/samples`, payload);
+    return unwrapApiData<Sample>(res.data);
+  },
+
+  async approveSample(id: Guid): Promise<Sample> {
+    const res = await api.patch(`${BASE}/samples/${id}/approve`);
+    return unwrapApiData<Sample>(res.data);
+  },
+
+  async rejectSample(id: Guid): Promise<Sample> {
+    const res = await api.patch(`${BASE}/samples/${id}/reject`);
+    return unwrapApiData<Sample>(res.data);
+  },
+
+  async submitSample(id: Guid, payload: { submitDate: string; remarks?: string }): Promise<Sample> {
+    const res = await api.patch(`${BASE}/samples/${id}/submit`, payload);
+    return unwrapApiData<Sample>(res.data);
+  },
+
+  async reviseSample(id: Guid, payload: { remarks?: string }): Promise<Sample> {
+    const res = await api.patch(`${BASE}/samples/${id}/revise`, payload);
+    return unwrapApiData<Sample>(res.data);
+  },
+
+  async createSampleCosting(id: Guid, payload: CreateSampleCostingRequest): Promise<SampleCosting> {
+    const res = await api.post(`${BASE}/samples/${id}/costing`, payload);
+    return unwrapApiData<SampleCosting>(res.data);
+  },
+
+  /* ── Quotations ── */
+  async getQuotations(companyId?: Guid, buyerId?: Guid): Promise<Quotation[]> {
+    const res = await api.get(`${BASE}/quotations`, {
+      params: params(companyId, buyerId ? { buyerId } : undefined),
+    });
+    return unwrapApiData<Quotation[]>(res.data);
+  },
+
+  async getQuotationById(id: Guid, companyId?: Guid): Promise<Quotation> {
+    const res = await api.get(`${BASE}/quotations/${id}`, { params: params(companyId) });
+    return unwrapApiData<Quotation>(res.data);
+  },
+
+  async createQuotation(payload: CreateQuotationRequest): Promise<Quotation> {
+    const res = await api.post(`${BASE}/quotations`, payload);
+    return unwrapApiData<Quotation>(res.data);
+  },
+
+  async updateQuotation(id: Guid, payload: UpdateQuotationRequest): Promise<Quotation> {
+    const res = await api.put(`${BASE}/quotations/${id}`, payload);
+    return unwrapApiData<Quotation>(res.data);
+  },
+
+  async addQuotationNegotiation(id: Guid, payload: AddQuotationNegotiationRequest): Promise<QuotationNegotiation> {
+    const res = await api.post(`${BASE}/quotations/${id}/negotiations`, payload);
+    return unwrapApiData<QuotationNegotiation>(res.data);
+  },
+
+  async convertQuotationToOrder(id: Guid, payload: ConvertQuotationToOrderRequest): Promise<Order> {
+    const res = await api.post(`${BASE}/quotations/${id}/convert-to-order`, payload);
+    return unwrapApiData<Order>(res.data);
+  },
+
+  /* ── TNA ── */
+  async createTnaTemplate(payload: {
+    companyId: Guid;
+    templateName: string;
+    description?: string;
+    isDefault: boolean;
+    milestones?: Array<{ milestoneName: string; sequenceNo: number; daysFromStart: number }>;
+  }): Promise<TnaTemplate> {
+    const res = await api.post(`${BASE}/tna/templates`, payload);
+    return unwrapApiData<TnaTemplate>(res.data);
+  },
+
+  async generateTnaForOrder(orderId: Guid): Promise<TnaCalendar> {
+    const res = await api.post(`${BASE}/tna/orders/${orderId}/generate`);
+    return unwrapApiData<TnaCalendar>(res.data);
+  },
+
+  async getTnaByOrder(orderId: Guid): Promise<TnaCalendar | null> {
+    const res = await api.get(`${BASE}/tna/orders/${orderId}`);
+    return unwrapApiData<TnaCalendar | null>(res.data);
+  },
+
+  async updateTnaMilestone(id: Guid, payload: { actualDate?: string; status: string }): Promise<TnaMilestone> {
+    const res = await api.put(`${BASE}/tna/milestones/${id}`, payload);
+    return unwrapApiData<TnaMilestone>(res.data);
+  },
+
+  async logTnaDelay(milestoneId: Guid, payload: { companyId: Guid; delayDays: number; reason: string }): Promise<TnaDelayLog> {
+    const res = await api.post(`${BASE}/tna/milestones/${milestoneId}/delays`, payload);
+    return unwrapApiData<TnaDelayLog>(res.data);
+  },
+
+  /* ── Material bookings ── */
+  async getMaterialBookings(companyId?: Guid, orderId?: Guid, itemType?: string): Promise<MaterialBooking[]> {
+    const res = await api.get(`${BASE}/bookings`, {
+      params: params(companyId, {
+        ...(orderId ? { orderId } : {}),
+        ...(itemType ? { itemType } : {}),
+      }),
+    });
+    const rows = unwrapApiData<MaterialBooking[]>(res.data);
+    if (!itemType) return rows;
+    const normalized = itemType.toLowerCase();
+    return rows.filter((b) => b.bookingType.toLowerCase() === normalized);
+  },
+
+  async createMaterialBooking(payload: CreateMaterialBookingRequest): Promise<MaterialBooking> {
+    const res = await api.post(`${BASE}/bookings`, payload);
+    return unwrapApiData<MaterialBooking>(res.data);
+  },
+
+  async autoCalculateBooking(id: Guid, companyId: Guid): Promise<MaterialBooking> {
+    const res = await api.post(`${BASE}/bookings/${id}/auto-calculate`, { companyId });
+    return unwrapApiData<MaterialBooking>(res.data);
+  },
+
+  async addFabricBookingDetail(id: Guid, payload: {
+    companyId: Guid;
+    fabricTypeId?: Guid;
+    colorName: string;
+    requiredQty: number;
+    supplierId?: Guid;
+  }): Promise<FabricBookingDetail> {
+    const res = await api.post(`${BASE}/bookings/${id}/fabric-details`, payload);
+    return unwrapApiData<FabricBookingDetail>(res.data);
+  },
+
+  async addTrimsBookingDetail(id: Guid, payload: {
+    companyId: Guid;
+    trimsTypeId?: Guid;
+    itemName: string;
+    requiredQty: number;
+    supplierId?: Guid;
+  }): Promise<TrimsBookingDetail> {
+    const res = await api.post(`${BASE}/bookings/${id}/trims-details`, payload);
+    return unwrapApiData<TrimsBookingDetail>(res.data);
+  },
+
+  async addBookingAllocation(id: Guid, payload: {
+    companyId: Guid;
+    detailId: Guid;
+    detailType: string;
+    allocatedQty: number;
+    allocationDate: string;
+  }): Promise<BookingAllocation> {
+    const res = await api.post(`${BASE}/bookings/${id}/allocations`, payload);
+    return unwrapApiData<BookingAllocation>(res.data);
+  },
+
+  /* ── Requisitions ── */
+  async getRequisitions(companyId?: Guid, orderId?: Guid): Promise<PurchaseRequisition[]> {
+    const res = await api.get(`${BASE}/requisitions`, {
+      params: params(companyId, orderId ? { orderId } : undefined),
+    });
+    return unwrapApiData<PurchaseRequisition[]>(res.data);
+  },
+
+  async createRequisition(payload: CreatePurchaseRequisitionRequest): Promise<PurchaseRequisition> {
+    const res = await api.post(`${BASE}/requisitions`, payload);
+    return unwrapApiData<PurchaseRequisition>(res.data);
+  },
+
+  async submitRequisition(id: Guid): Promise<PurchaseRequisition> {
+    const res = await api.post(`${BASE}/requisitions/${id}/submit`);
+    return unwrapApiData<PurchaseRequisition>(res.data);
+  },
+
+  async createRequisitionFromOrder(orderId: Guid, payload: CreatePurchaseRequisitionRequest): Promise<PurchaseRequisition> {
+    const res = await api.post(`${BASE}/requisitions/from-order/${orderId}`, payload);
+    return unwrapApiData<PurchaseRequisition>(res.data);
+  },
+
+  /* ── Documents ── */
+  async getStyleDocuments(styleId: Guid, companyId?: Guid): Promise<StyleDocument[]> {
+    const res = await api.get(`${BASE}/styles/${styleId}/documents`, { params: params(companyId) });
+    return unwrapApiData<StyleDocument[]>(res.data);
+  },
+
+  async createStyleDocument(styleId: Guid, payload: CreateStyleDocumentRequest): Promise<StyleDocument> {
+    const res = await api.post(`${BASE}/styles/${styleId}/documents`, payload);
+    return unwrapApiData<StyleDocument>(res.data);
+  },
+
+  async getOrderDocuments(orderId: Guid, companyId?: Guid): Promise<OrderDocument[]> {
+    const res = await api.get(`${BASE}/orders/${orderId}/documents`, { params: params(companyId) });
+    return unwrapApiData<OrderDocument[]>(res.data);
+  },
+
+  async createOrderDocument(orderId: Guid, payload: CreateOrderDocumentRequest): Promise<OrderDocument> {
+    const res = await api.post(`${BASE}/orders/${orderId}/documents`, payload);
+    return unwrapApiData<OrderDocument>(res.data);
+  },
+
+  /* ── Communications ── */
+  async getCommunications(companyId?: Guid, styleId?: Guid, orderId?: Guid): Promise<CommunicationLog[]> {
+    const res = await api.get(`${BASE}/communications`, {
+      params: params(companyId, { styleId, orderId }),
+    });
+    return unwrapApiData<CommunicationLog[]>(res.data);
+  },
+
+  async createCommunication(payload: CreateCommunicationLogRequest): Promise<CommunicationLog> {
+    const res = await api.post(`${BASE}/communications`, payload);
+    return unwrapApiData<CommunicationLog>(res.data);
+  },
+
+  /* ── Approvals ── */
+  async createApprovalRequest(payload: CreateApprovalRequestRequest): Promise<ApprovalRequest> {
+    const res = await api.post(`${BASE}/approvals`, payload);
+    return unwrapApiData<ApprovalRequest>(res.data);
+  },
+
+  async getApprovalRequest(id: Guid, companyId?: Guid): Promise<ApprovalRequest> {
+    const res = await api.get(`${BASE}/approvals/${id}`, { params: params(companyId) });
+    return unwrapApiData<ApprovalRequest>(res.data);
+  },
+
+  async getPendingApprovals(companyId?: Guid): Promise<ApprovalRequest[]> {
+    const res = await api.get(`${BASE}/approvals/pending`, { params: params(companyId) });
+    return unwrapApiData<ApprovalRequest[]>(res.data);
+  },
+
+  async approveStep(requestId: Guid, stepId: Guid, payload: ApproveStepRequest): Promise<ApprovalRequest> {
+    const res = await api.post(`${BASE}/approvals/${requestId}/steps/${stepId}/approve`, payload);
+    return unwrapApiData<ApprovalRequest>(res.data);
+  },
+
+  async rejectStep(requestId: Guid, stepId: Guid, payload: RejectStepRequest): Promise<ApprovalRequest> {
+    const res = await api.post(`${BASE}/approvals/${requestId}/steps/${stepId}/reject`, payload);
+    return unwrapApiData<ApprovalRequest>(res.data);
+  },
+
+  /* ── Shipment ── */
+  async getShipmentPlans(companyId?: Guid, orderId?: Guid): Promise<ShipmentPlan[]> {
+    const res = await api.get(`${BASE}/shipment-plans`, {
+      params: params(companyId, orderId ? { orderId } : undefined),
+    });
+    return unwrapApiData<ShipmentPlan[]>(res.data);
+  },
+
+  async createShipmentPlan(payload: CreateShipmentPlanRequest): Promise<ShipmentPlan> {
+    const res = await api.post(`${BASE}/shipment-plans`, payload);
+    return unwrapApiData<ShipmentPlan>(res.data);
+  },
+
+  async updateShipmentPlan(id: Guid, payload: UpdateShipmentPlanRequest): Promise<ShipmentPlan> {
+    const res = await api.put(`${BASE}/shipment-plans/${id}`, payload);
+    return unwrapApiData<ShipmentPlan>(res.data);
+  },
+
+  async createShipmentExecution(payload: {
+    companyId: Guid;
+    shipmentPlanId: Guid;
+    actualShipmentDate?: string;
+    shippedQty: number;
+    status?: string;
+  }): Promise<ShipmentExecution> {
+    const res = await api.post(`${BASE}/shipment-executions`, payload);
+    return unwrapApiData<ShipmentExecution>(res.data);
+  },
+
+  async getShipmentExecutionByPlan(companyId: Guid, shipmentPlanId: Guid): Promise<ShipmentExecution | null> {
+    const res = await api.get(`${BASE}/shipment-executions`, {
+      params: { companyId, shipmentPlanId },
+    });
+    return unwrapApiData<ShipmentExecution | null>(res.data);
+  },
+
+  async createPackingList(payload: {
+    companyId: Guid;
+    shipmentExecutionId: Guid;
+    cartonCount: number;
+    grossWeightKg: number;
+    netWeightKg: number;
+    remarks?: string;
+    cartons?: Array<{ cartonNo: number; colorName: string; sizeName: string; quantity: number }>;
+  }): Promise<PackingList> {
+    const res = await api.post(`${BASE}/shipment-executions/packing-lists`, payload);
+    return unwrapApiData<PackingList>(res.data);
+  },
+
+  /* ── Reports ── */
+  async getOrderSummaryReport(companyId?: Guid, buyerId?: Guid, status?: string): Promise<Order[]> {
+    const res = await api.get(`${BASE}/reports/order-summary`, {
+      params: params(companyId, { buyerId, status }),
+    });
+    return unwrapApiData<Order[]>(res.data);
+  },
+
+  async exportOrderSummaryReport(companyId?: Guid, buyerId?: Guid, status?: string): Promise<void> {
+    await downloadCsv(`${BASE}/reports/order-summary.csv`, 'merchandising-order-summary.csv', companyId, { buyerId, status });
+  },
+
+  async getTnaDelayReport(companyId?: Guid): Promise<TnaDelayReportRow[]> {
+    const res = await api.get(`${BASE}/reports/tna-delay`, { params: params(companyId) });
+    return unwrapApiData<TnaDelayReportRow[]>(res.data);
+  },
+
+  async exportTnaDelayReport(companyId?: Guid): Promise<void> {
+    await downloadCsv(`${BASE}/reports/tna-delay.csv`, 'merchandising-tna-delay.csv', companyId);
+  },
+
+  async getBookingStatusReport(companyId?: Guid, orderId?: Guid): Promise<BookingStatusReportRow[]> {
+    const res = await api.get(`${BASE}/reports/booking-status`, {
+      params: params(companyId, orderId ? { orderId } : undefined),
+    });
+    return unwrapApiData<BookingStatusReportRow[]>(res.data);
+  },
+
+  async exportBookingStatusReport(companyId?: Guid, orderId?: Guid): Promise<void> {
+    await downloadCsv(`${BASE}/reports/booking-status.csv`, 'merchandising-booking-status.csv', companyId, orderId ? { orderId } : undefined);
+  },
+
+  async getOrderPipelineReport(companyId?: Guid): Promise<OrderPipelineReportRow[]> {
+    const res = await api.get(`${BASE}/reports/order-pipeline`, { params: params(companyId) });
+    return unwrapApiData<OrderPipelineReportRow[]>(res.data);
+  },
+
+  async exportOrderPipelineReport(companyId?: Guid): Promise<void> {
+    await downloadCsv(`${BASE}/reports/order-pipeline.csv`, 'merchandising-order-pipeline.csv', companyId);
+  },
 };
 
 export default merchandisingService;

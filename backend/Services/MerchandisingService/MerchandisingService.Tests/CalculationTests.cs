@@ -1,4 +1,4 @@
-using MerchandisingService.Application;
+using MerchandisingService.Application.Common;
 using MerchandisingService.Domain;
 
 namespace MerchandisingService.Tests;

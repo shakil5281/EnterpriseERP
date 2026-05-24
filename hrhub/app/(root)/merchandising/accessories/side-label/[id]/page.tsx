@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import AccessoryProcurementMatrix from "@/components/merchandising/AccessoryProcurementMatrix"
-
-export default function SideLabelDetailPage() {
-    return <AccessoryProcurementMatrix title="Side Label" accessoryType="side-label" />
+export default function AccessoryDetailRedirectPage() {
+    redirect("/merchandising/bookings")
 }

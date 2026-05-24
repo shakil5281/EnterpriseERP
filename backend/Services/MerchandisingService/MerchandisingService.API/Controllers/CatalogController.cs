@@ -8,11 +8,11 @@ using Microsoft.AspNetCore.Mvc;
 namespace MerchandisingService.API.Controllers;
 
 [ApiController]
-[Route("api/seasons")]
+[Route("api/v1/merchandising/seasons")]
 public sealed class SeasonsController(IMediator mediator) : ControllerBase
 {
     [HttpPost]
-    [Authorize(Policy = MerchandisingPermissions.StyleManage)]
+    [Authorize(Policy = MerchandisingPolicies.StyleManage)]
     public async Task<ActionResult<ApiResponse<SeasonDto>>> Create(CreateSeasonRequest request, CancellationToken cancellationToken) =>
         Ok(ApiResponse<SeasonDto>.Ok(await mediator.Send(new CreateSeasonCommand(request), cancellationToken), "Season created."));
 
@@ -23,11 +23,11 @@ public sealed class SeasonsController(IMediator mediator) : ControllerBase
 }
 
 [ApiController]
-[Route("api/garment-items")]
+[Route("api/v1/merchandising/garment-items")]
 public sealed class GarmentItemsController(IMediator mediator) : ControllerBase
 {
     [HttpPost]
-    [Authorize(Policy = MerchandisingPermissions.StyleManage)]
+    [Authorize(Policy = MerchandisingPolicies.StyleManage)]
     public async Task<ActionResult<ApiResponse<GarmentItemDto>>> Create(CreateGarmentItemRequest request, CancellationToken cancellationToken) =>
         Ok(ApiResponse<GarmentItemDto>.Ok(await mediator.Send(new CreateGarmentItemCommand(request), cancellationToken), "Garment item created."));
 
@@ -38,11 +38,11 @@ public sealed class GarmentItemsController(IMediator mediator) : ControllerBase
 }
 
 [ApiController]
-[Route("api/styles")]
+[Route("api/v1/merchandising/styles")]
 public sealed class StylesController(IMediator mediator) : ControllerBase
 {
     [HttpPost]
-    [Authorize(Policy = MerchandisingPermissions.StyleManage)]
+    [Authorize(Policy = MerchandisingPolicies.StyleManage)]
     public async Task<ActionResult<ApiResponse<StyleDto>>> Create(CreateStyleRequest request, CancellationToken cancellationToken) =>
         Ok(ApiResponse<StyleDto>.Ok(await mediator.Send(new CreateStyleCommand(request), cancellationToken), "Style created."));
 
@@ -53,11 +53,31 @@ public sealed class StylesController(IMediator mediator) : ControllerBase
 
     [HttpGet("{id:guid}")]
     [Authorize]
-    public async Task<ActionResult<ApiResponse<StyleDto>>> GetById(Guid id, CancellationToken cancellationToken) =>
-        Ok(ApiResponse<StyleDto>.Ok(await mediator.Send(new GetStyleByIdQuery(id), cancellationToken)));
+    public async Task<ActionResult<ApiResponse<StyleDto>>> GetById(Guid id, [FromQuery] Guid companyId, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<StyleDto>.Ok(await mediator.Send(new GetStyleByIdQuery(companyId, id), cancellationToken)));
 
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = MerchandisingPermissions.StyleManage)]
+    [Authorize(Policy = MerchandisingPolicies.StyleManage)]
     public async Task<ActionResult<ApiResponse<StyleDto>>> Update(Guid id, UpdateStyleRequest request, CancellationToken cancellationToken) =>
         Ok(ApiResponse<StyleDto>.Ok(await mediator.Send(new UpdateStyleCommand(id, request), cancellationToken), "Style updated."));
+
+    [HttpGet("{styleId:guid}/versions")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<StyleVersionDto>>>> GetVersions(Guid styleId, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<IReadOnlyList<StyleVersionDto>>.Ok(await mediator.Send(new GetStyleVersionsQuery(styleId), cancellationToken)));
+
+    [HttpPost("versions")]
+    [Authorize(Policy = MerchandisingPolicies.StyleManage)]
+    public async Task<ActionResult<ApiResponse<StyleVersionDto>>> CreateVersion(CreateStyleVersionRequest request, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<StyleVersionDto>.Ok(await mediator.Send(new CreateStyleVersionCommand(request), cancellationToken), "Style version created."));
+
+    [HttpGet("{styleId:guid}/bom-items")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<StyleBomItemDto>>>> GetBomItems(Guid styleId, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<IReadOnlyList<StyleBomItemDto>>.Ok(await mediator.Send(new GetStyleBomItemsQuery(styleId), cancellationToken)));
+
+    [HttpPost("bom-items")]
+    [Authorize(Policy = MerchandisingPolicies.BomManage)]
+    public async Task<ActionResult<ApiResponse<StyleBomItemDto>>> CreateBomItem(CreateStyleBomItemRequest request, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<StyleBomItemDto>.Ok(await mediator.Send(new CreateStyleBomItemCommand(request), cancellationToken), "Style BOM item created."));
 }

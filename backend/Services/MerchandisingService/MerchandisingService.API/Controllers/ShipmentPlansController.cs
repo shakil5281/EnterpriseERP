@@ -8,11 +8,11 @@ using Microsoft.AspNetCore.Mvc;
 namespace MerchandisingService.API.Controllers;
 
 [ApiController]
-[Route("api/shipment-plans")]
+[Route("api/v1/merchandising/shipment-plans")]
 public sealed class ShipmentPlansController(IMediator mediator) : ControllerBase
 {
     [HttpPost]
-    [Authorize(Policy = MerchandisingPermissions.ShipmentPlanManage)]
+    [Authorize(Policy = MerchandisingPolicies.ShipmentPlanManage)]
     public async Task<ActionResult<ApiResponse<ShipmentPlanDto>>> Create(CreateShipmentPlanRequest request, CancellationToken cancellationToken) =>
         Ok(ApiResponse<ShipmentPlanDto>.Ok(await mediator.Send(new CreateShipmentPlanCommand(request), cancellationToken), "Shipment plan created."));
 
@@ -22,7 +22,7 @@ public sealed class ShipmentPlansController(IMediator mediator) : ControllerBase
         Ok(ApiResponse<IReadOnlyList<ShipmentPlanDto>>.Ok(await mediator.Send(new GetShipmentPlansQuery(companyId, orderId), cancellationToken)));
 
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = MerchandisingPermissions.ShipmentPlanManage)]
+    [Authorize(Policy = MerchandisingPolicies.ShipmentPlanManage)]
     public async Task<ActionResult<ApiResponse<ShipmentPlanDto>>> Update(Guid id, UpdateShipmentPlanRequest request, CancellationToken cancellationToken) =>
         Ok(ApiResponse<ShipmentPlanDto>.Ok(await mediator.Send(new UpdateShipmentPlanCommand(id, request), cancellationToken), "Shipment plan updated."));
 }

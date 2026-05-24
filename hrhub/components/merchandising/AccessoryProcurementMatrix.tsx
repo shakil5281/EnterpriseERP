@@ -2,23 +2,16 @@
 
 import * as React from "react"
 import { useParams, useRouter } from "next/navigation"
-import { 
-    merchandisingService, 
-    ProgramOrder, 
-    FabricColorPantone,
-    AccessoryRequirement
-} from "@/lib/services/merchandising"
+import { merchandisingService } from "@/lib/services/merchandising"
+import type { ProgramOrderWorksheet, MasterDataDto } from "@/lib/types/merchandising"
 import { format } from "date-fns"
 import { toast } from "sonner"
 import {
     IconArrowLeft,
-    IconDeviceFloppy,
     IconLoader2,
 } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -32,87 +25,34 @@ interface AccessoryProcurementMatrixProps {
     accessoryType: string;
 }
 
-export default function AccessoryProcurementMatrix({ title, accessoryType }: AccessoryProcurementMatrixProps) {
+export default function AccessoryProcurementMatrix({ title }: AccessoryProcurementMatrixProps) {
     const params = useParams()
     const router = useRouter()
-    const [order, setOrder] = React.useState<ProgramOrder | null>(null)
-    const [masterColors, setMasterColors] = React.useState<FabricColorPantone[]>([])
-    const [requirements, setRequirements] = React.useState<AccessoryRequirement[]>([])
+    const orderId = params.id as string
+    const [worksheet, setWorksheet] = React.useState<ProgramOrderWorksheet | null>(null)
+    const [masterColors, setMasterColors] = React.useState<MasterDataDto[]>([])
     const [loading, setLoading] = React.useState(true)
-    const [saving, setSaving] = React.useState(false)
 
     const fetchData = React.useCallback(async () => {
         try {
             setLoading(true)
-            const id = parseInt(params.id as string)
-            const [orderData, colorsData, requirementsData] = await Promise.all([
-                merchandisingService.getProgramOrder(id),
-                merchandisingService.getColors(1),
-                merchandisingService.getAccessoryRequirements(id, accessoryType)
+            const [worksheetData, colorsData] = await Promise.all([
+                merchandisingService.getOrderWorksheet(orderId),
+                merchandisingService.getMasterData("colors"),
             ])
-            
-            setOrder(orderData)
+            setWorksheet(worksheetData)
             setMasterColors(colorsData)
-            setRequirements(requirementsData)
         } catch (error) {
             console.error(error)
             toast.error(`Failed to fetch ${title} data`)
         } finally {
             setLoading(false)
         }
-    }, [params.id, accessoryType, title])
+    }, [orderId, title])
 
     React.useEffect(() => {
-        if (params.id) fetchData()
-    }, [fetchData, params.id])
-
-    const getRequirement = (sbId: number) => {
-        return requirements.find(r => r.programSizeBreakdownId === sbId)
-    }
-
-    const handleCellChange = (sbId: number, field: keyof AccessoryRequirement, value: any) => {
-        const newRequirements = [...requirements]
-        const index = newRequirements.findIndex(r => r.programSizeBreakdownId === sbId)
-        
-        if (index > -1) {
-            if (field === 'masterColorId') {
-                const colorId = parseInt(value)
-                const colorName = masterColors.find(c => c.id === colorId)?.colorName
-                newRequirements[index] = { ...newRequirements[index], masterColorId: colorId, masterColorName: colorName }
-            } else {
-                newRequirements[index] = { ...newRequirements[index], [field]: value }
-            }
-        } else {
-            const newItem: AccessoryRequirement = {
-                programSizeBreakdownId: sbId,
-                accessoryType: accessoryType,
-                [field]: value
-            }
-            if (field === 'masterColorId') {
-                const colorId = parseInt(value)
-                const colorName = masterColors.find(c => c.id === colorId)?.colorName
-                newItem.masterColorName = colorName
-                newItem.masterColorId = colorId
-            }
-            newRequirements.push(newItem)
-        }
-        
-        setRequirements(newRequirements)
-    }
-
-    const handleSave = async () => {
-        if (!order) return
-        try {
-            setSaving(true)
-            await merchandisingService.saveAccessoryRequirements(order.id, accessoryType, requirements)
-            toast.success(`${title} mappings saved successfully`)
-        } catch (error) {
-            console.error(error)
-            toast.error(`Failed to save ${title} mappings`)
-        } finally {
-            setSaving(false)
-        }
-    }
+        if (orderId) fetchData()
+    }, [fetchData, orderId])
 
     if (loading) {
         return (
@@ -123,162 +63,78 @@ export default function AccessoryProcurementMatrix({ title, accessoryType }: Acc
         )
     }
 
-    if (!order) return null
+    if (!worksheet) return null
 
-    const programTotal = order.articles?.reduce((acc: any, item: any) => acc + item.totalQty, 0) || 0
+    const programTotal = worksheet.articles.reduce((acc, item) => acc + item.totalQty, 0)
 
     return (
-        <div className="flex flex-col gap-6 py-6 px-4 lg:px-8 bg-background min-h-screen transition-colors duration-300">
-            {/* Header Section */}
-            <div className="flex items-center justify-between pb-4 border-b border-border">
+        <div className="flex flex-col gap-6 py-6 px-4 lg:px-8 bg-background min-h-screen">
+            <div className="flex items-center justify-between pb-4 border-b">
                 <div className="flex items-center gap-4">
-                    <Button 
-                        variant="outline" size="icon" className="rounded-full shadow-sm hover:translate-x-[-1px] transition-all border-border bg-card text-foreground"
-                        onClick={() => router.back()}
-                    >
+                    <Button variant="outline" size="icon" className="rounded-full" onClick={() => router.back()}>
                         <IconArrowLeft className="size-4" />
                     </Button>
                     <div>
-                        <h1 className="text-xl font-black tracking-tight text-foreground uppercase">
-                            {title} Procurement Matrix
-                        </h1>
+                        <h1 className="text-xl font-black tracking-tight uppercase">{title} Procurement Matrix</h1>
                         <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">
-                            Program: {order.programNumber} | {order.buyerName}
+                            Order: {worksheet.programNumber} | {worksheet.buyerName}
                         </p>
                     </div>
                 </div>
-                <Button 
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="h-9 px-6 bg-primary text-primary-foreground hover:bg-primary/90 font-bold uppercase text-xs tracking-widest rounded-lg shadow-md border-none"
-                >
-                    {saving ? <IconLoader2 className="size-4 animate-spin mr-2" /> : <IconDeviceFloppy className="size-4 mr-2" />}
-                    Save Booking Data
-                </Button>
             </div>
 
-            <div className="w-full">
-                {/* Visual Header */}
-                <div className="flex flex-col gap-1 mb-8">
-                    <h2 className="text-2xl font-black text-foreground tracking-tight leading-none uppercase">{order.factoryName}</h2>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[.2em]">{order.factoryAddress}</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-card rounded-2xl border">
+                <div><Label className="text-[10px] font-black uppercase text-muted-foreground">Program #</Label><p className="text-sm font-black">{worksheet.programNumber}</p></div>
+                <div><Label className="text-[10px] font-black uppercase text-muted-foreground">Buyer</Label><p className="text-sm font-black">{worksheet.buyerName}</p></div>
+                <div><Label className="text-[10px] font-black uppercase text-muted-foreground">Status</Label><p className="text-sm font-black">{worksheet.orderStatus}</p></div>
+                <div><Label className="text-[10px] font-black uppercase text-muted-foreground">Order Date</Label><p className="text-sm font-black">{worksheet.orderDate ? format(new Date(worksheet.orderDate), "dd MMM yyyy") : "N/A"}</p></div>
+            </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-x-12 gap-y-4 mt-6 p-6 bg-card rounded-2xl border border-border">
-                        <div className="space-y-0.5">
-                            <Label className="text-[10px] font-black uppercase text-muted-foreground">Program #</Label>
-                            <p className="text-sm font-black text-foreground uppercase">{order.programNumber}</p>
-                        </div>
-                        <div className="space-y-0.5">
-                            <Label className="text-[10px] font-black uppercase text-muted-foreground">Buyer Entity</Label>
-                            <p className="text-sm font-black text-foreground uppercase">{order.buyerName}</p>
-                        </div>
-                        <div className="space-y-0.5">
-                            <Label className="text-[10px] font-black uppercase text-muted-foreground">Customer</Label>
-                            <p className="text-sm font-black text-foreground uppercase">{order.customerName || "---"}</p>
-                        </div>
-                        <div className="space-y-0.5">
-                            <Label className="text-[10px] font-black uppercase text-muted-foreground">Order Date</Label>
-                            <p className="text-sm font-black text-foreground uppercase">
-                                {order.orderDate ? (
-                                    (() => {
-                                        const d = new Date(order.orderDate);
-                                        return isNaN(d.getTime()) ? "N/A" : format(d, 'dd MMM yyyy');
-                                    })()
-                                ) : "N/A"}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Matrix Table */}
-                <div className="border border-border rounded-lg overflow-hidden shadow-sm overflow-x-auto">
-                    <table className="w-full text-xs border-collapse min-w-[1000px]">
-                        <thead>
-                            <tr className="bg-primary text-primary-foreground font-black uppercase text-[10px] tracking-widest text-center">
-                                <th className="p-3 border-r border-primary-foreground/10">SL</th>
-                                <th className="p-3 border-r border-primary-foreground/10">Article</th>
-                                <th className="p-3 border-r border-primary-foreground/10">Item</th>
-                                <th className="p-3 border-r border-primary-foreground/10">Garment Color</th>
-                                <th className="p-3 border-r border-primary-foreground/10">Qty to Book</th>
-                                <th className="p-3 border-r border-primary-foreground/10">{title} Color Spec</th>
-                                <th className="p-3 border-r border-primary-foreground/10">Specification</th>
-                                <th className="p-3">Required Quantity</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {order.articles?.map((item: any, itemIdx: number) => {
-                                const totalRows = item.colors.reduce((acc: number, color: any) => acc + color.sizeBreakdowns.length, 0);
-                                let rowCounter = 0;
-
-                                return item.colors.map((color: any, colorIdx: number) => {
-                                    return color.sizeBreakdowns.map((sb: any, sbIdx: number) => {
-                                        const isFirstRowOfItem = rowCounter === 0;
-                                        rowCounter++;
-                                        const req = getRequirement(sb.id);
-
-                                        return (
-                                            <tr key={`${item.id}-${color.id}-${sb.id || sbIdx}`} className="border-b border-border hover:bg-muted/50 transition-colors">
-                                                 {isFirstRowOfItem && (
-                                                    <>
-                                                        <td className="p-3 text-center font-black border-r border-border align-middle bg-muted/30 text-foreground" rowSpan={totalRows}>{itemIdx + 1}</td>
-                                                        <td className="p-3 text-center font-bold border-r border-border align-middle uppercase text-blue-600 dark:text-blue-400" rowSpan={totalRows}>{item.newArticleNo}</td>
-                                                        <td className="p-3 text-center font-black border-r border-border align-middle uppercase text-[10px] text-foreground" rowSpan={totalRows}>{item.itemName}</td>
-                                                    </>
-                                                )}
-
-                                                 <td className="p-2 border-r border-border font-black uppercase text-[10px] text-muted-foreground pl-4">{color.colorName}</td>
-                                                
-                                                <td className="p-2 border-r border-border text-center font-black bg-orange-50 dark:bg-orange-950/20 text-orange-700 dark:text-orange-400">{sb.rowTotal}</td>
-
-                                                <td className="p-2 border-r border-border bg-emerald-50/10 dark:bg-emerald-950/10">
-                                                    <Select
-                                                        value={req?.masterColorId?.toString() || ""}
-                                                        onValueChange={(val) => handleCellChange(sb.id, 'masterColorId', val)}
-                                                    >
-                                                        <SelectTrigger className="h-8 w-full bg-background border-border rounded-md text-[10px] font-black uppercase shadow-none focus:ring-1 focus:ring-primary">
-                                                            <SelectValue placeholder="SELECT COLOR" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {masterColors.map(c => (
-                                                                <SelectItem key={c.id} value={c.id.toString()} className="text-xs uppercase font-bold">
-                                                                    {c.colorName} {c.pantoneCode ? `(${c.pantoneCode})` : ""}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </td>
-                                                <td className="p-2 border-r border-border">
-                                                    <Input 
-                                                        value={req?.specification || ""}
-                                                        onChange={(e) => handleCellChange(sb.id, 'specification', e.target.value)}
-                                                        className="h-8 w-full bg-background border-border rounded-md text-[10px] font-black uppercase outline-none focus:ring-1 focus:ring-primary shadow-none"
-                                                        placeholder="E.g. Size, Type..."
-                                                    />
-                                                </td>
-                                                <td className="p-2 bg-emerald-50/10 dark:bg-emerald-950/10">
-                                                    <Input 
-                                                        type="number"
-                                                        value={req?.requiredQuantity || ""}
-                                                        onChange={(e) => handleCellChange(sb.id, 'requiredQuantity', e.target.value)}
-                                                        className="h-8 w-full bg-background border-border rounded-md text-[10px] font-black uppercase outline-none focus:ring-1 focus:ring-primary shadow-none text-center"
-                                                        placeholder="0"
-                                                    />
-                                                </td>
-                                            </tr>
-                                        );
-                                    });
-                                });
-                            })}
-                        </tbody>
-                        <tfoot>
-                            <tr className="bg-muted font-black uppercase text-[10px] border-t border-border">
-                                <td colSpan={4} className="p-4 text-left border-r border-border tracking-widest text-muted-foreground">Total Order Quantity Summary</td>
-                                <td className="p-4 text-center bg-orange-600 text-white shadow-inner">{programTotal.toLocaleString()} PCS</td>
-                                <td colSpan={3} className="p-4 bg-muted"></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
+            <div className="border rounded-lg overflow-hidden shadow-sm overflow-x-auto">
+                <table className="w-full text-xs border-collapse min-w-[900px]">
+                    <thead>
+                        <tr className="bg-primary text-primary-foreground font-black uppercase text-[10px] text-center">
+                            <th className="p-3 border-r">Style</th>
+                            <th className="p-3 border-r">Garment Color</th>
+                            <th className="p-3 border-r">Size</th>
+                            <th className="p-3 border-r">Qty to Book</th>
+                            <th className="p-3 border-r">{title} Color Spec</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {worksheet.articles.flatMap(article =>
+                            article.colors.flatMap(color =>
+                                color.sizeBreakdowns.map((sb, idx) => (
+                                    <tr key={`${article.styleNo}-${color.colorName}-${sb.sizeName}-${idx}`} className="border-b hover:bg-muted/50">
+                                        <td className="p-2 text-center font-bold uppercase text-blue-600">{article.styleNo}</td>
+                                        <td className="p-2 font-black uppercase pl-4">{color.colorName}</td>
+                                        <td className="p-2 text-center">{sb.sizeName}</td>
+                                        <td className="p-2 text-center font-black bg-orange-50 dark:bg-orange-950/20 text-orange-700">{sb.quantity}</td>
+                                        <td className="p-2">
+                                            <Select disabled>
+                                                <SelectTrigger className="h-8 text-[10px] font-black uppercase">
+                                                    <SelectValue placeholder="SELECT COLOR" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {masterColors.map(c => (
+                                                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </td>
+                                    </tr>
+                                ))
+                            )
+                        )}
+                    </tbody>
+                    <tfoot>
+                        <tr className="bg-muted font-black uppercase text-[10px]">
+                            <td colSpan={3} className="p-4 text-left">Total Order Quantity</td>
+                            <td className="p-4 text-center bg-orange-600 text-white">{programTotal.toLocaleString()} PCS</td>
+                            <td />
+                        </tr>
+                    </tfoot>
+                </table>
             </div>
         </div>
     )

@@ -1,14 +1,14 @@
 # Reset all ERP SQL Server databases and re-apply EF Core migrations.
 # Uses backend/Configuration/connectionstrings.json (via each API's AddEnterpriseErpConnectionConfiguration).
-# Requires: dotnet ef, sqlcmd, SQL Server at unity3\SQLEXPRESS (see $SqlServer below).
+# Requires: dotnet ef, sqlcmd, SQL Server at localhost (see $SqlServer below).
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $Backend = $Root
 
-$SqlServer = "unity3\SQLEXPRESS"
+$SqlServer = "localhost"
 $SqlUser = "sa"
-$SqlPassword = "123580"
+$SqlPassword = "shakil52814542A"
 
 $Databases = @(
     "AuthServiceDB",
@@ -26,7 +26,9 @@ $Databases = @(
     "SecurityServiceDB",
     "AccountsServiceDB",
     "CuttingServiceDB",
-    "MerchandisingServiceDB"
+    "MerchandisingServiceDB",
+    "ProcurementServiceDB",
+    "InventoryServiceDB"
 )
 
 $EfServices = @(
@@ -43,14 +45,16 @@ $EfServices = @(
     @{ Name = "Security";    Api = "Services\SecurityService\SecurityService.API";    Project = "Services\SecurityService\SecurityService.Infrastructure";    Context = "SecurityDbContext" },
     @{ Name = "Accounts";    Api = "Services\AccountsService\AccountsService.API";    Project = "Services\AccountsService\AccountsService.Infrastructure";    Context = "AccountsDbContext" },
     @{ Name = "Cutting";     Api = "Services\CuttingService\CuttingService.API";     Project = "Services\CuttingService\CuttingService.Infrastructure";     Context = "CuttingDbContext" },
-    @{ Name = "Merchandising"; Api = "Services\MerchandisingService\MerchandisingService.API"; Project = "Services\MerchandisingService\MerchandisingService.Infrastructure"; Context = "MerchandisingDbContext" }
+    @{ Name = "Merchandising"; Api = "Services\MerchandisingService\MerchandisingService.API"; Project = "Services\MerchandisingService\MerchandisingService.Infrastructure"; Context = "MerchandisingDbContext" },
+    @{ Name = "Procurement"; Api = "Services\ProcurementService\ProcurementService.API"; Project = "Services\ProcurementService\ProcurementService.Infrastructure"; Context = "ProcurementDbContext" },
+    @{ Name = "Inventory"; Api = "Services\InventoryService\InventoryService.API"; Project = "Services\InventoryService\InventoryService.Infrastructure"; Context = "InventoryDbContext" }
 )
 
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 
 Write-Step "Stopping running ERP API / host processes"
 Get-Process -ErrorAction SilentlyContinue | Where-Object {
-    $_.ProcessName -match 'AuthService|AttendanceService|HRService|CompanyService|Platform\.Host|EnterpriseERP|PunchData|ImportExport|CuttingService|FinishingService|QualityService|SecurityService|AccountsService|MerchandisingService|LeaveService|ShiftService|PayrollService|NotificationService'
+    $_.ProcessName -match 'AuthService|AttendanceService|HRService|CompanyService|Platform\.Host|EnterpriseERP|PunchData|ImportExport|CuttingService|FinishingService|QualityService|SecurityService|AccountsService|MerchandisingService|ProcurementService|InventoryService|LeaveService|ShiftService|PayrollService|NotificationService'
 } | ForEach-Object {
     Write-Host "  Stopping $($_.ProcessName) ($($_.Id))"
     Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
@@ -113,7 +117,7 @@ function Invoke-GoMigrate($serviceDir, $envPrefix) {
             param($d, $jwt)
             Set-Location $d
             $env:PUNCHDATA_JWT_SIGNINGKEY = $jwt
-            $env:PUNCHDATA_CONNECTIONSTRING = "Server=unity3\SQLEXPRESS;Database=PunchDataDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true"
+            $env:PUNCHDATA_CONNECTIONSTRING = "Server=localhost;Database=PunchDataDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true"
             & go run ./cmd/server 2>&1
         } -ArgumentList $dir, $goJwt
         Wait-Job $job -Timeout 45 | Out-Null
@@ -131,8 +135,8 @@ try {
         param($d, $jwt)
         Set-Location $d
         $env:IMPORTEXPORT_JWT_SIGNINGKEY = $jwt
-        $env:IMPORTEXPORT_CONNECTIONSTRING = "Server=unity3\SQLEXPRESS;Database=ImportExportDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true"
-        $env:IMPORTEXPORT_COMPANY_CONNECTIONSTRING = "Server=unity3\SQLEXPRESS;Database=CompanyServiceDB;User Id=sa;Password=123580;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true"
+        $env:IMPORTEXPORT_CONNECTIONSTRING = "Server=localhost;Database=ImportExportDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true"
+        $env:IMPORTEXPORT_COMPANY_CONNECTIONSTRING = "Server=localhost;Database=CompanyServiceDB;User Id=sa;Password=shakil52814542A;Encrypt=Mandatory;TrustServerCertificate=True;MultipleActiveResultSets=true"
         & go run ./cmd/api 2>&1
     } -ArgumentList (Get-Location).Path, $goJwt
     Wait-Job $job -Timeout 45 | Out-Null

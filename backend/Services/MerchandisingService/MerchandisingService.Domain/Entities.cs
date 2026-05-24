@@ -22,9 +22,15 @@ public sealed class Buyer : AuditableEntity
     public string? Email { get; set; }
     public string? Phone { get; set; }
     public string? Address { get; set; }
+    public string? PaymentTerms { get; set; }
+    public string? Currency { get; set; }
+    public int? LeadTimeDays { get; set; }
     public bool IsActive { get; set; } = true;
     public ICollection<Style> Styles { get; set; } = [];
     public ICollection<Order> Orders { get; set; } = [];
+    public ICollection<BuyerContact> Contacts { get; set; } = [];
+    public ICollection<BuyerPaymentTerm> PaymentTermDetails { get; set; } = [];
+    public ICollection<BuyerComplianceRule> ComplianceRules { get; set; } = [];
 }
 
 public sealed class Season : AuditableEntity
@@ -48,6 +54,7 @@ public sealed class Style : AuditableEntity
     public Guid BuyerId { get; set; }
     public Guid? SeasonId { get; set; }
     public Guid? GarmentItemId { get; set; }
+    public Guid? BrandId { get; set; }
     public string StyleNo { get; set; } = string.Empty;
     public string? StyleName { get; set; }
     public string? Description { get; set; }
@@ -55,6 +62,9 @@ public sealed class Style : AuditableEntity
     public Buyer? Buyer { get; set; }
     public Season? Season { get; set; }
     public GarmentItem? GarmentItem { get; set; }
+    public Brand? Brand { get; set; }
+    public ICollection<StyleVersion> Versions { get; set; } = [];
+    public ICollection<StyleBomItem> BomItems { get; set; } = [];
 }
 
 public sealed class Order : AuditableEntity
@@ -76,6 +86,12 @@ public sealed class Order : AuditableEntity
     public ICollection<BomItem> BomItems { get; set; } = [];
     public OrderCosting? Costing { get; set; }
     public ICollection<ShipmentPlan> ShipmentPlans { get; set; } = [];
+    public OrderAssignment? Assignment { get; set; }
+    public OrderCommercialTerms? CommercialTerms { get; set; }
+    public ICollection<OrderTrimsMatrix> TrimsMatrix { get; set; } = [];
+    public TnaCalendar? TnaCalendar { get; set; }
+    public ICollection<MaterialBooking> MaterialBookings { get; set; } = [];
+    public ICollection<PurchaseRequisition> Requisitions { get; set; } = [];
 }
 
 public sealed class BuyerPurchaseOrder : AuditableEntity
@@ -131,7 +147,12 @@ public sealed class OrderCosting : AuditableEntity
     public decimal SellingPrice { get; set; }
     public decimal ProfitAmount { get; set; }
     public decimal ProfitPercent { get; set; }
-    public string ApprovalStatus { get; set; } = "Draft";
+    public decimal FreightCost { get; set; }
+    public decimal CommercialCost { get; set; }
+    public decimal BankCharges { get; set; }
+    public decimal Commission { get; set; }
+    public decimal FinalFob { get; set; }
+    public string ApprovalStatus { get; set; } = CostingApprovalStatuses.Draft;
     public Order? Order { get; set; }
 }
 
@@ -147,6 +168,7 @@ public sealed class Sample : AuditableEntity
     public string? Remarks { get; set; }
     public Buyer? Buyer { get; set; }
     public Style? Style { get; set; }
+    public SampleCosting? Costing { get; set; }
 }
 
 public sealed class ShipmentPlan : AuditableEntity

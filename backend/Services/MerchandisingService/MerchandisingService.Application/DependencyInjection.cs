@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using MerchandisingService.Application.Common;
 
 namespace MerchandisingService.Application;
 
@@ -17,6 +18,7 @@ public static class DependencyInjection
         services.AddAutoMapper(cfg => cfg.AddProfile<MappingProfile>());
         services.AddScoped<IBomCalculationService, BomCalculationService>();
         services.AddScoped<ICostingCalculationService, CostingCalculationService>();
+        services.AddScoped<ITnaGenerationService, TnaGenerationService>();
         return services;
     }
 }

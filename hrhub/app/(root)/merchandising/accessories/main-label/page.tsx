@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import GenericAccessoryListPage from "@/components/merchandising/GenericAccessoryListPage"
-
-export default function MainLabelListPage() {
-    return <GenericAccessoryListPage title="Main Label" slug="main-label" />
+export default function MainLabelBookingRedirectPage() {
+    redirect("/merchandising/bookings?type=trims&subType=MainLabel")
 }

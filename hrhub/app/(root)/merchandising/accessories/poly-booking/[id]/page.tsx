@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import AccessoryProcurementMatrix from "@/components/merchandising/AccessoryProcurementMatrix"
-
-export default function PolyBookingDetailPage() {
-    return <AccessoryProcurementMatrix title="Poly Booking" accessoryType="poly-booking" />
+export default function AccessoryDetailRedirectPage() {
+    redirect("/merchandising/bookings")
 }

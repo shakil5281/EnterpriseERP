@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import GenericAccessoryListPage from "@/components/merchandising/GenericAccessoryListPage"
-
-export default function SolidTwillTapeListPage() {
-    return <GenericAccessoryListPage title="Solid Twill Tape" slug="solid-twill-tape" />
+export default function SolidTwillTapeBookingRedirectPage() {
+    redirect("/merchandising/bookings?type=trims&subType=SolidTwillTape")
 }

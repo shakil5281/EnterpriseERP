@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import GenericAccessoryListPage from "@/components/merchandising/GenericAccessoryListPage"
-
-export default function EyeletListPage() {
-    return <GenericAccessoryListPage title="Eyelet" slug="eyelet" />
+export default function EyeletBookingRedirectPage() {
+    redirect("/merchandising/bookings?type=trims&subType=Eyelet")
 }

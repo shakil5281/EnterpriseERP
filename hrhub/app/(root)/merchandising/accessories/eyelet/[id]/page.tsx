@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import AccessoryProcurementMatrix from "@/components/merchandising/AccessoryProcurementMatrix"
-
-export default function EyeletDetailPage() {
-    return <AccessoryProcurementMatrix title="Eyelet" accessoryType="eyelet" />
+export default function AccessoryDetailRedirectPage() {
+    redirect("/merchandising/bookings")
 }

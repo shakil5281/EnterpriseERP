@@ -1,11 +1,13 @@
 using System.Text;
 using FluentValidation.AspNetCore;
+using Erp.BuildingBlocks.CommonSecurity;
+using MerchandisingService.API.Authorization;
 using MerchandisingService.API.Middleware;
 using MerchandisingService.Application;
-using MerchandisingService.Domain;
 using MerchandisingService.Infrastructure;
 using MerchandisingService.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -19,6 +21,7 @@ builder.Host.UseSerilog((_, cfg) => cfg.WriteTo.Console());
 
 builder.Services.AddMerchandisingApplication();
 builder.Services.AddMerchandisingInfrastructure(builder.Configuration);
+builder.Services.AddEnterpriseTenantSecurity(builder.Configuration);
 builder.Services.AddControllers();
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddEndpointsApiExplorer();
@@ -64,20 +67,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy(MerchandisingPermissions.BuyerManage, p => p.RequireRole(MerchandisingRoles.SuperAdmin, MerchandisingRoles.GroupAdmin, MerchandisingRoles.CompanyAdmin, MerchandisingRoles.MerchandisingManager));
-    options.AddPolicy(MerchandisingPermissions.StyleManage, p => p.RequireRole(MerchandisingRoles.SuperAdmin, MerchandisingRoles.CompanyAdmin, MerchandisingRoles.MerchandisingManager, MerchandisingRoles.Merchandiser));
-    options.AddPolicy(MerchandisingPermissions.OrderCreate, p => p.RequireRole(MerchandisingRoles.SuperAdmin, MerchandisingRoles.CompanyAdmin, MerchandisingRoles.MerchandisingManager, MerchandisingRoles.Merchandiser));
-    options.AddPolicy(MerchandisingPermissions.OrderUpdate, p => p.RequireRole(MerchandisingRoles.SuperAdmin, MerchandisingRoles.CompanyAdmin, MerchandisingRoles.MerchandisingManager, MerchandisingRoles.Merchandiser));
-    options.AddPolicy(MerchandisingPermissions.OrderConfirm, p => p.RequireRole(MerchandisingRoles.SuperAdmin, MerchandisingRoles.CompanyAdmin, MerchandisingRoles.MerchandisingManager));
-    options.AddPolicy(MerchandisingPermissions.OrderCancel, p => p.RequireRole(MerchandisingRoles.SuperAdmin, MerchandisingRoles.CompanyAdmin, MerchandisingRoles.MerchandisingManager));
-    options.AddPolicy(MerchandisingPermissions.BomManage, p => p.RequireRole(MerchandisingRoles.SuperAdmin, MerchandisingRoles.CompanyAdmin, MerchandisingRoles.MerchandisingManager, MerchandisingRoles.Merchandiser, MerchandisingRoles.StoreManager));
-    options.AddPolicy(MerchandisingPermissions.CostingManage, p => p.RequireRole(MerchandisingRoles.SuperAdmin, MerchandisingRoles.CompanyAdmin, MerchandisingRoles.MerchandisingManager, MerchandisingRoles.CostingOfficer));
-    options.AddPolicy(MerchandisingPermissions.SampleManage, p => p.RequireRole(MerchandisingRoles.SuperAdmin, MerchandisingRoles.CompanyAdmin, MerchandisingRoles.MerchandisingManager, MerchandisingRoles.Merchandiser));
-    options.AddPolicy(MerchandisingPermissions.ShipmentPlanManage, p => p.RequireRole(MerchandisingRoles.SuperAdmin, MerchandisingRoles.CompanyAdmin, MerchandisingRoles.MerchandisingManager, MerchandisingRoles.Merchandiser));
-    options.AddPolicy(MerchandisingPermissions.ReportView, p => p.RequireRole(MerchandisingRoles.SuperAdmin, MerchandisingRoles.CompanyAdmin, MerchandisingRoles.MerchandisingManager, MerchandisingRoles.Auditor, MerchandisingRoles.Viewer));
-});
+builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionAuthorizationPolicyProvider>();
+builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+builder.Services.AddAuthorization();
 
 builder.Services.AddCors(options =>
 {
@@ -94,6 +86,7 @@ app.UseSwagger();
 app.UseSwaggerUI(o => o.SwaggerEndpoint("/swagger/v1/swagger.json", "Merchandising v1"));
 app.UseCors("default");
 app.UseAuthentication();
+app.UseEnterpriseTenantSecurity();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health");

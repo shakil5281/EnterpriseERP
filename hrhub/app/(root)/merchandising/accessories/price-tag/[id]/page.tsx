@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import AccessoryProcurementMatrix from "@/components/merchandising/AccessoryProcurementMatrix"
-
-export default function PriceTagDetailPage() {
-    return <AccessoryProcurementMatrix title="Price Tag" accessoryType="price-tag" />
+export default function AccessoryDetailRedirectPage() {
+    redirect("/merchandising/bookings")
 }

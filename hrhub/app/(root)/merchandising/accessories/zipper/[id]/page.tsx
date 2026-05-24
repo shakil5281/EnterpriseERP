@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import AccessoryProcurementMatrix from "@/components/merchandising/AccessoryProcurementMatrix"
-
-export default function ZipperDetailPage() {
-    return <AccessoryProcurementMatrix title="Zipper" accessoryType="zipper" />
+export default function AccessoryDetailRedirectPage() {
+    redirect("/merchandising/bookings")
 }

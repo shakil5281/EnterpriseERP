@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import GenericAccessoryListPage from "@/components/merchandising/GenericAccessoryListPage"
-
-export default function DrawstringListPage() {
-    return <GenericAccessoryListPage title="Drawstring" slug="drawstring" />
+export default function DrawstringBookingRedirectPage() {
+    redirect("/merchandising/bookings?type=trims&subType=Drawstring")
 }

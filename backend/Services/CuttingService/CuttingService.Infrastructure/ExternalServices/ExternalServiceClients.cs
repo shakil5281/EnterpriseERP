@@ -9,12 +9,12 @@ public sealed class MerchandisingServiceClient(HttpClient httpClient) : IMerchan
 {
     public async Task<OrderSnapshot?> GetOrderAsync(Guid companyId, Guid orderId, CancellationToken cancellationToken = default)
     {
-        try { return await httpClient.GetFromJsonAsync<OrderSnapshot>($"/api/orders/{orderId}?companyId={companyId}", cancellationToken); }
+        try { return await httpClient.GetFromJsonAsync<OrderSnapshot>($"/api/v1/merchandising/orders/{orderId}?companyId={companyId}", cancellationToken); }
         catch (HttpRequestException) { return new OrderSnapshot(orderId, companyId, Guid.Empty, "LOCAL", 1000, "Confirmed"); }
     }
     public async Task<IReadOnlyList<OrderColorSizeBreakdownSnapshot>> GetOrderColorSizeBreakdownAsync(Guid companyId, Guid orderId, CancellationToken cancellationToken = default)
     {
-        try { return await httpClient.GetFromJsonAsync<IReadOnlyList<OrderColorSizeBreakdownSnapshot>>($"/api/orders/{orderId}/color-size-breakdown?companyId={companyId}", cancellationToken) ?? []; }
+        try { return await httpClient.GetFromJsonAsync<IReadOnlyList<OrderColorSizeBreakdownSnapshot>>($"/api/v1/merchandising/orders/{orderId}/color-size-breakdown?companyId={companyId}", cancellationToken) ?? []; }
         catch (HttpRequestException) { return [new OrderColorSizeBreakdownSnapshot("Black", "M", 1000)]; }
     }
     public async Task<bool> IsOrderConfirmedAsync(Guid companyId, Guid orderId, CancellationToken cancellationToken = default)

@@ -59,6 +59,10 @@
     <Project Path="Services/HRService/HRService.Infrastructure/HRService.Infrastructure.csproj" />
     <Project Path="Services/HRService/HRService.Tests/HRService.Tests.csproj" />
   </Folder>
+  <Folder Name="/Services/ProductionPlanningService/">
+    <Project Path="Services/ProductionPlanningService/ProductionPlanningService.API/ProductionPlanningService.API.csproj" />
+    <Project Path="Services/ProductionPlanningService/ProductionPlanningService.Domain/ProductionPlanningService.Domain.csproj" />
+  </Folder>
   <Folder Name="/Services/MerchandisingService/">
     <Project Path="Services/MerchandisingService/MerchandisingService.API/MerchandisingService.API.csproj" />
     <Project Path="Services/MerchandisingService/MerchandisingService.Application/MerchandisingService.Application.csproj" />
@@ -66,6 +70,20 @@
     <Project Path="Services/MerchandisingService/MerchandisingService.Domain/MerchandisingService.Domain.csproj" />
     <Project Path="Services/MerchandisingService/MerchandisingService.Infrastructure/MerchandisingService.Infrastructure.csproj" />
     <Project Path="Services/MerchandisingService/MerchandisingService.Tests/MerchandisingService.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Services/ProcurementService/">
+    <Project Path="Services/ProcurementService/ProcurementService.API/ProcurementService.API.csproj" />
+    <Project Path="Services/ProcurementService/ProcurementService.Application/ProcurementService.Application.csproj" />
+    <Project Path="Services/ProcurementService/ProcurementService.Contracts/ProcurementService.Contracts.csproj" />
+    <Project Path="Services/ProcurementService/ProcurementService.Domain/ProcurementService.Domain.csproj" />
+    <Project Path="Services/ProcurementService/ProcurementService.Infrastructure/ProcurementService.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/Services/InventoryService/">
+    <Project Path="Services/InventoryService/InventoryService.API/InventoryService.API.csproj" />
+    <Project Path="Services/InventoryService/InventoryService.Application/InventoryService.Application.csproj" />
+    <Project Path="Services/InventoryService/InventoryService.Contracts/InventoryService.Contracts.csproj" />
+    <Project Path="Services/InventoryService/InventoryService.Domain/InventoryService.Domain.csproj" />
+    <Project Path="Services/InventoryService/InventoryService.Infrastructure/InventoryService.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/Services/MicroserviceShells/">
     <Project Path="Services/MicroserviceShells/Erp.Shift.Shell/Erp.Shift.Shell.csproj" />

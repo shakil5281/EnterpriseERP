@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import GenericAccessoryListPage from "@/components/merchandising/GenericAccessoryListPage"
-
-export default function ZipperListPage() {
-    return <GenericAccessoryListPage title="Zipper" slug="zipper" />
+export default function ZipperBookingRedirectPage() {
+    redirect("/merchandising/bookings?type=trims&subType=Zipper")
 }

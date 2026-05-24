@@ -21,7 +21,7 @@ public static class DependencyInjection
         else
         {
             var connectionString = configuration.GetConnectionString("SecurityDb") ?? configuration.GetConnectionString("DefaultConnection")
-                ?? "Server=unity3\\SQLEXPRESS;Database=SecurityServiceDB;Trusted_Connection=True;TrustServerCertificate=True;";
+                ?? "Server=localhost;Database=SecurityServiceDB;Trusted_Connection=True;TrustServerCertificate=True;";
             services.AddDbContext<SecurityDbContext>(options => options.UseSqlServer(connectionString, sql => sql.MigrationsAssembly(typeof(SecurityDbContext).Assembly.FullName)));
         }
 

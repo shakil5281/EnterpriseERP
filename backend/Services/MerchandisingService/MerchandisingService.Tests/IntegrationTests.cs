@@ -24,7 +24,7 @@ public sealed class IntegrationTests
         await using var factory = new MerchandisingApiFactory();
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync($"/api/buyers?companyId={Guid.NewGuid()}");
+        var response = await client.GetAsync($"/api/v1/merchandising/buyers?companyId={Guid.NewGuid()}");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

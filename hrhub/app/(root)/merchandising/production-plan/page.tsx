@@ -12,19 +12,20 @@ import {
 import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
-import { merchandisingService, StyleOrder } from "@/lib/services/merchandising"
+import { merchandisingService } from "@/lib/services/merchandising"
+import type { Order } from "@/lib/types/merchandising"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Card, CardContent } from "@/components/ui/card"
 
 export default function ProductionPlanningPage() {
-    const [orders, setOrders] = React.useState<StyleOrder[]>([])
+    const [orders, setOrders] = React.useState<Order[]>([])
     const [loading, setLoading] = React.useState(true)
 
     const fetchData = React.useCallback(async () => {
         try {
             setLoading(true)
-            const data = await merchandisingService.getOrders(1)
+            const data = await merchandisingService.getOrders()
             setOrders(data)
         } catch (error) {
             console.error(error)
@@ -38,7 +39,7 @@ export default function ProductionPlanningPage() {
         fetchData()
     }, [fetchData])
 
-    const columns: ColumnDef<StyleOrder>[] = [
+    const columns: ColumnDef<Order>[] = [
         {
             id: "sl",
             header: "SL",
@@ -46,19 +47,19 @@ export default function ProductionPlanningPage() {
         },
         {
             id: "styleNumber",
-            accessorKey: "style.styleNumber",
-            header: "Style Number",
-            cell: ({ row }) => <span className="font-bold tracking-tight text-foreground uppercase">{row.original.style?.styleNumber || "N/A"}</span>
+            accessorKey: "orderNo",
+            header: "Order No",
+            cell: ({ row }) => <span className="font-bold tracking-tight text-foreground uppercase">{row.original.orderNo}</span>
         },
         {
-            accessorKey: "poNumber",
-            header: "PO Number",
-            cell: ({ row }) => <span className="font-bold text-indigo-600 dark:text-indigo-400 underline underline-offset-2">{row.original.poNumber}</span>
+            accessorKey: "orderStatus",
+            header: "Status",
+            cell: ({ row }) => <span className="font-bold text-indigo-600 dark:text-indigo-400">{row.original.orderStatus}</span>
         },
         {
-            accessorKey: "orderQuantity",
+            accessorKey: "totalOrderQty",
             header: "Target Qty",
-            cell: ({ row }) => <span className="font-bold text-foreground tabular-nums">{row.original.orderQuantity.toLocaleString()} PCS</span>
+            cell: ({ row }) => <span className="font-bold text-foreground tabular-nums">{row.original.totalOrderQty.toLocaleString()} PCS</span>
         },
         {
             id: "line",

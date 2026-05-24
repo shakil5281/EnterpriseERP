@@ -13,19 +13,20 @@ import {
 import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
-import { merchandisingService, StyleOrder } from "@/lib/services/merchandising"
+import { merchandisingService } from "@/lib/services/merchandising"
+import type { Order } from "@/lib/types/merchandising"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Card, CardContent } from "@/components/ui/card"
 
 export default function PaymentSheetPage() {
-    const [orders, setOrders] = React.useState<StyleOrder[]>([])
+    const [orders, setOrders] = React.useState<Order[]>([])
     const [loading, setLoading] = React.useState(true)
 
     const fetchData = React.useCallback(async () => {
         try {
             setLoading(true)
-            const data = await merchandisingService.getOrders(1)
+            const data = await merchandisingService.getOrders()
             setOrders(data)
         } catch (error) {
             console.error(error)
@@ -39,7 +40,7 @@ export default function PaymentSheetPage() {
         fetchData()
     }, [fetchData])
 
-    const columns: ColumnDef<StyleOrder>[] = [
+    const columns: ColumnDef<Order>[] = [
         {
             id: "sl",
             header: "SL",
@@ -52,9 +53,9 @@ export default function PaymentSheetPage() {
         },
         {
             id: "styleRef",
-            accessorKey: "style.styleNumber",
-            header: "Style Ref",
-            cell: ({ row }) => <span className="font-bold text-indigo-600 dark:text-indigo-400 underline underline-offset-2">{row.original.style?.styleNumber || "N/A"}</span>
+            accessorKey: "orderNo",
+            header: "Order Ref",
+            cell: ({ row }) => <span className="font-bold text-indigo-600 dark:text-indigo-400 underline underline-offset-2">{row.original.orderNo}</span>
         },
         {
             id: "bank",
@@ -69,7 +70,7 @@ export default function PaymentSheetPage() {
         {
             id: "value",
             header: "Invoice Value",
-            cell: ({ row }) => <span className="font-bold text-foreground tabular-nums">${(row.original.orderQuantity * 8.5).toLocaleString()}</span>
+            cell: ({ row }) => <span className="font-bold text-foreground tabular-nums">${row.original.totalValue.toLocaleString()}</span>
         },
         {
             id: "status",
@@ -96,7 +97,7 @@ export default function PaymentSheetPage() {
             header: "Realized Funds",
             cell: ({ row }) => (
                 <span className="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                    ${(row.index % 3 === 0 ? row.original.orderQuantity * 8.5 : row.original.orderQuantity * 4.2).toLocaleString()}
+                    ${((row.index % 3 === 0 ? row.original.totalOrderQty * 8.5 : row.original.totalOrderQty * 4.2)).toLocaleString()}
                 </span>
             )
         }

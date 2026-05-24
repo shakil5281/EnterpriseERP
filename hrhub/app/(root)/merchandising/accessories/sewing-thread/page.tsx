@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import GenericAccessoryListPage from "@/components/merchandising/GenericAccessoryListPage"
-
-export default function SewingThreadListPage() {
-    return <GenericAccessoryListPage title="Sewing Thread" slug="sewing-thread" />
+export default function SewingThreadBookingRedirectPage() {
+    redirect("/merchandising/bookings?type=trims&subType=SewingThread")
 }

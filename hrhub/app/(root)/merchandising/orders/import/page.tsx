@@ -15,50 +15,67 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { merchandisingService } from "@/lib/services/merchandising"
+import type { OrderImportPreviewDto, OrderImportRowDto } from "@/lib/types/merchandising"
+import { getActiveCompanyHeaderValue } from "@/lib/active-company-storage"
 import { toast } from "sonner"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
+import * as XLSX from "xlsx"
 
-interface ImportSummary {
-    total: number;
-    valid: number;
-    invalid: number;
+function parseImportRows(file: File): Promise<OrderImportRowDto[]> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+            try {
+                const data = e.target?.result
+                const workbook = XLSX.read(data, { type: "array" })
+                const sheet = workbook.Sheets[workbook.SheetNames[0]]
+                const json = XLSX.utils.sheet_to_json<Record<string, string | number>>(sheet, { defval: "" })
+                const rows: OrderImportRowDto[] = json.map((row) => ({
+                    orderNo: String(row.OrderNo ?? row.orderNo ?? "").trim(),
+                    buyerCode: String(row.BuyerCode ?? row.buyerCode ?? "").trim(),
+                    styleNo: String(row.StyleNo ?? row.styleNo ?? "").trim(),
+                    orderDate: String(row.OrderDate ?? row.orderDate ?? "").trim(),
+                    shipmentDate: String(row.ShipmentDate ?? row.shipmentDate ?? "").trim() || undefined,
+                    totalQty: Number(row.TotalQty ?? row.totalQty ?? 0),
+                    unitPrice: Number(row.UnitPrice ?? row.unitPrice ?? 0),
+                    currency: String(row.Currency ?? row.currency ?? "USD").trim(),
+                    colorName: String(row.ColorName ?? row.colorName ?? "").trim(),
+                    sizeName: String(row.SizeName ?? row.sizeName ?? "").trim(),
+                    quantity: Number(row.Quantity ?? row.quantity ?? 0),
+                }))
+                resolve(rows.filter(r => r.orderNo))
+            } catch (err) {
+                reject(err)
+            }
+        }
+        reader.onerror = reject
+        reader.readAsArrayBuffer(file)
+    })
 }
 
 export default function OrderImportPage() {
     const router = useRouter()
     const [file, setFile] = React.useState<File | null>(null)
-    const [previewData, setPreviewData] = React.useState<any>(null)
+    const [previewData, setPreviewData] = React.useState<OrderImportPreviewDto | null>(null)
     const [loading, setLoading] = React.useState(false)
     const [importing, setImporting] = React.useState(false)
-    const [summary, setSummary] = React.useState<ImportSummary | null>(null)
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
+        if (e.target.files?.[0]) {
             setFile(e.target.files[0])
             setPreviewData(null)
-            setSummary(null)
         }
     }
 
     const handleUploadPreview = async () => {
         if (!file) {
-            toast.error("Please select an Excel file")
+            toast.error("Please select a file")
             return
         }
-
         try {
             setLoading(true)
-            const data = await merchandisingService.previewProgramOrder(file)
+            const data = await merchandisingService.previewOrderImport(file)
             setPreviewData(data)
-
-            const total = data.orders.length
-            const valid = data.orders.filter((r: any) => r.isValid).length
-            setSummary({
-                total: total,
-                valid: valid,
-                invalid: total - valid
-            })
             toast.success("File analyzed successfully")
         } catch (error) {
             console.error(error)
@@ -69,11 +86,26 @@ export default function OrderImportPage() {
     }
 
     const handleConfirmImport = async () => {
-        if (!previewData || previewData.orders.length === 0) return;
-
+        if (!file || !previewData) return
+        const companyId = getActiveCompanyHeaderValue()
+        if (!companyId) {
+            toast.error("No active company selected")
+            return
+        }
         try {
             setImporting(true)
-            await merchandisingService.importProgramOrders(previewData, 1, 1)
+            const allRows = await parseImportRows(file)
+            const validKeys = new Set(
+                previewData.rows.filter(r => r.isValid).map(r => `${r.orderNo}|${r.buyerCode}|${r.styleNo}|${r.colorName}|${r.sizeName}`)
+            )
+            const rowsToImport = allRows.filter(r =>
+                validKeys.has(`${r.orderNo}|${r.buyerCode}|${r.styleNo}|${r.colorName}|${r.sizeName}`)
+            )
+            if (rowsToImport.length === 0) {
+                toast.error("No valid rows to import")
+                return
+            }
+            await merchandisingService.importOrders({ companyId, rows: rowsToImport })
             toast.success("Orders imported successfully")
             router.push("/merchandising/orders")
         } catch (error) {
@@ -86,37 +118,25 @@ export default function OrderImportPage() {
 
     return (
         <div className="flex flex-col py-0 bg-background min-h-screen">
-            {/* Top Action Bar - Sticky */}
-            <div className="sticky top-0 z-50 bg-background/90 backdrop-blur-lg border-b border-border px-4 lg:px-8 py-3 mb-6 transition-all shadow-sm">
+            <div className="sticky top-0 z-50 bg-background/90 backdrop-blur-lg border-b px-4 lg:px-8 py-3 mb-6">
                 <div className="flex items-center justify-between max-w-[1600px] mx-auto">
                     <div className="flex items-center gap-4">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 text-muted-foreground hover:text-foreground transition-colors"
-                            onClick={() => router.push("/merchandising/orders")}
-                        >
+                        <Button variant="ghost" size="icon" onClick={() => router.push("/merchandising/orders")}>
                             <IconArrowLeft className="size-5" />
                         </Button>
                         <div>
-                            <h1 className="text-xl font-bold text-foreground tracking-tight leading-none">
-                                Bulk Order Import
-                            </h1>
-                            <p className="text-[11px] font-medium text-muted-foreground mt-1">Batch process production programs</p>
+                            <h1 className="text-xl font-bold">Bulk Order Import</h1>
+                            <p className="text-[11px] text-muted-foreground">CSV or Excel order import</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <Button variant="outline" onClick={() => merchandisingService.downloadOrderTemplate()} className="h-10 px-4 font-bold bg-card border-border hover:bg-muted text-foreground rounded-xl">
+                        <Button variant="outline" onClick={() => merchandisingService.downloadOrderImportTemplate()}>
                             <IconDownload className="mr-2 size-4" /> Download Template
                         </Button>
                         {previewData && (
-                            <Button
-                                disabled={importing || (summary?.valid || 0) === 0}
-                                onClick={handleConfirmImport}
-                                className="h-10 px-8 font-bold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-lg transition-all active:scale-95"
-                            >
+                            <Button disabled={importing || previewData.validCount === 0} onClick={handleConfirmImport}>
                                 {importing ? <IconLoader2 className="animate-spin mr-2 size-4" /> : <IconTableImport className="mr-2 size-4" />}
-                                Import {summary?.valid} Records
+                                Import {previewData.validCount} Rows
                             </Button>
                         )}
                     </div>
@@ -124,109 +144,71 @@ export default function OrderImportPage() {
             </div>
 
             <div className="flex flex-col gap-6 px-4 lg:px-8 max-w-[1600px] mx-auto w-full pb-10">
-
                 {!previewData ? (
-                    <Card className="border-2 border-dashed border-border bg-card shadow-none mt-4">
+                    <Card className="border-2 border-dashed mt-4">
                         <CardContent className="flex flex-col items-center justify-center py-20">
-                            <div className="p-4 bg-muted rounded-full text-muted-foreground mb-6 font-bold uppercase tracking-widest text-[10px]">
-                                <IconFileUpload size={40} />
-                            </div>
-                            <h2 className="text-lg font-bold text-foreground">Choose Excel File</h2>
-                            <p className="text-muted-foreground text-xs mt-1 mb-8">Supported: .xlsx, .xls</p>
-
-                            <input type="file" accept=".xlsx, .xls" className="hidden" id="excel-upload" onChange={handleFileChange} />
-                            <div className="flex flex-col items-center gap-4">
-                                <label htmlFor="excel-upload">
-                                    <Button asChild variant="outline" className="h-10 px-8 font-semibold cursor-pointer">
-                                        <span>{file ? file.name : "Browse Files"}</span>
-                                    </Button>
-                                </label>
-                                {file && (
-                                    <Button
-                                        onClick={handleUploadPreview}
-                                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-10 px-10"
-                                        disabled={loading}
-                                    >
-                                        {loading ? <IconLoader2 className="animate-spin mr-2" /> : <IconFileSpreadsheet className="mr-2" />}
-                                        Analyze File
-                                    </Button>
-                                )}
-                            </div>
+                            <IconFileUpload size={40} className="mb-6 text-muted-foreground" />
+                            <h2 className="text-lg font-bold">Choose Import File</h2>
+                            <p className="text-muted-foreground text-xs mt-1 mb-8">Supported: .csv, .xlsx, .xls</p>
+                            <input type="file" accept=".csv,.xlsx,.xls" className="hidden" id="excel-upload" onChange={handleFileChange} />
+                            <label htmlFor="excel-upload">
+                                <Button asChild variant="outline"><span>{file ? file.name : "Browse Files"}</span></Button>
+                            </label>
+                            {file && (
+                                <Button onClick={handleUploadPreview} className="mt-4" disabled={loading}>
+                                    {loading ? <IconLoader2 className="animate-spin mr-2" /> : <IconFileSpreadsheet className="mr-2" />}
+                                    Analyze File
+                                </Button>
+                            )}
                         </CardContent>
                     </Card>
                 ) : (
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="bg-card p-4 rounded-xl border border-border shadow-sm">
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase">Total Rows</p>
-                                <p className="text-xl font-bold text-foreground mt-0.5">{summary?.total}</p>
-                            </div>
-                            <div className="bg-card p-4 rounded-xl border border-border shadow-sm">
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase">Valid Rows</p>
-                                <p className="text-xl font-bold text-green-600 mt-0.5">{summary?.valid}</p>
-                            </div>
-                            <div className="bg-card p-4 rounded-xl border border-border shadow-sm text-red-600">
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase">Invalid Rows</p>
-                                <p className="text-xl font-bold mt-0.5">{summary?.invalid}</p>
-                            </div>
+                            <StatCard label="Total Rows" value={previewData.totalCount} />
+                            <StatCard label="Valid Rows" value={previewData.validCount} className="text-green-600" />
+                            <StatCard label="Invalid Rows" value={previewData.invalidCount} className="text-red-600" />
                         </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-primary/5 p-4 rounded-xl border border-primary/10">
-                                <p className="text-[10px] font-bold text-primary uppercase">Styles to Sync</p>
-                                <p className="text-xl font-bold text-primary mt-0.5">{previewData.styles?.length || 0}</p>
-                            </div>
-                            <div className="bg-orange-500/5 p-4 rounded-xl border border-orange-500/10">
-                                <p className="text-[10px] font-bold text-orange-600 uppercase">Colors to Sync</p>
-                                <p className="text-xl font-bold text-orange-600 mt-0.5">{previewData.colors?.length || 0}</p>
-                            </div>
-                        </div>
-
-                        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-                            <div className="p-4 border-b border-border bg-muted/50 flex items-center justify-between">
-                                <h3 className="text-sm font-bold text-foreground">Order Validation Preview</h3>
-                                <Button variant="ghost" size="sm" onClick={() => { setPreviewData(null); setFile(null); setSummary(null) }} className="text-xs text-muted-foreground hover:text-red-500">Reset</Button>
+                        <div className="bg-card rounded-xl border overflow-hidden">
+                            <div className="p-4 border-b bg-muted/50 flex justify-between">
+                                <h3 className="text-sm font-bold">Validation Preview</h3>
+                                <Button variant="ghost" size="sm" onClick={() => { setPreviewData(null); setFile(null); }}>Reset</Button>
                             </div>
                             <div className="overflow-x-auto max-h-[500px]">
                                 <table className="w-full text-xs text-left">
-                                    <thead className="bg-muted/30 border-b border-border sticky top-0">
+                                    <thead className="bg-muted/30 border-b sticky top-0">
                                         <tr>
-                                            <th className="p-3 w-12 text-center"></th>
-                                            <th className="p-3 font-bold text-muted-foreground uppercase text-[10px]">Program#</th>
-                                            <th className="p-3 font-bold text-muted-foreground uppercase text-[10px]">Season</th>
-                                            <th className="p-3 font-bold text-muted-foreground uppercase text-[10px]">Buyer</th>
-                                            <th className="p-3 font-bold text-muted-foreground uppercase text-[10px]">Article#</th>
-                                            <th className="p-3 font-bold text-muted-foreground uppercase text-[10px]">Color</th>
-                                            <th className="p-3 font-bold text-muted-foreground uppercase text-[10px] text-center">Qty</th>
-                                            <th className="p-3 font-bold text-muted-foreground uppercase text-[10px]">Status / Error</th>
+                                            <th className="p-3 w-12" />
+                                            <th className="p-3 font-bold uppercase text-[10px]">Order No</th>
+                                            <th className="p-3 font-bold uppercase text-[10px]">Buyer</th>
+                                            <th className="p-3 font-bold uppercase text-[10px]">Style</th>
+                                            <th className="p-3 font-bold uppercase text-[10px]">Color</th>
+                                            <th className="p-3 font-bold uppercase text-[10px]">Size</th>
+                                            <th className="p-3 font-bold uppercase text-[10px] text-center">Qty</th>
+                                            <th className="p-3 font-bold uppercase text-[10px]">Status</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-border">
-                                        {previewData.orders.map((row: any, idx: number) => {
-                                            const qty = row.sizeM + row.sizeL + row.sizeXL + row.sizeXXL + row.sizeXXXL + row.size3XL + row.size4XL + row.size5XL + row.size6XL;
-                                            return (
-                                                <tr key={idx} className={`hover:bg-muted/30 ${!row.isValid ? 'bg-red-500/10' : ''}`}>
-                                                    <td className="p-3 text-center">
-                                                        {row.isValid ? <IconCheck className="text-green-600 size-4 mx-auto" /> : <IconX className="text-red-600 size-4 mx-auto" />}
-                                                    </td>
-                                                    <td className="p-3 font-bold text-foreground">{row.programNumber}</td>
-                                                    <td className="p-3 text-muted-foreground uppercase text-[10px] font-bold">{row.programName}</td>
-                                                    <td className="p-3 text-muted-foreground uppercase text-[10px] font-bold">{row.buyerName}</td>
-                                                    <td className="p-3 font-mono text-[10px]">{row.newArticleNo}</td>
-                                                    <td className="p-3 font-medium text-foreground">{row.color}</td>
-                                                    <td className="p-3 text-center font-bold">{qty.toLocaleString()}</td>
-                                                    <td className="p-3">
-                                                        {!row.isValid ? (
-                                                            <div className="flex items-center gap-1.5 text-red-600 font-medium">
-                                                                <IconAlertCircle size={12} /> {row.errorMessage}
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-green-600 font-bold uppercase text-[9px]">Valid</span>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            )
-                                        })}
+                                    <tbody className="divide-y">
+                                        {previewData.rows.map((row, idx) => (
+                                            <tr key={idx} className={!row.isValid ? "bg-red-500/10" : ""}>
+                                                <td className="p-3 text-center">
+                                                    {row.isValid ? <IconCheck className="text-green-600 size-4 mx-auto" /> : <IconX className="text-red-600 size-4 mx-auto" />}
+                                                </td>
+                                                <td className="p-3 font-bold">{row.orderNo}</td>
+                                                <td className="p-3">{row.buyerCode}</td>
+                                                <td className="p-3 font-mono">{row.styleNo}</td>
+                                                <td className="p-3">{row.colorName}</td>
+                                                <td className="p-3">{row.sizeName}</td>
+                                                <td className="p-3 text-center font-bold">{row.quantity}</td>
+                                                <td className="p-3">
+                                                    {!row.isValid ? (
+                                                        <span className="flex items-center gap-1 text-red-600"><IconAlertCircle size={12} />{row.errorMessage}</span>
+                                                    ) : (
+                                                        <span className="text-green-600 font-bold uppercase text-[9px]">Valid</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
                                     </tbody>
                                 </table>
                             </div>
@@ -234,6 +216,15 @@ export default function OrderImportPage() {
                     </div>
                 )}
             </div>
+        </div>
+    )
+}
+
+function StatCard({ label, value, className }: { label: string; value: number; className?: string }) {
+    return (
+        <div className="bg-card p-4 rounded-xl border shadow-sm">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase">{label}</p>
+            <p className={`text-xl font-bold mt-0.5 ${className ?? ""}`}>{value}</p>
         </div>
     )
 }

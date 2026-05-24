@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import GenericAccessoryListPage from "@/components/merchandising/GenericAccessoryListPage"
-
-export default function SnapButtonListPage() {
-    return <GenericAccessoryListPage title="Snap Button" slug="snap-button" />
+export default function SnapButtonBookingRedirectPage() {
+    redirect("/merchandising/bookings?type=trims&subType=SnapButton")
 }

@@ -1,7 +1,5 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import GenericAccessoryListPage from "@/components/merchandising/GenericAccessoryListPage"
-
-export default function PriceTagListPage() {
-    return <GenericAccessoryListPage title="Price Tag" slug="price-tag" />
+export default function PriceTagBookingRedirectPage() {
+    redirect("/merchandising/bookings?type=trims&subType=PriceTag")
 }

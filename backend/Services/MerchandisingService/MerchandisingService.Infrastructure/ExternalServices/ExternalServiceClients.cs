@@ -24,7 +24,7 @@ public sealed class InventoryServiceClient(HttpClient httpClient) : IInventorySe
     {
         try
         {
-            return await httpClient.GetFromJsonAsync<bool>($"/api/inventory/items/{itemId}/exists?companyId={companyId}", cancellationToken);
+            return await httpClient.GetFromJsonAsync<bool>($"/api/v1/inventory/items/{itemId}/exists?companyId={companyId}", cancellationToken);
         }
         catch (HttpRequestException)
         {
@@ -36,7 +36,7 @@ public sealed class InventoryServiceClient(HttpClient httpClient) : IInventorySe
     {
         try
         {
-            return await httpClient.GetFromJsonAsync<decimal>($"/api/inventory/items/{itemId}/stock-balance?companyId={companyId}", cancellationToken);
+            return await httpClient.GetFromJsonAsync<decimal>($"/api/v1/inventory/items/{itemId}/stock-balance?companyId={companyId}", cancellationToken);
         }
         catch (HttpRequestException)
         {
@@ -51,7 +51,20 @@ public sealed class ProcurementServiceClient(HttpClient httpClient) : IProcureme
     {
         try
         {
-            var response = await httpClient.PostAsJsonAsync("/api/purchase-requisitions/from-bom", new { companyId, orderId }, cancellationToken);
+            var response = await httpClient.PostAsJsonAsync("/api/v1/procurement/requisitions/from-bom", new { companyId, orderId }, cancellationToken);
+            return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<Guid>(cancellationToken) : null;
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
+    }
+
+    public async Task<Guid?> CreatePurchaseOrderFromRequisitionAsync(Guid companyId, Guid requisitionId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await httpClient.PostAsJsonAsync($"/api/v1/procurement/requisitions/{requisitionId}/create-po", new { companyId }, cancellationToken);
             return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<Guid>(cancellationToken) : null;
         }
         catch (HttpRequestException)
