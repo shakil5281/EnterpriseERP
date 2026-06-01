@@ -2,7 +2,7 @@
   "profiles": {
     "ProductionPlanningService.API": {
       "commandName": "Project",
-      "applicationUrl": "http://localhost:5042",
+      "applicationUrl": "http://127.0.0.1:5043",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }

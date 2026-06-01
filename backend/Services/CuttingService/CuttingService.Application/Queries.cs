@@ -1,7 +1,16 @@
 using CuttingService.Contracts;
+using Erp.BuildingBlocks.Contracts.Pagination;
 using MediatR;
 
 namespace CuttingService.Application;
+
+public sealed class CuttingBundleListQuery : PagedRequest
+{
+    public Guid CompanyId { get; set; }
+    public Guid? OrderId { get; set; }
+    public Guid? PlanId { get; set; }
+    public string? Status { get; set; }
+}
 
 public sealed record GetCuttingPlansQuery(Guid CompanyId, Guid? OrderId, string? Status) : IRequest<IReadOnlyList<CuttingPlanDto>>;
 public sealed record GetCuttingPlanByIdQuery(Guid Id) : IRequest<CuttingPlanDto>;
@@ -17,3 +26,6 @@ public sealed record GetCuttingBalancesQuery(Guid CompanyId, Guid OrderId) : IRe
 public sealed record GetCuttingPanelTransfersQuery(Guid CompanyId, Guid? OrderId) : IRequest<IReadOnlyList<CuttingPanelTransferDto>>;
 public sealed record GetCuttingPanelTransferByIdQuery(Guid Id) : IRequest<CuttingPanelTransferDto>;
 public sealed record GetCuttingReportQuery(Guid CompanyId, Guid? OrderId, string ReportType, DateOnly? FromDate, DateOnly? ToDate) : IRequest<IReadOnlyList<CuttingReportRowDto>>;
+public sealed record GetCuttingBundlesQuery(CuttingBundleListQuery Query) : IRequest<PaginatedList<CuttingBundleDto>>;
+public sealed record GetCuttingBundleSummaryQuery(Guid CompanyId, string? Status) : IRequest<CuttingBundleSummaryDto>;
+public sealed record GetCuttingBundleByIdQuery(Guid Id) : IRequest<CuttingBundleDto>;

@@ -51,10 +51,20 @@ public sealed class BuyersController(IMediator mediator) : ControllerBase
     public async Task<ActionResult<ApiResponse<BuyerContactDto>>> CreateContact(CreateBuyerContactRequest request, CancellationToken cancellationToken) =>
         Ok(ApiResponse<BuyerContactDto>.Ok(await mediator.Send(new CreateBuyerContactCommand(request), cancellationToken), "Buyer contact created."));
 
+    [HttpGet("{buyerId:guid}/payment-terms")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<BuyerPaymentTermDto>>>> GetPaymentTerms(Guid buyerId, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<IReadOnlyList<BuyerPaymentTermDto>>.Ok(await mediator.Send(new GetBuyerPaymentTermsQuery(buyerId), cancellationToken)));
+
     [HttpPost("payment-terms")]
     [Authorize(Policy = MerchandisingPolicies.BuyerManage)]
     public async Task<ActionResult<ApiResponse<BuyerPaymentTermDto>>> CreatePaymentTerm(CreateBuyerPaymentTermRequest request, CancellationToken cancellationToken) =>
         Ok(ApiResponse<BuyerPaymentTermDto>.Ok(await mediator.Send(new CreateBuyerPaymentTermCommand(request), cancellationToken), "Buyer payment term created."));
+
+    [HttpGet("{buyerId:guid}/compliance-rules")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<BuyerComplianceRuleDto>>>> GetComplianceRules(Guid buyerId, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<IReadOnlyList<BuyerComplianceRuleDto>>.Ok(await mediator.Send(new GetBuyerComplianceRulesQuery(buyerId), cancellationToken)));
 
     [HttpPost("compliance-rules")]
     [Authorize(Policy = MerchandisingPolicies.BuyerManage)]

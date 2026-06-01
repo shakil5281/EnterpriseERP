@@ -23,7 +23,7 @@ import { payrollService, type SalarySummary, type SummaryItem } from "@/lib/serv
 import { toast } from "sonner"
 import { Progress } from "@/components/ui/progress"
 import { Label } from "@/components/ui/label"
-import { companyService } from "@/lib/services/company"
+import { ManagementLegacyCompanySelect } from "@/components/hr/management-legacy-company-select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const MONTHS = [
@@ -45,13 +45,11 @@ export default function SalarySummaryPage() {
     const [year, setYear] = React.useState(new Date().getFullYear())
     const [month, setMonth] = React.useState(new Date().getMonth() + 1)
     const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>("all")
-    const [companies, setCompanies] = React.useState<any[]>([])
     const [isLoading, setIsLoading] = React.useState(false)
     const [isExporting, setIsExporting] = React.useState(false)
     const [summary, setSummary] = React.useState<SalarySummary | null>(null)
 
     React.useEffect(() => {
-        companyService.getAll().then(setCompanies)
         handleSearch()
     }, [])
 
@@ -163,10 +161,11 @@ export default function SalarySummaryPage() {
                         </div>
                         <div className="space-y-1.5">
                             <Label className="text-xs font-bold text-muted-foreground uppercase">Company</Label>
-                            <NativeSelect value={selectedCompanyId} onChange={(e) => setSelectedCompanyId(e.target.value)} className="h-10">
-                                <option value="all">All Companies</option>
-                                {companies.map(c => <option key={c.id} value={c.id}>{c.companyNameEn}</option>)}
-                            </NativeSelect>
+                            <ManagementLegacyCompanySelect
+                                value={selectedCompanyId}
+                                onChange={setSelectedCompanyId}
+                                className="h-10"
+                            />
                         </div>
                         <Button
                             className="h-10 gap-2 bg-primary hover:bg-primary/90 shadow-md transition-all active:scale-95 text-white"

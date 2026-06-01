@@ -4,9 +4,6 @@ import * as React from "react"
 import { format } from "date-fns"
 import {
     IconChartBar,
-    IconSearch,
-    IconDownload,
-    IconRefresh,
     IconActivity,
     IconClock,
     IconArrowLeft,
@@ -26,7 +23,8 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { overtimeService, type DailyOtSummaryRow } from "@/lib/services/overtime"
-import { type AttendanceQuery } from "@/lib/services/attendance-api"
+import { type AttendanceQuery, toAttendanceExportParams } from "@/lib/services/attendance-api"
+import { HrReportExportButtons } from "@/components/reports/hr-report-export-buttons"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -36,7 +34,6 @@ export default function DailyOTSummaryPage() {
     const router = useRouter()
     const [date, setDate] = React.useState<Date | undefined>(new Date())
     const [isLoading, setIsLoading] = React.useState(false)
-    const [isExporting, setIsExporting] = React.useState(false)
     const [rows, setRows] = React.useState<DailyOtSummaryRow[]>([])
     const [hasSearched, setHasSearched] = React.useState(false)
 
@@ -102,19 +99,6 @@ export default function DailyOTSummaryPage() {
     const [activeQuery, setActiveQuery] = React.useState<AttendanceQuery | null>(null)
     const totalEmployees = rows.reduce((s, r) => s + r.employeeCount, 0)
 
-    const handleExport = async () => {
-        if (!activeQuery) return
-        setIsExporting(true)
-        try {
-            await overtimeService.exportDailyOTSummaryExcel(activeQuery)
-            toast.success("Summary exported successfully")
-        } catch {
-            toast.error("Export failed")
-        } finally {
-            setIsExporting(false)
-        }
-    }
-
     const avgOTPerEmployee = totalEmployees > 0 ? (grandTotal / totalEmployees).toFixed(2) : "0.00"
 
     return (
@@ -130,19 +114,14 @@ export default function DailyOTSummaryPage() {
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={handleExport}
-                        disabled={rows.length === 0 || isExporting}
-                    >
-                        {isExporting ? (
-                            <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                            <IconDownload className="mr-2 h-4 w-4" />
-                        )}
-                        Export Report
-                    </Button>
+                    {hasSearched && activeQuery && (
+                        <HrReportExportButtons
+                            exportUrl="/api/v1/attendance/reports/daily-ot-summary"
+                            params={toAttendanceExportParams(activeQuery)}
+                            filePrefix={`daily-ot-summary-${activeQuery.date ?? activeQuery.fromDate}`}
+                            disabled={isLoading || rows.length === 0}
+                        />
+                    )}
                 </div>
             </div>
 

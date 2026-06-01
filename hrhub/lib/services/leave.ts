@@ -1,4 +1,7 @@
 import api from "../api";
+import { buildPaginationParams } from "@/lib/pagination/params";
+import { unwrapPaginatedApiData } from "@/lib/pagination/unwrap";
+import type { LegacyPagedResult } from "@/lib/pagination/types";
 import { platformApiUrl, unwrapResponse } from "./api-helpers";
 
 export interface BackendLeaveType {
@@ -51,6 +54,32 @@ export interface BackendLeaveApplication {
   rejectedAt?: string | null;
   cancelledAt?: string | null;
   steps: LeaveApprovalStep[];
+}
+
+/** Paginated list row with employee fields from HR (no separate batch call). */
+export interface BackendLeaveApplicationListItem {
+  id: string;
+  companyId: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  departmentName?: string | null;
+  designationName?: string | null;
+  leaveTypeId: string;
+  leaveCode?: string | null;
+  leaveTypeName?: string | null;
+  fromDate: string;
+  toDate: string;
+  totalDays: number;
+  isHalfDay: boolean;
+  halfDayType?: string | null;
+  reason?: string | null;
+  status: string;
+  appliedBy: string;
+  appliedAt: string;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
+  cancelledAt?: string | null;
 }
 
 export interface LeaveApprovalStep {
@@ -186,6 +215,12 @@ export const leaveService = {
     );
     return unwrapResponse<BackendLeaveType>(response);
   },
+  deleteLeaveType: async (id: string) => {
+    const response = await api.delete<unknown>(
+      platformApiUrl(`/api/v1/leave-types/${encodeURIComponent(id)}`)
+    );
+    return unwrapResponse<string>(response);
+  },
 
   createLeavePolicy: async (
     data: Omit<BackendLeavePolicy, "id" | "leaveCode" | "isActive">
@@ -285,12 +320,73 @@ export const leaveService = {
     );
     return unwrapResponse<BackendLeaveApplication>(response);
   },
-  listLeaveApplications: async (companyId: string) => {
+  listLeaveApplicationsPage: async (
+    companyId: string,
+    params?: {
+      page?: number;
+      pageSize?: number;
+      getAll?: boolean;
+      status?: string;
+      employeeId?: string;
+      fromDate?: string;
+      toDate?: string;
+    },
+  ): Promise<LegacyPagedResult<BackendLeaveApplicationListItem>> => {
+    const pagination = buildPaginationParams({
+      page: params?.page,
+      pageSize: params?.pageSize,
+      getAll: params?.getAll,
+    });
     const response = await api.get<unknown>(
       platformApiUrl("/api/v1/leaves/applications"),
-      { params: { companyId } }
+      {
+        params: {
+          companyId,
+          ...pagination,
+          ...(params?.status && params.status !== "all"
+            ? { status: params.status }
+            : {}),
+          ...(params?.employeeId ? { employeeId: params.employeeId } : {}),
+          ...(params?.fromDate ? { fromDate: params.fromDate } : {}),
+          ...(params?.toDate ? { toDate: params.toDate } : {}),
+        },
+      },
     );
-    return unwrapResponse<BackendLeaveApplication[]>(response);
+    const paginated = unwrapPaginatedApiData<BackendLeaveApplicationListItem>(
+      response.data,
+    );
+    return {
+      items: paginated.data,
+      page: paginated.pagination.page,
+      pageSize: paginated.pagination.pageSize,
+      totalCount: paginated.pagination.totalCount,
+      totalPages: paginated.pagination.totalPages,
+      hasNextPage: paginated.pagination.hasNextPage,
+      hasPreviousPage: paginated.pagination.hasPreviousPage,
+      getAll: paginated.pagination.getAll,
+    };
+  },
+
+  /** Loads all applications for a company (enriched; single request). */
+  listLeaveApplications: async (
+    companyId: string,
+    params?: { status?: string },
+  ) => {
+    const pagination = buildPaginationParams({ getAll: true });
+    const response = await api.get<unknown>(
+      platformApiUrl("/api/v1/leaves/applications"),
+      {
+        params: {
+          companyId,
+          ...pagination,
+          ...(params?.status && params.status !== "all"
+            ? { status: params.status }
+            : {}),
+        },
+      },
+    );
+    return unwrapPaginatedApiData<BackendLeaveApplicationListItem>(response.data)
+      .data;
   },
   getLeaveApplicationById: async (id: string) => {
     const response = await api.get<unknown>(
@@ -333,11 +429,27 @@ export const leaveService = {
     );
     return unwrapResponse<Holiday>(response);
   },
-  listHolidays: async (params: { companyId: string; year: number }) => {
-    const response = await api.get<unknown>(platformApiUrl("/api/v1/holidays"), {
-      params,
+  listHolidays: async (params: {
+    companyId: string;
+    year: number;
+    page?: number;
+    pageSize?: number;
+    getAll?: boolean;
+  }) => {
+    const pagination = buildPaginationParams({
+      page: params.page,
+      pageSize: params.pageSize,
+      getAll: params.getAll ?? true,
     });
-    return unwrapResponse<Holiday[]>(response);
+    const response = await api.get<unknown>(platformApiUrl("/api/v1/holidays"), {
+      params: {
+        companyId: params.companyId,
+        year: params.year,
+        ...pagination,
+      },
+    });
+    const paginated = unwrapPaginatedApiData<Holiday>(response.data);
+    return paginated.data;
   },
   updateHoliday: async (id: string, data: HolidayRequest) => {
     const response = await api.put<unknown>(
@@ -419,12 +531,25 @@ export const leaveService = {
     );
     return unwrapResponse<LeaveEncashment>(response);
   },
-  listLeaveEncashments: async (params: { companyId: string; year?: number }) => {
+  listLeaveEncashments: async (params: {
+    companyId: string;
+    year?: number;
+    getAll?: boolean;
+  }) => {
+    const pagination = buildPaginationParams({
+      getAll: params.getAll ?? true,
+    });
     const response = await api.get<unknown>(
       platformApiUrl("/api/v1/leave-encashments"),
-      { params }
+      {
+        params: {
+          companyId: params.companyId,
+          ...(params.year != null ? { year: params.year } : {}),
+          ...pagination,
+        },
+      },
     );
-    return unwrapResponse<LeaveEncashment[]>(response);
+    return unwrapPaginatedApiData<LeaveEncashment>(response.data).data;
   },
   approveLeaveEncashment: async (id: string, approvedBy: string) => {
     const response = await api.patch<unknown>(

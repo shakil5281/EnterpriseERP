@@ -16,6 +16,8 @@ public static class AttendanceReportHelper
             filter.DepartmentId,
             filter.SectionId,
             filter.DesignationId,
+            filter.GroupId,
+            filter.LineName,
             filter.SearchTerm,
             filter.EmployeeID);
 
@@ -44,6 +46,8 @@ public static class AttendanceReportHelper
         var hasEmployeeFilter = filter.DepartmentId.HasValue
             || filter.SectionId.HasValue
             || filter.DesignationId.HasValue
+            || filter.GroupId.HasValue
+            || !string.IsNullOrWhiteSpace(filter.LineName)
             || !string.IsNullOrWhiteSpace(filter.SearchTerm)
             || !string.IsNullOrWhiteSpace(filter.EmployeeID);
 
@@ -107,18 +111,20 @@ public static class AttendanceReportHelper
         return "None";
     }
 
-    public static bool IsMissingEntry(DailyAttendance row)
-    {
-        if (row.InTime is null || row.OutTime is null)
-        {
-            return true;
-        }
-
-        var remarks = row.Remarks ?? string.Empty;
-        return remarks.Contains("punch not recorded", StringComparison.OrdinalIgnoreCase);
-    }
+    public static bool IsMissingEntry(DailyAttendance row) =>
+        row.InTime is null ^ row.OutTime is null;
 
     public static int StableHash(Guid id) => Math.Abs(id.GetHashCode());
 
     public static int LegacyCompanyId(Guid companyId) => Math.Abs(companyId.GetHashCode() % 10000);
+
+    public static bool MatchesAttendanceStatusFilter(AttendanceStatus status, string? filter)
+    {
+        if (string.IsNullOrWhiteSpace(filter) || filter.Equals("all", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return status.ToString().Contains(filter.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
 }

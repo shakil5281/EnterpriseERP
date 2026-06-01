@@ -38,12 +38,12 @@ export default function TeamSettingsPage() {
     )
 
     return (
-        <div className="flex flex-col gap-8 py-8 px-4 lg:px-8 min-h-screen bg-slate-50/50 dark:bg-slate-950">
+        <div className="flex flex-col gap-8 py-8 px-4 lg:px-8 min-h-screen bg-muted/30 dark:bg-transparent">
             {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div className="space-y-2">
-                    <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/20">
+                    <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/20">
                             <IconUsers className="size-6 text-white" />
                         </div>
                         Team Settings
@@ -53,7 +53,7 @@ export default function TeamSettingsPage() {
                     </p>
                 </div>
                 <div className="flex gap-3">
-                    <Button variant="outline" className="rounded-xl shadow-sm hover:shadow-md transition-all font-semibold h-11 border-slate-200 dark:border-slate-800">
+                    <Button variant="outline" className="rounded-xl shadow-sm hover:shadow-md transition-all font-semibold h-11 border-slate-200 dark:border-border">
                         Manage Roles
                     </Button>
                     <Button className="rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all font-bold h-11 px-6 gap-2 bg-primary">
@@ -65,7 +65,7 @@ export default function TeamSettingsPage() {
 
             {/* Top KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="border-0 shadow-lg bg-white dark:bg-slate-900 rounded-3xl overflow-hidden relative group transition-transform hover:-translate-y-1">
+                <Card className="border-0 shadow-lg bg-card rounded-3xl overflow-hidden relative group transition-transform hover:-translate-y-1">
                     <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity text-indigo-500">
                         <IconUsers className="size-24" />
                     </div>
@@ -73,14 +73,14 @@ export default function TeamSettingsPage() {
                         <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Total Members</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-4xl font-black text-slate-900 dark:text-white">24</div>
+                        <div className="text-4xl font-black text-foreground">24</div>
                         <p className="text-xs font-semibold text-emerald-500 mt-2 flex items-center gap-1">
                             <IconCheck className="size-3" /> 21 Active
                         </p>
                     </CardContent>
                 </Card>
 
-                <Card className="border-0 shadow-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 rounded-3xl overflow-hidden relative group transition-transform hover:-translate-y-1 text-white">
+                <Card className="border-0 shadow-lg bg-linear-to-br from-violet-500 to-fuchsia-600 rounded-3xl overflow-hidden relative group transition-transform hover:-translate-y-1 text-white">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
                         <IconShieldLock className="size-24" />
                     </div>
@@ -95,7 +95,7 @@ export default function TeamSettingsPage() {
                     </CardContent>
                 </Card>
 
-                <Card className="border-0 shadow-lg bg-white dark:bg-slate-900 rounded-3xl overflow-hidden relative group transition-transform hover:-translate-y-1">
+                <Card className="border-0 shadow-lg bg-card rounded-3xl overflow-hidden relative group transition-transform hover:-translate-y-1">
                     <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity text-rose-500">
                         <IconMail className="size-24" />
                     </div>
@@ -103,7 +103,7 @@ export default function TeamSettingsPage() {
                         <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Pending Invites</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-4xl font-black text-slate-900 dark:text-white">3</div>
+                        <div className="text-4xl font-black text-foreground">3</div>
                         <p className="text-xs font-semibold text-rose-500 mt-2 flex items-center gap-1">
                             Awaiting response
                         </p>
@@ -112,23 +112,23 @@ export default function TeamSettingsPage() {
             </div>
 
             {/* Main Content Area */}
-            <div className="flex flex-col bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-                <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row gap-4 items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
-                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">Active Team Members</h2>
+            <div className="flex flex-col bg-card rounded-3xl shadow-sm border border-border overflow-hidden">
+                <div className="p-4 sm:p-6 border-b border-border flex flex-col sm:flex-row gap-4 items-center justify-between bg-muted/50">
+                    <h2 className="text-lg font-bold text-foreground">Active Team Members</h2>
                     <div className="relative w-full sm:w-80">
                         <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <Input
                             placeholder="Search by name, email, or role..."
-                            className="pl-10 h-10 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 shadow-sm rounded-xl w-full focus-visible:ring-indigo-500"
+                            className="pl-10 h-10 bg-card border-border shadow-sm rounded-xl w-full focus-visible:ring-indigo-500"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div data-slot="table-container" className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
-                        <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-950/50 text-slate-500 font-bold tracking-wider">
+                        <thead className="text-xs uppercase text-muted-foreground font-bold tracking-wider">
                             <tr>
                                 <th className="px-6 py-4 rounded-tl-xl">Member Info</th>
                                 <th className="px-6 py-4">Role / Access</th>
@@ -136,16 +136,16 @@ export default function TeamSettingsPage() {
                                 <th className="px-6 py-4 rounded-tr-xl text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                        <tbody className="divide-y divide-border">
                             {filteredMembers.map((member) => (
-                                <tr key={member.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
+                                <tr key={member.id} className="hover:bg-table-row-hover transition-colors group">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-4">
-                                            <Avatar className={`h-10 w-10 border-2 border-white dark:border-slate-900 shadow-sm ${member.color}`}>
+                                            <Avatar className={`h-10 w-10 border-2 border-white dark:border-card shadow-sm ${member.color}`}>
                                                 <AvatarFallback className="text-white font-bold">{member.avatar}</AvatarFallback>
                                             </Avatar>
                                             <div>
-                                                <div className="font-bold text-slate-900 dark:text-white">{member.name}</div>
+                                                <div className="font-bold text-foreground">{member.name}</div>
                                                 <div className="text-slate-500 text-xs">{member.email}</div>
                                             </div>
                                         </div>
@@ -162,7 +162,7 @@ export default function TeamSettingsPage() {
                                             className={`font-bold border px-2.5 py-0.5 shadow-sm
                                                 ${member.status === "Active" ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400" : 
                                                 member.status === "Invited" ? "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400" : 
-                                                "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400"}
+                                                "bg-slate-100 text-slate-500 border-slate-200 dark:bg-muted dark:border-border dark:text-muted-foreground"}
                                             `}
                                         >
                                             {member.status}

@@ -70,6 +70,14 @@ func main() {
 
 	gormDB, err := db.Open(cfg.ConnectionStrings.PunchDataDb, logger)
 	if err != nil {
+		if strings.EqualFold(os.Getenv("PUNCHDATA_SWAGGER_ONLY_ON_DB_FAILURE"), "true") {
+			logger.Warn("db open failed; starting PunchDataService in Swagger-only mode", "error", err)
+			if os.Getenv("GIN_MODE") == "" {
+				gin.SetMode(gin.ReleaseMode)
+			}
+			runSwaggerOnlyServer(cfg.Server.Address, router.NewSwaggerOnly(cfg.Cors.AllowedOrigins), logger)
+			return
+		}
 		logger.Error("db open failed", "error", err)
 		os.Exit(1)
 	}
@@ -145,11 +153,11 @@ func main() {
 			Audience:   cfg.Jwt.Audience,
 			SigningKey: cfg.Jwt.SigningKey,
 		},
-		Health:        handlers.NewHealthHandler(gormDB, remoteSQL),
-		Logs:          handlers.NewLogsHandler(repo, procSvc, cfg.PunchData.MaxUploadMB),
-		Punches:       handlers.NewPunchesHandler(repo, procSvc),
-		Machines:      handlers.NewMachinesHandler(repo, zkClient, syncSvc),
-		Imports:       handlers.NewImportsHandler(repo),
+		Health:   handlers.NewHealthHandler(gormDB, remoteSQL),
+		Logs:     handlers.NewLogsHandler(repo, procSvc, cfg.PunchData.MaxUploadMB),
+		Punches:  handlers.NewPunchesHandler(repo, procSvc),
+		Machines: handlers.NewMachinesHandler(repo, zkClient, syncSvc),
+		Imports:  handlers.NewImportsHandler(repo),
 		RemoteCollect: handlers.NewRemoteCollectHandler(handlers.RemoteCollectHandlerConfig{
 			Repo:          repo,
 			RemoteConnStr: cfg.ConnectionStrings.RemoteZktecoDb,
@@ -208,5 +216,31 @@ func main() {
 	}
 	if remoteSQL != nil {
 		_ = remoteSQL.Close()
+	}
+}
+
+func runSwaggerOnlyServer(address string, engine *gin.Engine, logger *slog.Logger) {
+	srv := &http.Server{
+		Addr:              address,
+		Handler:           engine,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	go func() {
+		logger.Info("PunchDataService Swagger-only listener started", "address", address)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Warn("graceful shutdown failed", "error", err)
 	}
 }

@@ -18,6 +18,7 @@
     <ProjectReference Include="..\LeaveService.Contracts\LeaveService.Contracts.csproj" />
     <ProjectReference Include="..\LeaveService.Domain\LeaveService.Domain.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.CommonResponses\Erp.BuildingBlocks.CommonResponses.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.Contracts\Erp.BuildingBlocks.Contracts.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.EventBus\Erp.BuildingBlocks.EventBus.csproj" />
   </ItemGroup>
 

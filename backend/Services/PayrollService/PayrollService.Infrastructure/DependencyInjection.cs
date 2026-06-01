@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Erp.BuildingBlocks.ReportExport;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PayrollService.Application;
@@ -57,6 +58,8 @@ public static class DependencyInjection
             .AddHttpMessageHandler<ForwardAuthorizationHandler>();
 
         services.AddHostedService<RabbitMqConsumerHostedService>();
+
+        services.AddReportExportClient(configuration, "payroll");
 
         return services;
     }

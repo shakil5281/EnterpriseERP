@@ -6,9 +6,6 @@ import { formatAttendanceDate, formatPunchTime } from "@/lib/format-attendance-t
 import {
     IconSearch,
     IconRefresh,
-    IconDownload,
-    IconFileSpreadsheet,
-    IconFileTypePdf,
     IconLoader,
     IconClock
 } from "@tabler/icons-react"
@@ -18,7 +15,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { toast } from "sonner"
 import { ColumnDef } from "@tanstack/react-table"
 import { AttendanceCompanyFilter } from "@/components/attendance/attendance-company-filter"
-import { attendanceApi, type AttendanceQuery, type AttendanceRecord } from "@/lib/services/attendance-api"
+import { attendanceApi, toAttendanceExportParams, type AttendanceQuery, type AttendanceRecord } from "@/lib/services/attendance-api"
+import { HrReportExportButtons } from "@/components/reports/hr-report-export-buttons"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 
@@ -45,14 +43,6 @@ export default function DailyInputPage() {
     const handleFilterChange = ({ query }: { query: AttendanceQuery }) => {
         setActiveQuery(query)
         fetchReport(query)
-    }
-
-    const handleExportExcel = () => {
-        if (activeQuery) attendanceApi.exportDailyReportCsv(activeQuery)
-    }
-
-    const handleExportPdf = () => {
-        if (activeQuery) attendanceApi.exportDailyReportCsv(activeQuery, `daily-report-${activeQuery.date ?? activeQuery.fromDate}.csv`)
     }
 
     const columns = React.useMemo<ColumnDef<AttendanceRecord>[]>(() => [
@@ -167,26 +157,14 @@ export default function DailyInputPage() {
                         <IconRefresh size={18} className={cn("mr-2", isLoading && "animate-spin")} />
                         Refresh
                     </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-xl font-bold shadow-sm bg-emerald-50/50 hover:bg-emerald-50 text-emerald-700 border-emerald-100"
-                        onClick={handleExportExcel}
-                        disabled={isLoading || data.length === 0}
-                    >
-                        <IconFileSpreadsheet size={18} className="mr-2" />
-                        Excel
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-xl font-bold shadow-sm bg-red-50/50 hover:bg-red-50 text-red-700 border-red-100"
-                        onClick={handleExportPdf}
-                        disabled={isLoading || data.length === 0}
-                    >
-                        <IconFileTypePdf size={18} className="mr-2" />
-                        PDF
-                    </Button>
+                    {hasSearched && activeQuery && (
+                        <HrReportExportButtons
+                            exportUrl="/api/v1/attendance/reports/daily-report"
+                            params={toAttendanceExportParams(activeQuery)}
+                            filePrefix={`daily-input-${activeQuery.date ?? activeQuery.fromDate}`}
+                            disabled={isLoading || data.length === 0}
+                        />
+                    )}
                 </div>
             </div>
 

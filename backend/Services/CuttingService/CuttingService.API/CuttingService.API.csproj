@@ -22,6 +22,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\CommonSecurity\Erp.BuildingBlocks.CommonSecurity.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.CommonResponses\Erp.BuildingBlocks.CommonResponses.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.Hosting\Erp.BuildingBlocks.Hosting.csproj" />
     <ProjectReference Include="..\CuttingService.Application\CuttingService.Application.csproj" />
     <ProjectReference Include="..\CuttingService.Contracts\CuttingService.Contracts.csproj" />

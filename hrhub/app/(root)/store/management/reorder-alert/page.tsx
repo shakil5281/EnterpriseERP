@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { IconAlertTriangle, IconBell, IconRefresh, IconShoppingCart, IconLoader2, IconSearch } from "@tabler/icons-react"
+import { IconAlertTriangle, IconRefresh, IconShoppingCart, IconLoader2, IconSearch } from "@tabler/icons-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -14,10 +14,12 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import storeService, { StoreItem } from "@/lib/services/store"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { StoreItem } from "@/lib/types/store"
 import { toast } from "sonner"
 
-export default function ReorderAlertPage() {
+function ReorderAlertContent({ companyId }: { companyId: string }) {
     const [lowStockItems, setLowStockItems] = React.useState<StoreItem[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [search, setSearch] = React.useState("");
@@ -25,9 +27,9 @@ export default function ReorderAlertPage() {
     const fetchLowStock = async () => {
         setLoading(true);
         try {
-            const data = await storeService.getLowStock();
+            const data = await storeService.getLowStock(companyId);
             setLowStockItems(data);
-        } catch (error) {
+        } catch {
             toast.error("Failed to fetch stock alerts");
         } finally {
             setLoading(false);
@@ -36,7 +38,7 @@ export default function ReorderAlertPage() {
 
     React.useEffect(() => {
         fetchLowStock();
-    }, []);
+    }, [companyId]);
 
     const filtered = lowStockItems.filter(i =>
         i.itemName.toLowerCase().includes(search.toLowerCase()) ||
@@ -44,7 +46,7 @@ export default function ReorderAlertPage() {
     );
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400">
@@ -75,12 +77,7 @@ export default function ReorderAlertPage() {
                         </div>
                         <div className="relative">
                             <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-4" />
-                            <Input
-                                placeholder="Search alerts..."
-                                className="pl-10 w-[250px] h-9 border-orange-200 focus-visible:ring-orange-500"
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                            />
+                            <Input placeholder="Search alerts..." className="pl-10 w-[250px] h-9 border-orange-200 focus-visible:ring-orange-500" value={search} onChange={e => setSearch(e.target.value)} />
                         </div>
                     </div>
                 </CardHeader>
@@ -113,7 +110,7 @@ export default function ReorderAlertPage() {
                                     </TableRow>
                                 ) : (
                                     filtered.map((item) => {
-                                        const isCritical = item.currentStock <= (item.minimumStockLevel * 0.3); // Less than 30% of min
+                                        const isCritical = item.currentStock <= (item.minimumStockLevel * 0.3);
                                         return (
                                             <TableRow key={item.id} className="hover:bg-orange-50/30 dark:hover:bg-orange-950/10 transition-colors border-orange-50 dark:border-orange-900/20">
                                                 <TableCell className="font-bold">
@@ -148,6 +145,16 @@ export default function ReorderAlertPage() {
                     </div>
                 </CardContent>
             </Card>
-        </div>
-    )
+        </>
+    );
+}
+
+export default function ReorderAlertPage() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <ReorderAlertContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
+    );
 }

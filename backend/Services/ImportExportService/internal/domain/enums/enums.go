@@ -3,11 +3,12 @@ package enums
 type ImportJobStatus string
 
 const (
-	ImportPending    ImportJobStatus = "Pending"
-	ImportProcessing ImportJobStatus = "Processing"
-	ImportCompleted  ImportJobStatus = "Completed"
-	ImportFailed     ImportJobStatus = "Failed"
-	ImportCancelled  ImportJobStatus = "Cancelled"
+	ImportPending             ImportJobStatus = "Pending"
+	ImportProcessing          ImportJobStatus = "Processing"
+	ImportCompleted           ImportJobStatus = "Completed"
+	ImportCompletedWithErrors ImportJobStatus = "CompletedWithErrors"
+	ImportFailed              ImportJobStatus = "Failed"
+	ImportCancelled           ImportJobStatus = "Cancelled"
 )
 
 type ExportJobStatus string
@@ -30,14 +31,14 @@ const (
 type ModuleName string
 
 const (
-	ModuleEmployee   ModuleName = "Employee"
-	ModuleAttendance ModuleName = "Attendance"
-	ModulePayroll    ModuleName = "Payroll"
-	ModuleShift      ModuleName = "Shift"
-	ModuleLeave      ModuleName = "Leave"
-	ModuleCompany    ModuleName = "Company"
-	ModuleDepartment ModuleName = "Department"
+	ModuleEmployee    ModuleName = "Employee"
+	ModuleAttendance  ModuleName = "Attendance"
+	ModulePayroll     ModuleName = "Payroll"
+	ModuleShift       ModuleName = "Shift"
+	ModuleLeave       ModuleName = "Leave"
+	ModuleCompany     ModuleName = "Company"
+	ModuleDepartment  ModuleName = "Department"
 	ModuleDesignation ModuleName = "Designation"
-	ModuleBonus      ModuleName = "Bonus"
+	ModuleBonus       ModuleName = "Bonus"
 	ModuleSalarySheet ModuleName = "SalarySheet"
 )

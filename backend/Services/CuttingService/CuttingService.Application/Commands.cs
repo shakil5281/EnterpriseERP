@@ -20,3 +20,6 @@ public sealed record CreateCuttingWastageCommand(CreateCuttingWastageRequest Req
 public sealed record CreateCuttingPanelTransferCommand(CreatePanelTransferRequest Request) : IRequest<CuttingPanelTransferDto>;
 public sealed record ConfirmCuttingPanelTransferCommand(Guid Id) : IRequest<CuttingPanelTransferDto>;
 public sealed record CancelCuttingPanelTransferCommand(Guid Id) : IRequest<CuttingPanelTransferDto>;
+public sealed record CreateCuttingBundleCommand(CreateCuttingBundleRequest Request) : IRequest<CuttingBundleDto>;
+public sealed record UpdateCuttingBundleCommand(Guid Id, UpdateCuttingBundleRequest Request) : IRequest<CuttingBundleDto>;
+public sealed record UpdateCuttingBundleStatusCommand(Guid Id, UpdateBundleStatusRequest Request) : IRequest<CuttingBundleDto>;

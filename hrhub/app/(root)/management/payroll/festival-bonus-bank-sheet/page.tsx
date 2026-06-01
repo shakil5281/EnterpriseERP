@@ -22,7 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { NativeSelect } from "@/components/ui/native-select"
 import { payrollService } from "@/lib/services/payroll"
 import { organogramService } from "@/lib/services/organogram"
-import { companyService } from "@/lib/services/company"
+import { ManagementLegacyCompanySelect } from "@/components/hr/management-legacy-company-select"
 import { toast } from "sonner"
 import Link from "next/link"
 import { Label } from "@/components/ui/label"
@@ -55,11 +55,9 @@ export default function FestivalBonusBankSheetPage() {
     const [isLoading, setIsLoading] = React.useState(false)
     const [isExporting, setIsExporting] = React.useState(false)
     const [records, setRecords] = React.useState<any[]>([])
-    const [companies, setCompanies] = React.useState<any[]>([])
     const [departments, setDepartments] = React.useState<any[]>([])
 
     React.useEffect(() => {
-        companyService.getAll().then(setCompanies)
         handleSearch()
     }, [])
 
@@ -252,10 +250,11 @@ export default function FestivalBonusBankSheetPage() {
                         </div>
                         <div className="space-y-2">
                             <Label className="text-xs font-bold text-muted-foreground">COMPANY</Label>
-                            <NativeSelect value={selectedCompanyId} onChange={(e) => setSelectedCompanyId(e.target.value)} className="h-10">
-                                <option value="all">All Companies</option>
-                                {companies.map(c => <option key={c.id} value={c.id}>{c.companyNameEn}</option>)}
-                            </NativeSelect>
+                            <ManagementLegacyCompanySelect
+                                value={selectedCompanyId}
+                                onChange={setSelectedCompanyId}
+                                className="h-10"
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label className="text-xs font-bold text-muted-foreground">DEPARTMENT</Label>

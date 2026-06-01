@@ -17,9 +17,7 @@ import {
 } from "@/components/ui/form"
 import { IconLoader2 } from "@tabler/icons-react"
 import { toast } from "sonner"
-import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/providers/auth-provider"
-import { resolveReturnUrl } from "@/lib/role-redirect"
 
 export function LoginForm({
   className,
@@ -28,16 +26,7 @@ export function LoginForm({
   const [isLoading, setIsLoading] = React.useState(false)
   const [pendingTwoFactorToken, setPendingTwoFactorToken] = React.useState<string | null>(null)
   const [twoFactorCode, setTwoFactorCode] = React.useState("")
-  const router = useRouter()
   const { login, completeTwoFactorLogin } = useAuth()
-
-  const redirectAfterLogin = React.useCallback(
-    (roles: string[]) => {
-      const params = new URLSearchParams(window.location.search)
-      router.replace(resolveReturnUrl(params.get("returnUrl"), roles))
-    },
-    [router],
-  )
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -56,7 +45,6 @@ export function LoginForm({
           toast.success("Welcome back!", {
             description: response.message || "You have successfully logged in.",
           })
-          redirectAfterLogin(response.roles || [])
           setIsLoading(false)
         } else {
           toast.error("Verification failed", {
@@ -72,7 +60,6 @@ export function LoginForm({
         toast.success("Welcome back!", {
           description: response.message || "You have successfully logged in.",
         })
-        redirectAfterLogin(response.roles || [])
         setIsLoading(false)
       } else if (response.requiresTwoFactor && response.pendingTwoFactorToken) {
         setPendingTwoFactorToken(response.pendingTwoFactorToken)

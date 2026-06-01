@@ -214,7 +214,7 @@ export default function DailyOTSheetPage() {
     }
 
     return (
-        <div className="flex flex-col gap-8 py-8 px-8 min-h-screen bg-slate-50/50 dark:bg-slate-950/50 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="flex flex-col gap-8 py-8 px-8 min-h-screen bg-muted/30 dark:bg-background animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div className="space-y-1">

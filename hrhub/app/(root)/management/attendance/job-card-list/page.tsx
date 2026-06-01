@@ -240,7 +240,7 @@ export default function JobCardListPage() {
 
             {/* Main Content */}
             <div className="px-6">
-                <Card className="border-none shadow-sm overflow-hidden bg-white dark:bg-zinc-950">
+                <Card className="border-none shadow-sm overflow-hidden bg-card">
                     <CardHeader className="pb-4 border-b">
                         <div className="flex items-center justify-between">
                             <div>

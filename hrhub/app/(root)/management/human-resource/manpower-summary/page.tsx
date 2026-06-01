@@ -16,6 +16,8 @@ import {
 } from "@tabler/icons-react"
 import { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/data-table"
+import { HrPageHeader } from "@/components/hr/hr-page-header"
+import { HrPageShell } from "@/components/hr/hr-page-shell"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -23,12 +25,15 @@ import { NativeSelect } from "@/components/ui/native-select"
 import { SummaryCard } from "@/components/summary-card"
 import { toast } from "sonner"
 import { employeeService, type ManpowerSummary, type SummaryItem } from "@/lib/services/employee"
-import { companyService, type Company } from "@/lib/services/company"
+import { ManagementLegacyCompanySelect } from "@/components/hr/management-legacy-company-select"
+import { useCompanyFilterScope } from "@/hooks/use-company-filter-scope"
 import { organogramService, type Floor, type Department, type Section, type Designation } from "@/lib/services/organogram"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { type DateRange } from "react-day-picker"
+import { HrReportExportButtons } from "@/components/reports/hr-report-export-buttons"
+import type { HrReportExportParams } from "@/lib/services/hr-report-export"
 
 export default function ManpowerSummaryPage() {
     const [summary, setSummary] = React.useState<ManpowerSummary | null>(null)
@@ -51,7 +56,8 @@ export default function ManpowerSummaryPage() {
     const [sections, setSections] = React.useState<Section[]>([])
     const [designations, setDesignations] = React.useState<Designation[]>([])
     const [floors, setFloors] = React.useState<Floor[]>([])
-    const [companies, setCompanies] = React.useState<Company[]>([])
+    const { companies, isCompanyLocked, defaultCompany } = useCompanyFilterScope()
+    const lockedInitRef = React.useRef(false)
 
     const fetchSummary = React.useCallback(async () => {
         setIsLoading(true)
@@ -79,24 +85,15 @@ export default function ManpowerSummaryPage() {
     }, [departmentId, sectionId, designationId, floorId, selectedCompanyId, companyName, gender, religion, dateRange, status])
 
     React.useEffect(() => {
-        const loadRefs = async () => {
-            try {
-                const [flrs, comps] = await Promise.all([
-                    organogramService.getFloors(),
-                    companyService.getAll(),
-                ])
-                setFloors(flrs)
-                setCompanies(comps)
-                if (comps.length > 0 && selectedCompanyId === "all") {
-                    setSelectedCompanyId(String(comps[0].id))
-                    setCompanyName(comps[0].companyNameEn)
-                }
-            } catch (error) {
-                console.error("Failed to load reference data", error)
-            }
-        }
-        loadRefs()
+        organogramService.getFloors().then(setFloors).catch(console.error)
     }, [])
+
+    React.useEffect(() => {
+        if (!isCompanyLocked || !defaultCompany || lockedInitRef.current) return
+        lockedInitRef.current = true
+        setSelectedCompanyId(String(defaultCompany.id))
+        setCompanyName(defaultCompany.companyNameEn)
+    }, [isCompanyLocked, defaultCompany])
 
     // Cascading dropdowns
     React.useEffect(() => {
@@ -133,6 +130,46 @@ export default function ManpowerSummaryPage() {
             fetchSummary()
         }
     }, [selectedCompanyId, fetchSummary])
+
+    const exportParams = React.useMemo((): HrReportExportParams => {
+        const params: HrReportExportParams = {}
+        if (selectedCompanyId !== "all") {
+            const company = companies.find((c) => c.id === parseInt(selectedCompanyId, 10))
+            if (company) params.companyId = company.entityId
+        }
+        if (departmentId !== "all") {
+            const dept = departments.find((d) => d.id === parseInt(departmentId, 10))
+            if (dept) params.departmentId = dept.entityId
+        }
+        if (sectionId !== "all") {
+            const section = sections.find((s) => s.id === parseInt(sectionId, 10))
+            if (section) params.sectionId = section.entityId
+        }
+        if (designationId !== "all") {
+            const designation = designations.find((d) => d.id === parseInt(designationId, 10))
+            if (designation) params.designationId = designation.entityId
+        }
+        if (status !== "all") params.status = status
+        if (gender !== "all") params.gender = gender
+        if (religion !== "all") params.religion = religion
+        if (dateRange?.from) params.joinDateFrom = dateRange.from.toISOString().slice(0, 10)
+        if (dateRange?.to) params.joinDateTo = dateRange.to.toISOString().slice(0, 10)
+        return params
+    }, [
+        selectedCompanyId,
+        departmentId,
+        sectionId,
+        designationId,
+        floorId,
+        status,
+        gender,
+        religion,
+        dateRange,
+        companies,
+        departments,
+        sections,
+        designations,
+    ])
 
     const departmentColumns: ColumnDef<SummaryItem>[] = [
         {
@@ -205,26 +242,26 @@ export default function ManpowerSummaryPage() {
     ]
 
     return (
-        <div className="flex flex-col gap-6 py-6 bg-muted/20 min-h-screen px-4 lg:px-8">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20">
-                        <IconChartPie className="size-7 text-primary" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight">Manpower Analytics</h1>
-                        <p className="text-sm text-muted-foreground">
-                            Deep dive into workforce distribution and employee status.
-                        </p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 bg-background px-3 py-1.5 rounded-full border">
-                        <span className="size-1.5 rounded-full bg-green-500 animate-pulse" />
-                        Live Feed Active
-                    </span>
-                </div>
-            </div>
+        <HrPageShell>
+            <HrPageHeader
+                icon={<IconChartPie className="size-7" />}
+                title="Manpower Analytics"
+                description="Deep dive into workforce distribution and employee status."
+                actions={
+                    <>
+                        <HrReportExportButtons
+                            exportUrl="/api/v1/hr/reports/manpower-summary"
+                            params={exportParams}
+                            filePrefix="manpower-summary"
+                            disabled={isLoading || selectedCompanyId === "all" || !summary}
+                        />
+                        <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 bg-background px-3 py-1.5 rounded-full border">
+                            <span className="size-1.5 rounded-full bg-green-500 animate-pulse" />
+                            Live Feed Active
+                        </span>
+                    </>
+                }
+            />
 
             {/* Filter Section */}
             <Card className="border-none bg-background/60 backdrop-blur-sm overflow-hidden">
@@ -259,8 +296,13 @@ export default function ManpowerSummaryPage() {
                                     setSectionId("all")
                                     setDesignationId("all")
                                     setFloorId("all")
-                                    setCompanyName("all")
-                                    setSelectedCompanyId("all")
+                                    if (isCompanyLocked && defaultCompany) {
+                                        setSelectedCompanyId(String(defaultCompany.id))
+                                        setCompanyName(defaultCompany.companyNameEn)
+                                    } else {
+                                        setCompanyName("all")
+                                        setSelectedCompanyId("all")
+                                    }
                                     setGender("all")
                                     setReligion("all")
                                     setDateRange(undefined)
@@ -340,11 +382,11 @@ export default function ManpowerSummaryPage() {
                         {/* Company */}
                         <div className="flex flex-col gap-1.5">
                             <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Company</Label>
-                            <NativeSelect
-                                className="h-10 bg-muted/30 border-none"
+                            <ManagementLegacyCompanySelect
+                                className="bg-muted/30 border-none"
                                 value={selectedCompanyId}
-                                onChange={(e) => {
-                                    const val = e.target.value
+                                allValue="all"
+                                onChange={(val) => {
                                     setSelectedCompanyId(val)
                                     if (val === "all") {
                                         setCompanyName("all")
@@ -356,12 +398,7 @@ export default function ManpowerSummaryPage() {
                                     setSectionId("all")
                                     setDesignationId("all")
                                 }}
-                            >
-                                <option value="all">All Companies</option>
-                                {companies.map((c) => (
-                                    <option key={c.id} value={c.id}>{c.companyNameEn}</option>
-                                ))}
-                            </NativeSelect>
+                            />
                         </div>
 
                         {/* Floor */}
@@ -552,6 +589,6 @@ export default function ManpowerSummaryPage() {
                     </CardContent>
                 </Card>
             </div>
-        </div>
+        </HrPageShell>
     )
 }

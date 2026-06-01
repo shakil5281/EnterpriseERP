@@ -26,4 +26,24 @@ public interface IAuthService
 	Task<(IReadOnlyList<string>? RecoveryCodes, IReadOnlyList<string> Errors)> VerifyAndEnableTwoFactorAsync(Guid userId, string code, CancellationToken cancellationToken = default);
 
 	Task<(bool Ok, IReadOnlyList<string> Errors)> DisableTwoFactorAsync(Guid userId, string password, string code, CancellationToken cancellationToken = default);
+
+	Task<(UserProfileResponse? Response, IReadOnlyList<string> Errors)> UpdateProfileAsync(
+		Guid userId,
+		UpdateUserProfileRequest request,
+		CancellationToken cancellationToken = default);
+
+	Task<(bool Ok, IReadOnlyList<string> Errors)> ChangePasswordAsync(
+		Guid userId,
+		ChangePasswordRequest request,
+		CancellationToken cancellationToken = default);
+
+	Task<(UserProfileResponse? Response, IReadOnlyList<string> Errors)> UpdateProfilePictureAsync(
+		Guid userId,
+		Stream fileStream,
+		string contentType,
+		CancellationToken cancellationToken = default);
+
+	Task<(UserProfileResponse? Response, IReadOnlyList<string> Errors)> RemoveProfilePictureAsync(
+		Guid userId,
+		CancellationToken cancellationToken = default);
 }

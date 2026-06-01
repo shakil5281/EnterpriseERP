@@ -152,3 +152,23 @@ public sealed class CuttingAuditLog
     public string? Remarks { get; set; }
     public DateTime CreatedAt { get; set; } = BusinessTime.Now;
 }
+
+public sealed class CuttingBundle : AuditableEntity
+{
+    public Guid OrderId { get; set; }
+    public Guid CuttingPlanId { get; set; }
+    public Guid? CuttingLayId { get; set; }
+    public Guid? CuttingOutputId { get; set; }
+    public string BundleTag { get; set; } = string.Empty;
+    public string? PlanNo { get; set; }
+    public string? StyleName { get; set; }
+    public string SizeName { get; set; } = string.Empty;
+    public int PieceCount { get; set; }
+    public int? SerialFrom { get; set; }
+    public int? SerialTo { get; set; }
+    public string? SerialRange { get; set; }
+    public decimal? WeightKg { get; set; }
+    public string? CurrentLocation { get; set; }
+    public string Status { get; set; } = BundleStatuses.Ready;
+    public CuttingPlan? CuttingPlan { get; set; }
+}

@@ -65,7 +65,8 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health");
 
-if (app.Environment.IsDevelopment() && app.Configuration.GetValue("Database:AutoMigrate", false))
+if ((app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Docker"))
+    && app.Configuration.GetValue("Database:AutoMigrate", false))
 {
     await using var scope = app.Services.CreateAsyncScope();
     var db = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();

@@ -1,5 +1,7 @@
 using AutoMapper;
+using CuttingService.Application.Features.Bundles;
 using CuttingService.Contracts;
+using Erp.BuildingBlocks.Contracts.Pagination;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,7 +23,10 @@ public sealed class QueryHandlers(IUnitOfWork uow, ICuttingDbContext db, IMapper
     IRequestHandler<GetCuttingBalancesQuery, IReadOnlyList<CuttingBalanceDto>>,
     IRequestHandler<GetCuttingPanelTransfersQuery, IReadOnlyList<CuttingPanelTransferDto>>,
     IRequestHandler<GetCuttingPanelTransferByIdQuery, CuttingPanelTransferDto>,
-    IRequestHandler<GetCuttingReportQuery, IReadOnlyList<CuttingReportRowDto>>
+    IRequestHandler<GetCuttingReportQuery, IReadOnlyList<CuttingReportRowDto>>,
+    IRequestHandler<GetCuttingBundlesQuery, PaginatedList<CuttingBundleDto>>,
+    IRequestHandler<GetCuttingBundleSummaryQuery, CuttingBundleSummaryDto>,
+    IRequestHandler<GetCuttingBundleByIdQuery, CuttingBundleDto>
 {
     public async Task<IReadOnlyList<CuttingPlanDto>> Handle(GetCuttingPlansQuery q, CancellationToken ct)
     {
@@ -170,4 +175,27 @@ public sealed class QueryHandlers(IUnitOfWork uow, ICuttingDbContext db, IMapper
             .Select(x => new CuttingReportRowDto(outputLabel, x.CompanyId, x.OrderId, x.CuttingPlan!.PlanNo, x.OutputDate, x.ColorName, x.SizeName, x.OutputQty, 0, x.Status))
             .ToListAsync(ct);
     }
+
+    public async Task<PaginatedList<CuttingBundleDto>> Handle(GetCuttingBundlesQuery request, CancellationToken ct)
+    {
+        var q = request.Query;
+        q.Normalize();
+
+        var rows = db.CuttingBundles
+            .ApplyListFilters(q.CompanyId, q.OrderId, q.PlanId, q.Status, q.Search)
+            .OrderByDescending(x => x.CreatedAt);
+
+        return await rows.ProjectToDto().ToPaginatedListAsync(q, ct);
+    }
+
+    public async Task<CuttingBundleSummaryDto> Handle(GetCuttingBundleSummaryQuery q, CancellationToken ct)
+    {
+        var rows = db.CuttingBundles.ApplyListFilters(q.CompanyId, null, null, q.Status, null);
+        var bundleCount = await rows.CountAsync(ct);
+        var totalPieces = bundleCount == 0 ? 0 : await rows.SumAsync(x => x.PieceCount, ct);
+        return new CuttingBundleSummaryDto(bundleCount, totalPieces);
+    }
+
+    public async Task<CuttingBundleDto> Handle(GetCuttingBundleByIdQuery q, CancellationToken ct) =>
+        mapper.Map<CuttingBundleDto>(await uow.Bundles.GetByIdAsync(q.Id, ct) ?? throw new KeyNotFoundException("Bundle not found."));
 }

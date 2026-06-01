@@ -81,7 +81,7 @@ export default function TargetPage() {
         const formData = new FormData(e.currentTarget)
 
         const data = {
-            assignmentId: parseInt(formData.get("assignmentId") as string),
+            assignmentId: formData.get("assignmentId") as string,
             targetDate: selectedDate,
             dailyTarget: parseInt(formData.get("dailyTarget") as string),
             hourlyTarget: parseInt(formData.get("hourlyTarget") as string),
@@ -100,7 +100,7 @@ export default function TargetPage() {
         }
     }
 
-    const handleDelete = async (id: number) => {
+    const handleDelete = async (id: string) => {
         try {
             await productionTargetService.delete(id)
             toast.success("Target deleted successfully")

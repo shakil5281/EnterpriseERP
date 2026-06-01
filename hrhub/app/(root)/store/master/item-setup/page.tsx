@@ -31,10 +31,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import storeService, { StoreItem, ItemCategory, StoreUnit } from "@/lib/services/store"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { StoreItem, ItemCategory, StoreUnit, CreateStoreItemRequest } from "@/lib/types/store"
 import { toast } from "sonner"
 
-export default function ItemSetupPage() {
+function ItemSetupContent({ companyId }: { companyId: string }) {
     const [items, setItems] = React.useState<StoreItem[]>([]);
     const [categories, setCategories] = React.useState<ItemCategory[]>([]);
     const [units, setUnits] = React.useState<StoreUnit[]>([]);
@@ -43,11 +45,11 @@ export default function ItemSetupPage() {
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
     const [submitting, setSubmitting] = React.useState(false);
 
-    const [newItem, setNewItem] = React.useState<Partial<StoreItem>>({
+    const [newItem, setNewItem] = React.useState<Omit<CreateStoreItemRequest, "companyId">>({
         itemCode: "",
         itemName: "",
-        categoryId: 0,
-        unitId: 0,
+        categoryId: "",
+        unitId: "",
         openingStock: 0,
         minimumStockLevel: 0,
         unitPrice: 0,
@@ -57,14 +59,14 @@ export default function ItemSetupPage() {
     const fetchData = async () => {
         try {
             const [itemsData, catsData, unitsData] = await Promise.all([
-                storeService.getItems(),
-                storeService.getCategories(),
-                storeService.getUnits()
+                storeService.getItems(companyId),
+                storeService.getCategories(companyId),
+                storeService.getUnits(companyId),
             ]);
             setItems(itemsData);
             setCategories(catsData);
             setUnits(unitsData);
-        } catch (error) {
+        } catch {
             toast.error("Failed to load item data");
         } finally {
             setLoading(false);
@@ -73,7 +75,7 @@ export default function ItemSetupPage() {
 
     React.useEffect(() => {
         fetchData();
-    }, []);
+    }, [companyId]);
 
     const handleAddItem = async () => {
         if (!newItem.itemCode || !newItem.itemName || !newItem.categoryId || !newItem.unitId) {
@@ -83,21 +85,21 @@ export default function ItemSetupPage() {
 
         setSubmitting(true);
         try {
-            await storeService.addItem(newItem);
+            await storeService.addItem({ ...newItem, companyId });
             toast.success("Item created successfully");
             setIsDialogOpen(false);
             setNewItem({
                 itemCode: "",
                 itemName: "",
-                categoryId: 0,
-                unitId: 0,
+                categoryId: "",
+                unitId: "",
                 openingStock: 0,
                 minimumStockLevel: 0,
                 unitPrice: 0,
                 description: "",
             });
             fetchData();
-        } catch (error) {
+        } catch {
             toast.error("Failed to create item");
         } finally {
             setSubmitting(false);
@@ -110,7 +112,7 @@ export default function ItemSetupPage() {
     );
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 lg:px-6 px-4">
+        <>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20 text-primary">
@@ -148,23 +150,23 @@ export default function ItemSetupPage() {
                                 </div>
                                 <div className="grid gap-2">
                                     <Label>Category</Label>
-                                    <Select value={newItem.categoryId?.toString()} onValueChange={val => setNewItem({ ...newItem, categoryId: parseInt(val) })}>
+                                    <Select value={newItem.categoryId} onValueChange={val => setNewItem({ ...newItem, categoryId: val })}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select category" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {categories.map(cat => <SelectItem key={cat.id} value={cat.id.toString()}>{cat.categoryName}</SelectItem>)}
+                                            {categories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.categoryName}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>
                                 <div className="grid gap-2">
                                     <Label>Unit of Measure</Label>
-                                    <Select value={newItem.unitId?.toString()} onValueChange={val => setNewItem({ ...newItem, unitId: parseInt(val) })}>
+                                    <Select value={newItem.unitId} onValueChange={val => setNewItem({ ...newItem, unitId: val })}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select unit" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {units.map(u => <SelectItem key={u.id} value={u.id.toString()}>{u.unitName} ({u.shortName})</SelectItem>)}
+                                            {units.map(u => <SelectItem key={u.id} value={u.id}>{u.unitName} ({u.shortName})</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -274,6 +276,16 @@ export default function ItemSetupPage() {
                     </div>
                 </CardContent>
             </Card>
-        </div>
-    )
+        </>
+    );
+}
+
+export default function ItemSetupPage() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <ItemSetupContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
+    );
 }

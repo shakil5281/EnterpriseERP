@@ -5,6 +5,7 @@ namespace FinishingService.Application;
 
 public sealed record GetFinishingReceivesQuery(Guid CompanyId, Guid? OrderId, string? Status) : IRequest<IReadOnlyList<FinishingReceiveDto>>;
 public sealed record GetFinishingReceiveByIdQuery(Guid Id) : IRequest<FinishingReceiveDto>;
+public sealed record GetFinishingReceiveQuantityQuery(Guid CompanyId, Guid OrderId, string? Color, string Size) : IRequest<int>;
 
 public sealed record GetFinishingBatchesQuery(Guid CompanyId, Guid? OrderId, string? Status) : IRequest<IReadOnlyList<FinishingBatchDto>>;
 public sealed record GetFinishingBatchByIdQuery(Guid Id) : IRequest<FinishingBatchDto>;

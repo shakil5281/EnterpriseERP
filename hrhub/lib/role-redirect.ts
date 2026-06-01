@@ -31,6 +31,11 @@ export const roleRedirectMap: Record<string, string> = {
     // Merchandising module roles
     'Merchandising': '/merchandising/dashboard',
     'Merchandiser': '/merchandising/dashboard',
+
+    // Security module roles
+    'SecurityManager': '/security/dashboard',
+    'SecurityOfficer': '/security/dashboard',
+    'GateOfficer': '/security/dashboard',
 }
 
 /**

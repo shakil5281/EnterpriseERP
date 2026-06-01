@@ -40,6 +40,9 @@ public sealed record SubmitPurchaseRequisitionCommand(Guid Id) : IRequest<Purcha
 public sealed record GenerateRequisitionFromOrderCommand(Guid OrderId, CreatePurchaseRequisitionRequest Request) : IRequest<PurchaseRequisitionDto>;
 
 public sealed record GetBuyerContactsQuery(Guid BuyerId) : IRequest<IReadOnlyList<BuyerContactDto>>;
+public sealed record GetBuyerPaymentTermsQuery(Guid BuyerId) : IRequest<IReadOnlyList<BuyerPaymentTermDto>>;
+public sealed record GetBuyerComplianceRulesQuery(Guid BuyerId) : IRequest<IReadOnlyList<BuyerComplianceRuleDto>>;
+public sealed record GetQuotationNegotiationsQuery(Guid CompanyId, Guid QuotationId) : IRequest<IReadOnlyList<QuotationNegotiationDto>>;
 public sealed record GetStyleVersionsQuery(Guid StyleId) : IRequest<IReadOnlyList<StyleVersionDto>>;
 public sealed record GetStyleBomItemsQuery(Guid StyleId) : IRequest<IReadOnlyList<StyleBomItemDto>>;
 public sealed record GetQuotationsQuery(Guid CompanyId, Guid? BuyerId) : IRequest<IReadOnlyList<QuotationDto>>;

@@ -12,13 +12,16 @@ public sealed record AttendanceEmployeeProfile(
     Guid? SectionId,
     string? SectionName,
     Guid? DesignationId,
-    string? DesignationName);
+    string? DesignationName,
+    string? LineName);
 
 public sealed record AttendanceEmployeeFilter(
     Guid CompanyId,
     Guid? DepartmentId = null,
     Guid? SectionId = null,
     Guid? DesignationId = null,
+    Guid? GroupId = null,
+    string? LineName = null,
     string? SearchTerm = null,
     string? EmployeeID = null);
 

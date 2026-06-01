@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ShiftService.Application\ShiftService.Application.csproj" />
     <ProjectReference Include="..\ShiftService.Domain\ShiftService.Domain.csproj" />
+    <ProjectReference Include="..\..\LeaveService\LeaveService.Infrastructure\LeaveService.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.Contracts\Erp.BuildingBlocks.Contracts.csproj" />
   </ItemGroup>
 

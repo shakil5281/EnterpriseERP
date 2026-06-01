@@ -236,7 +236,7 @@ export default function RemoteCollectPage() {
                 <Card className="border-amber-200 bg-amber-50/80">
                     <CardContent className="p-4 text-sm text-amber-950">
                         Remote ZKTeco SQL is configured but not reachable:{" "}
-                        {remoteStatus.message ?? "check VPN/firewall and that 103.87.136.72:1433 is open from this machine."}
+                        {remoteStatus.message ?? "check SQL Server (SHAKIL\\SQLEXPRESS), database zkteco, and that PunchDataService is running on port 5050."}
                     </CardContent>
                 </Card>
             )}

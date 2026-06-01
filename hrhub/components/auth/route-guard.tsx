@@ -13,31 +13,28 @@ interface RouteGuardProps {
 }
 
 export function RouteGuard({ children, requiredRoles = [], fallbackUrl = "/unauthorized" }: RouteGuardProps) {
-    const { user, loading, hasAnyRole } = useAuth()
+    const { user, loading, isAuthenticated, hasAnyRole } = useAuth()
     const router = useRouter()
 
     useEffect(() => {
         if (loading) return
 
-        const hasToken = authService.isAuthenticated()
-
-        if (!user && !hasToken) {
-            router.push("/login")
+        if (!isAuthenticated || !user?.roles?.length) {
+            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search)
+            router.replace(`/login?returnUrl=${returnUrl}`)
             return
         }
 
-        if (!user) return
-
         if (requiredRoles.length > 0 && !hasAnyRole(requiredRoles)) {
-            router.push(fallbackUrl)
+            router.replace(fallbackUrl)
         }
-    }, [user, loading, hasAnyRole, requiredRoles, router, fallbackUrl])
+    }, [user, loading, isAuthenticated, hasAnyRole, requiredRoles, router, fallbackUrl])
 
     if (loading) {
         return <FullScreenLoading message="Verifying access..." />
     }
 
-    if (!user) {
+    if (!isAuthenticated || !user?.roles?.length) {
         if (authService.isAuthenticated()) {
             return <FullScreenLoading message="Verifying access..." />
         }

@@ -1,0 +1,31 @@
+---
+description: Locked dark-mode theme tokens for hrhub — do not change --primary in .dark
+globs: hrhub/**/*
+alwaysApply: false
+---
+
+# hrhub dark mode theme (locked)
+
+## Do NOT change
+
+In `hrhub/app/globals.css`, under `.dark`:
+
+- **`--primary` must stay `#2a3746`**
+- **`--primary-foreground` must stay `#d8dce2`**
+- **`--sidebar-primary` must stay `#2a3746`** (aligned with primary)
+
+These are surface/button tokens on the blue-gray dark theme, not link accent colors.
+
+## Readable text on dark tables
+
+- Body cell text: `text-foreground` (or rely on `DataTable` default `text-foreground` on cells).
+- **Never use `text-primary` for plain table text in dark mode** — primary blends into the row background.
+
+## Links and green accent
+
+- Use **`text-erp-accent`** / **`hover:text-erp-accent`** for interactive links in tables (maps to `--erp-accent`, green in both themes).
+- Light mode: `--erp-accent` matches brand green; dark mode: same green for hover/links only.
+
+## Reference
+
+See `hrhub/docs/THEME.md` for the full token table.

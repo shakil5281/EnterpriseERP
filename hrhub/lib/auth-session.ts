@@ -5,6 +5,8 @@ import {
   clearActiveCompanyStorage,
   syncActiveCompanyStorage,
 } from "@/lib/active-company-storage";
+import { clearSessionCookie, syncSessionCookieFromLocalStorage } from "@/lib/auth-cookie-sync";
+import { isLogoutInProgress, clearAllClientSession, beginLogout } from "@/lib/logout";
 
 const COOKIE_MAX_AGE_SEC = 60 * 60 * 24;
 
@@ -37,6 +39,7 @@ export function applySessionTokens(accessToken: string, refreshToken?: string) {
 /** Single-flight refresh so parallel 401s do not invalidate a rotated refresh token. */
 export async function refreshAccessToken(): Promise<string | null> {
   if (typeof window === "undefined") return null;
+  if (isLogoutInProgress()) return null;
 
   const storedRefresh = localStorage.getItem("refreshToken");
   if (!storedRefresh) return null;
@@ -67,13 +70,15 @@ export async function refreshAccessToken(): Promise<string | null> {
 }
 
 export function clearSessionAndRedirectToLogin() {
-  document.cookie =
-    "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
-  localStorage.removeItem("token");
-  localStorage.removeItem("refreshToken");
-  localStorage.removeItem("user");
-  clearActiveCompanyStorage();
-  window.location.href = "/login";
+  if (isLogoutInProgress()) return;
+  beginLogout();
+  clearAllClientSession();
+  const path = typeof window !== "undefined" ? window.location.pathname : "";
+  const returnUrl =
+    path && path !== "/login" && !path.startsWith("/login")
+      ? `?returnUrl=${encodeURIComponent(path)}`
+      : "";
+  window.location.href = `/login${returnUrl}`;
 }
 
 export function isSkippableAuthRetryUrl(url?: string): boolean {

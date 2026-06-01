@@ -16,6 +16,7 @@ public interface ICuttingDbContext
     IQueryable<CuttingPanelTransfer> CuttingPanelTransfers { get; }
     IQueryable<CuttingPanelTransferItem> CuttingPanelTransferItems { get; }
     IQueryable<CuttingAuditLog> AuditLogs { get; }
+    IQueryable<CuttingBundle> CuttingBundles { get; }
     void Add<TEntity>(TEntity entity) where TEntity : class;
     void Remove<TEntity>(TEntity entity) where TEntity : class;
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
@@ -39,6 +40,7 @@ public interface IUnitOfWork
     IRepository<CuttingWastage> Wastages { get; }
     IRepository<CuttingBalance> Balances { get; }
     IRepository<CuttingPanelTransfer> PanelTransfers { get; }
+    IRepository<CuttingBundle> Bundles { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
 

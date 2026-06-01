@@ -26,7 +26,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { payrollService, type MonthlySalarySheet } from "@/lib/services/payroll"
 import { organogramService, type Department, type Section, type Designation, type Line, type Group, type Shift, type Floor } from "@/lib/services/organogram"
-import { companyService, type Company } from "@/lib/services/company"
+import { ManagementLegacyCompanySelect } from "@/components/hr/management-legacy-company-select"
 import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
@@ -65,15 +65,10 @@ export default function PaySlipListPage() {
     const [hasSearched, setHasSearched] = React.useState(false)
 
     // Option Lists
-    const [companies, setCompanies] = React.useState<Company[]>([])
     const [departments, setDepartments] = React.useState<Department[]>([])
     const [sections, setSections] = React.useState<Section[]>([])
     const [designations, setDesignations] = React.useState<Designation[]>([])
     const [lines, setLines] = React.useState<Line[]>([])
-
-    React.useEffect(() => {
-        companyService.getAll().then(setCompanies).catch(console.error)
-    }, [])
 
     React.useEffect(() => {
         if (selectedCompanyId !== "All") {
@@ -241,10 +236,12 @@ export default function PaySlipListPage() {
                         </div>
                         <div className="space-y-2">
                             <Label className="text-[11px] uppercase font-bold text-muted-foreground tracking-wider">Select Company</Label>
-                            <NativeSelect value={selectedCompanyId} onChange={(e) => setSelectedCompanyId(e.target.value === "All" ? "All" : parseInt(e.target.value))} className="h-11">
-                                <option value="All">All Companies</option>
-                                {companies.map(c => <option key={c.id} value={c.id}>{c.companyNameEn}</option>)}
-                            </NativeSelect>
+                            <ManagementLegacyCompanySelect
+                                value={selectedCompanyId === "All" ? "All" : String(selectedCompanyId)}
+                                onChange={(value) => setSelectedCompanyId(value === "All" ? "All" : parseInt(value))}
+                                allValue="All"
+                                className="h-11"
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label className="text-[11px] uppercase font-bold text-muted-foreground tracking-wider">Department</Label>
@@ -378,7 +375,7 @@ function PayslipCard({ data }: { data: MonthlySalarySheet }) {
                 {/* Header */}
                 <div className="flex justify-between items-start border-b border-border pb-4 print:border-slate-200">
                     <div className="flex items-center gap-3">
-                        <div className="size-12 bg-slate-900 rounded-xl flex items-center justify-center text-white dark:bg-slate-800">
+                        <div className="size-12 bg-primary rounded-xl flex items-center justify-center text-primary-foreground">
                             <IconBuilding className="size-7" />
                         </div>
                         <div>
@@ -489,11 +486,11 @@ function PayslipCard({ data }: { data: MonthlySalarySheet }) {
                 {/* Signature Row */}
                 <div className="grid grid-cols-2 gap-12 pt-10 px-2">
                     <div className="text-center space-y-1">
-                        <div className="h-[1px] bg-slate-200 w-full mb-2 print:border-t print:border-slate-300" />
+                        <div className="h-px bg-slate-200 w-full mb-2 print:border-t print:border-slate-300" />
                         <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest">Employee Acknowledgment</span>
                     </div>
                     <div className="text-center space-y-1">
-                        <div className="h-[1px] bg-slate-200 w-full mb-2 print:border-t print:border-slate-300" />
+                        <div className="h-px bg-slate-200 w-full mb-2 print:border-t print:border-slate-300" />
                         <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest">Authorized Signatory</span>
                     </div>
                 </div>

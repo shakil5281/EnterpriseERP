@@ -1,4 +1,5 @@
 using AutoMapper;
+using Erp.BuildingBlocks.Contracts.Pagination;
 using Erp.BuildingBlocks.EventBus;
 using LeaveService.Application.Common.Exceptions;
 using LeaveService.Application.Common.Interfaces;
@@ -34,7 +35,13 @@ public sealed record CreateHolidayCommand(HolidayRequest Request) : IRequest<Hol
 
 public sealed record UpdateHolidayCommand(Guid Id, HolidayRequest Request) : IRequest<HolidayDto>;
 
-public sealed record GetHolidaysQuery(Guid CompanyId, int Year) : IRequest<IReadOnlyList<HolidayDto>>;
+public sealed class HolidayListQuery : PagedRequest
+{
+    public Guid CompanyId { get; set; }
+    public int Year { get; set; }
+}
+
+public sealed record GetHolidaysQuery(HolidayListQuery Query) : IRequest<PaginatedList<HolidayDto>>;
 
 public sealed record DeleteHolidayCommand(Guid Id) : IRequest<Unit>;
 
@@ -50,7 +57,13 @@ public sealed record GetEarnLeaveSummaryQuery(Guid CompanyId, Guid EmployeeId, i
 
 public sealed record CreateLeaveEncashmentCommand(LeaveEncashmentRequest Request) : IRequest<LeaveEncashmentDto>;
 
-public sealed record GetLeaveEncashmentsQuery(Guid CompanyId, int? Year) : IRequest<IReadOnlyList<LeaveEncashmentDto>>;
+public sealed class LeaveEncashmentListQuery : PagedRequest
+{
+    public Guid CompanyId { get; set; }
+    public int? Year { get; set; }
+}
+
+public sealed record GetLeaveEncashmentsQuery(LeaveEncashmentListQuery Query) : IRequest<PaginatedList<LeaveEncashmentDto>>;
 
 public sealed record ApproveLeaveEncashmentCommand(Guid Id, Guid ApprovedBy) : IRequest<LeaveEncashmentDto>;
 
@@ -139,13 +152,16 @@ public sealed class GenerateYearlyBalancesCommandHandler(ILeaveUnitOfWork uow, I
         var employeeIds = await employees.GetActiveEmployeeIdsAsync(r.CompanyId, cancellationToken);
         var policies = await uow.LeavePolicies.ListByCompanyAsync(r.CompanyId, cancellationToken);
         var activePolicies = policies.Where(p => p.IsActive).ToList();
+        var existingKeys = await uow.EmployeeLeaveBalances.GetExistingBalanceKeysAsync(
+            r.CompanyId,
+            r.YearNo,
+            cancellationToken);
         var count = 0;
         foreach (var emp in employeeIds)
         {
             foreach (var p in activePolicies)
             {
-                var existing = await uow.EmployeeLeaveBalances.GetAsync(r.CompanyId, emp, p.LeaveTypeId, r.YearNo, cancellationToken);
-                if (existing != null)
+                if (existingKeys.Contains((emp, p.LeaveTypeId)))
                 {
                     continue;
                 }
@@ -291,17 +307,26 @@ public sealed class UpdateHolidayCommandHandler(ILeaveUnitOfWork uow, IMapper ma
     }
 }
 
-public sealed class GetHolidaysQueryHandler(ILeaveUnitOfWork uow, IMapper mapper, ILeaveCache cache) : IRequestHandler<GetHolidaysQuery, IReadOnlyList<HolidayDto>>
+public sealed class GetHolidaysQueryHandler(ILeaveUnitOfWork uow, IMapper mapper) : IRequestHandler<GetHolidaysQuery, PaginatedList<HolidayDto>>
 {
-    public async Task<IReadOnlyList<HolidayDto>> Handle(GetHolidaysQuery request, CancellationToken cancellationToken)
+    public async Task<PaginatedList<HolidayDto>> Handle(GetHolidaysQuery request, CancellationToken cancellationToken)
     {
-        var key = $"holidays:{request.CompanyId}:{request.Year}";
-        var data = await cache.GetOrCreateAsync(key, TimeSpan.FromHours(12), async ct =>
+        var q = request.Query;
+        q.Normalize();
+
+        var filter = new HolidayListFilter
         {
-            var list = await uow.Holidays.ListByCompanyYearAsync(request.CompanyId, request.Year, ct);
-            return list.Select(x => mapper.Map<HolidayDto>(x)).ToList();
-        }, cancellationToken);
-        return data == null ? Array.Empty<HolidayDto>() : data;
+            CompanyId = q.CompanyId,
+            Year = q.Year,
+            Page = q.Page,
+            PageSize = q.PageSize,
+            GetAll = q.GetAll,
+        };
+
+        var (items, total) = await uow.Holidays.ListByCompanyYearPagedAsync(filter, cancellationToken);
+        var data = items.Select(x => mapper.Map<HolidayDto>(x)).ToList();
+        var pagination = PaginationMetadata.Create(q.Page, q.PageSize, total, q.GetAll);
+        return PaginatedList<HolidayDto>.From(data, pagination);
     }
 }
 
@@ -446,12 +471,26 @@ public sealed class CreateLeaveEncashmentCommandHandler(ILeaveUnitOfWork uow, IM
     }
 }
 
-public sealed class GetLeaveEncashmentsQueryHandler(ILeaveUnitOfWork uow, IMapper mapper) : IRequestHandler<GetLeaveEncashmentsQuery, IReadOnlyList<LeaveEncashmentDto>>
+public sealed class GetLeaveEncashmentsQueryHandler(ILeaveUnitOfWork uow, IMapper mapper) : IRequestHandler<GetLeaveEncashmentsQuery, PaginatedList<LeaveEncashmentDto>>
 {
-    public async Task<IReadOnlyList<LeaveEncashmentDto>> Handle(GetLeaveEncashmentsQuery request, CancellationToken cancellationToken)
+    public async Task<PaginatedList<LeaveEncashmentDto>> Handle(GetLeaveEncashmentsQuery request, CancellationToken cancellationToken)
     {
-        var list = await uow.LeaveEncashments.ListByCompanyYearAsync(request.CompanyId, request.Year, cancellationToken);
-        return list.Select(x => mapper.Map<LeaveEncashmentDto>(x)).ToList();
+        var q = request.Query;
+        q.Normalize();
+
+        var filter = new LeaveEncashmentListFilter
+        {
+            CompanyId = q.CompanyId,
+            Year = q.Year,
+            Page = q.Page,
+            PageSize = q.PageSize,
+            GetAll = q.GetAll,
+        };
+
+        var (items, total) = await uow.LeaveEncashments.ListByCompanyYearPagedAsync(filter, cancellationToken);
+        var data = items.Select(x => mapper.Map<LeaveEncashmentDto>(x)).ToList();
+        var pagination = PaginationMetadata.Create(q.Page, q.PageSize, total, q.GetAll);
+        return PaginatedList<LeaveEncashmentDto>.From(data, pagination);
     }
 }
 
@@ -552,9 +591,8 @@ public sealed class GetDayTypeQueryHandler(ILeaveUnitOfWork uow) : IRequestHandl
             return new DayTypeResponse(DayTypeKind.Holiday, null, null, false);
         }
 
-        var weekly = await uow.WeeklyOffRules.ListByCompanyAsync(request.CompanyId, cancellationToken);
         var dow = request.Date.ToDateTime(TimeOnly.MinValue).DayOfWeek.ToString();
-        if (weekly.Any(w => w.IsActive && string.Equals(w.DayOfWeekName, dow, StringComparison.OrdinalIgnoreCase)))
+        if (await uow.WeeklyOffRules.HasActiveWeeklyOffAsync(request.CompanyId, dow, cancellationToken))
         {
             return new DayTypeResponse(DayTypeKind.WeeklyOff, null, null, false);
         }

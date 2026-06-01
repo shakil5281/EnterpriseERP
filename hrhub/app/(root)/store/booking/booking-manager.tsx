@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { IconNotebook, IconPlus, IconSearch, IconDownload, IconLoader2, IconCircleCheck, IconClock, IconFilter } from "@tabler/icons-react"
+import { IconNotebook, IconPlus, IconSearch, IconDownload, IconLoader2, IconCircleCheck, IconClock } from "@tabler/icons-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -31,16 +31,18 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import storeService, { StoreBooking, StoreOrder, StoreItem } from "@/lib/services/store"
+import { storeService } from "@/lib/services/store"
+import type { StoreBooking, StoreOrder, StoreItem, CreateStoreBookingRequest } from "@/lib/types/store"
 import { toast } from "sonner"
 
 interface BookingManagerProps {
+    companyId: string;
     bookingType: string;
     description: string;
     accentColor?: string;
 }
 
-export default function BookingManagementPage({ bookingType, description, accentColor = "sky" }: BookingManagerProps) {
+export default function BookingManagementPage({ companyId, bookingType, description, accentColor = "sky" }: BookingManagerProps) {
     const [bookings, setBookings] = React.useState<StoreBooking[]>([]);
     const [orders, setOrders] = React.useState<StoreOrder[]>([]);
     const [items, setItems] = React.useState<StoreItem[]>([]);
@@ -49,26 +51,25 @@ export default function BookingManagementPage({ bookingType, description, accent
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
     const [submitting, setSubmitting] = React.useState(false);
 
-    const [newBooking, setNewBooking] = React.useState<Partial<StoreBooking>>({
-        orderId: 0,
-        itemId: 0,
+    const [newBooking, setNewBooking] = React.useState<Omit<CreateStoreBookingRequest, "companyId">>({
+        orderId: "",
+        itemId: "",
         bookedQuantity: 0,
         bookingDate: new Date().toISOString().split('T')[0],
         bookingType: bookingType,
-        status: "Pending"
     });
 
     const fetchData = async () => {
         try {
             const [bookingData, orderData, itemData] = await Promise.all([
-                storeService.getBookings(bookingType),
-                storeService.getOrders(),
-                storeService.getItems()
+                storeService.getBookings(companyId, bookingType),
+                storeService.getOrders(companyId),
+                storeService.getItems(companyId),
             ]);
             setBookings(bookingData);
             setOrders(orderData);
             setItems(itemData);
-        } catch (error) {
+        } catch {
             toast.error(`Failed to load ${bookingType} bookings`);
         } finally {
             setLoading(false);
@@ -77,7 +78,7 @@ export default function BookingManagementPage({ bookingType, description, accent
 
     React.useEffect(() => {
         fetchData();
-    }, [bookingType]);
+    }, [companyId, bookingType]);
 
     const handleAddBooking = async () => {
         if (!newBooking.orderId || !newBooking.itemId || !newBooking.bookedQuantity) {
@@ -87,19 +88,18 @@ export default function BookingManagementPage({ bookingType, description, accent
 
         setSubmitting(true);
         try {
-            await storeService.addBooking(newBooking);
+            await storeService.addBooking({ ...newBooking, companyId });
             toast.success("Material booking created successfully");
             setIsDialogOpen(false);
             setNewBooking({
-                orderId: 0,
-                itemId: 0,
+                orderId: "",
+                itemId: "",
                 bookedQuantity: 0,
                 bookingDate: new Date().toISOString().split('T')[0],
                 bookingType: bookingType,
-                status: "Pending"
             });
             fetchData();
-        } catch (error) {
+        } catch {
             toast.error("Failed to create booking");
         } finally {
             setSubmitting(false);
@@ -121,7 +121,7 @@ export default function BookingManagementPage({ bookingType, description, accent
     };
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${colorClasses[accentColor as keyof typeof colorClasses]}`}>
@@ -147,23 +147,23 @@ export default function BookingManagementPage({ bookingType, description, accent
                         <div className="grid gap-4 py-4">
                             <div className="grid gap-2">
                                 <Label>Select Project/Order</Label>
-                                <Select value={newBooking.orderId?.toString()} onValueChange={v => setNewBooking({ ...newBooking, orderId: parseInt(v) })}>
+                                <Select value={newBooking.orderId} onValueChange={v => setNewBooking({ ...newBooking, orderId: v })}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Link to Order #" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {orders.map(o => <SelectItem key={o.id?.toString()} value={o.id?.toString() || ""}>{o.orderNumber} - {o.buyerName || "No Buyer"}</SelectItem>)}
+                                        {orders.map(o => <SelectItem key={o.id} value={o.id}>{o.orderNumber} - {o.buyerName || "No Buyer"}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
                             <div className="grid gap-2">
                                 <Label>Item to Book</Label>
-                                <Select value={newBooking.itemId?.toString()} onValueChange={v => setNewBooking({ ...newBooking, itemId: parseInt(v) })}>
+                                <Select value={newBooking.itemId} onValueChange={v => setNewBooking({ ...newBooking, itemId: v })}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Search Inventory Item..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {items.map(i => <SelectItem key={i.id?.toString()} value={i.id?.toString() || ""}>{i.itemName} ({i.itemCode})</SelectItem>)}
+                                        {items.map(i => <SelectItem key={i.id} value={i.id}>{i.itemName} ({i.itemCode})</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -281,6 +281,6 @@ export default function BookingManagementPage({ bookingType, description, accent
                     </div>
                 </CardContent>
             </Card>
-        </div>
-    )
+        </>
+    );
 }

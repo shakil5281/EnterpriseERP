@@ -5,7 +5,6 @@ import { IconPackageOff, IconDownload, IconLoader2, IconAlertTriangle, IconDatab
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import {
     Table,
@@ -15,10 +14,12 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import storeService, { StoreBooking } from "@/lib/services/store"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { StoreBooking } from "@/lib/types/store"
 import { toast } from "sonner"
 
-export default function ShortageReportPage() {
+function ShortageReportContent({ companyId }: { companyId: string }) {
     const [report, setReport] = React.useState<StoreBooking[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [search, setSearch] = React.useState("");
@@ -26,9 +27,9 @@ export default function ShortageReportPage() {
     const fetchReport = async () => {
         setLoading(true);
         try {
-            const data = await storeService.getShortageReport();
+            const data = await storeService.getShortageReport(companyId);
             setReport(data);
-        } catch (error) {
+        } catch {
             toast.error("Failed to generate shortage report");
         } finally {
             setLoading(false);
@@ -37,7 +38,7 @@ export default function ShortageReportPage() {
 
     React.useEffect(() => {
         fetchReport();
-    }, []);
+    }, [companyId]);
 
     const filtered = report.filter(i =>
         i.itemName.toLowerCase().includes(search.toLowerCase()) ||
@@ -48,7 +49,7 @@ export default function ShortageReportPage() {
     const totalShortageQty = report.reduce((sum, item) => sum + (item.bookedQuantity - (item.issuedQty || 0)), 0);
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400">
@@ -59,11 +60,9 @@ export default function ShortageReportPage() {
                         <p className="text-muted-foreground text-sm">Critical gaps between required bookings and actual inventory.</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" className="gap-2 border-orange-200 dark:border-orange-900/50 text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/10">
-                        <IconDownload className="size-4" /> Download PDF Analysis
-                    </Button>
-                </div>
+                <Button variant="outline" className="gap-2 border-orange-200 dark:border-orange-900/50 text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/10">
+                    <IconDownload className="size-4" /> Download PDF Analysis
+                </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
@@ -92,12 +91,7 @@ export default function ShortageReportPage() {
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="relative flex-1 max-w-[500px]">
                             <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-4" />
-                            <Input
-                                placeholder="Search by Order #, Item or Code..."
-                                className="pl-10 h-10 border-muted-foreground/20"
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                            />
+                            <Input placeholder="Search by Order #, Item or Code..." className="pl-10 h-10 border-muted-foreground/20" value={search} onChange={e => setSearch(e.target.value)} />
                         </div>
                         <Button variant="outline" size="sm" className="h-10 hover:bg-muted" onClick={fetchReport}>
                             <IconAlertTriangle className="size-4 mr-2" /> Recalculate Logic
@@ -170,6 +164,16 @@ export default function ShortageReportPage() {
                     </div>
                 </CardContent>
             </Card>
-        </div>
-    )
+        </>
+    );
+}
+
+export default function ShortageReportPage() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <ShortageReportContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
+    );
 }

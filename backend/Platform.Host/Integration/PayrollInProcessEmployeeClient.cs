@@ -22,7 +22,7 @@ public sealed class PayrollInProcessEmployeeClient(IEmployeeReadService employee
             PageSize = 200,
         }, cancellationToken);
 
-        return result.Items
+        return result.Data
             .Where(x => string.Equals(x.Status, "Active", StringComparison.OrdinalIgnoreCase))
             .Select(MapListItem)
             .ToList();
@@ -85,7 +85,7 @@ public sealed class PayrollInProcessEmployeeClient(IEmployeeReadService employee
             PageSize = 200,
         }, cancellationToken);
 
-        var row = manpower.Items.FirstOrDefault(x => x.Id == employeeId);
+        var row = manpower.Data.FirstOrDefault(x => x.Id == employeeId);
         if (row is null || row.GrossSalary <= 0)
         {
             return null;

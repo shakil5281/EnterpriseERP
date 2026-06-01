@@ -6,6 +6,7 @@
     <ProjectReference Include="..\PayrollService.Contracts\PayrollService.Contracts.csproj" />
     <ProjectReference Include="..\PayrollService.Domain\PayrollService.Domain.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.Contracts\Erp.BuildingBlocks.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.ReportExport\Erp.BuildingBlocks.ReportExport.csproj" />
   </ItemGroup>
 
   <ItemGroup>

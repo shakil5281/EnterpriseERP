@@ -25,6 +25,8 @@ public sealed class HrReadDbContext(DbContextOptions<HrReadDbContext> options) :
         {
             entity.ToTable("EmployeeJobInfos");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.WorkLocation).HasMaxLength(256);
+            entity.Property(x => x.GroupId);
         });
 
         modelBuilder.Entity<HrDepartmentEntity>(entity =>

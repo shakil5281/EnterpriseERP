@@ -76,6 +76,147 @@ public sealed class ShiftEvaluationService(
             assignmentSource);
     }
 
+    public async Task<IReadOnlyList<ShiftEvaluationDto>> EvaluateManyAsync(
+        Guid companyId,
+        IReadOnlyCollection<Guid> employeeIds,
+        DateTime attendanceDate,
+        CancellationToken cancellationToken = default)
+    {
+        if (employeeIds.Count == 0)
+        {
+            return [];
+        }
+
+        var date = attendanceDate.Date;
+        var employees = employeeIds.Distinct().ToList();
+
+        var tempAssignments = new Dictionary<Guid, Shift>();
+        foreach (var chunk in employees.Chunk(1000))
+        {
+            var rows = await db.TemporaryShiftAssignments
+                .AsNoTracking()
+                .Include(t => t.Shift)
+                .ThenInclude(s => s!.Rule)
+                .Where(t => t.CompanyId == companyId
+                    && chunk.Contains(t.EmployeeId)
+                    && t.ShiftDate.Date == date)
+                .ToListAsync(cancellationToken);
+
+            foreach (var row in rows)
+            {
+                if (row.Shift is not null)
+                {
+                    tempAssignments[row.EmployeeId] = row.Shift;
+                }
+            }
+        }
+
+        var regularAssignments = new Dictionary<Guid, Shift>();
+        foreach (var chunk in employees.Chunk(1000))
+        {
+            var rows = await db.EmployeeShiftAssignments
+                .AsNoTracking()
+                .Include(a => a.Shift)
+                .ThenInclude(s => s!.Rule)
+                .Where(a => a.CompanyId == companyId
+                    && chunk.Contains(a.EmployeeId)
+                    && a.IsCurrent
+                    && a.EffectiveFrom <= date
+                    && (a.EffectiveTo == null || a.EffectiveTo >= date))
+                .ToListAsync(cancellationToken);
+
+            foreach (var row in rows)
+            {
+                if (row.Shift is not null)
+                {
+                    regularAssignments[row.EmployeeId] = row.Shift;
+                }
+            }
+        }
+
+        var defaultShift = await db.Shifts
+            .AsNoTracking()
+            .Include(s => s.Rule)
+            .FirstOrDefaultAsync(s => s.CompanyId == companyId && s.IsDefault && s.IsActive, cancellationToken)
+            ?? await db.Shifts
+                .AsNoTracking()
+                .Include(s => s.Rule)
+                .Where(s => s.CompanyId == companyId)
+                .OrderByDescending(s => s.IsActive)
+                .ThenByDescending(s => s.IsDefault)
+                .FirstOrDefaultAsync(cancellationToken)
+            ?? CreateFallbackShift(companyId);
+
+        var isLeaveWeeklyOff = await leaveCalendar.IsWeeklyOffAsync(companyId, date, cancellationToken);
+        var isHoliday = await leaveCalendar.IsHolidayAsync(companyId, date, cancellationToken);
+
+        return employees
+            .Select(employeeId =>
+            {
+                if (tempAssignments.TryGetValue(employeeId, out var tempShift))
+                {
+                    return BuildEvaluation(companyId, employeeId, date, tempShift, "Temporary", isLeaveWeeklyOff, isHoliday);
+                }
+
+                if (regularAssignments.TryGetValue(employeeId, out var rosterShift))
+                {
+                    return BuildEvaluation(companyId, employeeId, date, rosterShift, "Roster", isLeaveWeeklyOff, isHoliday);
+                }
+
+                var source = defaultShift.Id == Guid.Empty ? "Fallback" : "General";
+                return BuildEvaluation(companyId, employeeId, date, defaultShift, source, isLeaveWeeklyOff, isHoliday);
+            })
+            .ToList();
+    }
+
+    private static ShiftEvaluationDto BuildEvaluation(
+        Guid companyId,
+        Guid employeeId,
+        DateTime date,
+        Shift shift,
+        string assignmentSource,
+        bool isLeaveWeeklyOff,
+        bool isHoliday)
+    {
+        var rule = shift.Rule
+            ?? ShiftPolicyTemplates.CreateDefaultRule(companyId, shift.Id, shift.ShiftCategory);
+
+        var (shiftStart, shiftEnd) = ShiftWindowCalculator.GetShiftBounds(date, shift);
+        var (windowStart, windowEnd) = ShiftWindowCalculator.GetPunchWindow(
+            date,
+            shift,
+            rule.OutGraceMinutes,
+            rule.MaximumOvertimeMinutes);
+
+        var isShiftWeeklyOff = shift.WeeklyOffDayOfWeek.HasValue
+            && shift.WeeklyOffDayOfWeek.Value == (int)date.DayOfWeek;
+        var isWeeklyOff = isShiftWeeklyOff || isLeaveWeeklyOff;
+        var calendarDayType = isHoliday ? "Holiday"
+            : isWeeklyOff ? "WeeklyOff"
+            : "WorkingDay";
+        var fullOt = (isHoliday && rule.HolidayWorkAllAsOvertime)
+            || (isWeeklyOff && rule.WeeklyOffWorkAllAsOvertime);
+
+        return new ShiftEvaluationDto(
+            companyId,
+            employeeId,
+            date,
+            shift.Id,
+            shift.ShiftName,
+            shift.ShiftCategory.ToString(),
+            shiftStart,
+            shiftEnd,
+            shift.IsCrossDay,
+            windowStart,
+            windowEnd,
+            calendarDayType,
+            isWeeklyOff,
+            isHoliday,
+            fullOt,
+            ShiftDtoMapping.ToPolicyDto(rule),
+            assignmentSource);
+    }
+
     private static Shift CreateFallbackShift(Guid companyId) =>
         new()
         {

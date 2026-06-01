@@ -13,28 +13,76 @@ namespace HRService.Api.Controllers;
 public sealed class EmployeesController(
     IEmployeeReadService employees,
     IEmployeeService employeeService,
+    IEmployeeImportService employeeImport,
+    IEmployeeExcelImportService employeeExcelImport,
     ITenantContext tenant) : ControllerBase
 {
+    public sealed class EmployeeBatchRequest
+    {
+        public IReadOnlyList<Guid> Ids { get; init; } = [];
+    }
+
     [HttpGet]
     [Authorize(Policy = "Permission:hr.employees.read")]
-    public async Task<ActionResult<ApiResponse<PagedResult<EmployeeListItemDto>>>> List(
+    public async Task<ActionResult<PaginatedApiResponse<EmployeeListItemDto>>> List(
         [FromQuery] EmployeeListQuery query,
         CancellationToken cancellationToken)
     {
         query.CompanyId = TenantCompanyResolver.ResolveCompanyId(tenant, query.CompanyId);
-        var data = await employees.ListAsync(query, cancellationToken);
-        return Ok(ApiResponse<PagedResult<EmployeeListItemDto>>.Ok(data, HttpContext.TraceIdentifier));
+        var result = await employees.ListAsync(query, cancellationToken);
+        return Ok(PaginatedApiResponse<EmployeeListItemDto>.Ok(
+            result.Data,
+            result.Pagination,
+            "Data loaded successfully",
+            HttpContext.TraceIdentifier));
+    }
+
+    [HttpPost("batch")]
+    [Authorize(Policy = "Permission:hr.employees.read")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<EmployeeListItemDto>>>> Batch(
+        [FromBody] EmployeeBatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        var ids = request.Ids?.Where(x => x != Guid.Empty).Distinct().ToArray() ?? [];
+        if (ids.Length == 0)
+            return Ok(ApiResponse<IReadOnlyList<EmployeeListItemDto>>.Ok([], HttpContext.TraceIdentifier));
+
+        var items = await employees.ListByIdsAsync(ids, cancellationToken);
+        var allowed = items.Where(e => tenant.HasAccessToCompany(e.CompanyId)).ToList();
+        return Ok(ApiResponse<IReadOnlyList<EmployeeListItemDto>>.Ok(allowed, HttpContext.TraceIdentifier));
+    }
+
+    [HttpPost("lookup")]
+    [Authorize(Policy = "Permission:hr.employees.read")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<EmployeeLookupDto>>>> Lookup(
+        [FromBody] EmployeeBatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        var ids = request.Ids?.Where(x => x != Guid.Empty).Distinct().ToArray() ?? [];
+        if (ids.Length == 0)
+            return Ok(ApiResponse<IReadOnlyList<EmployeeLookupDto>>.Ok([], HttpContext.TraceIdentifier));
+
+        Guid? companyId = null;
+        if (!tenant.IsSuperAdmin && tenant.ActiveCompanyId.HasValue)
+            companyId = tenant.ActiveCompanyId;
+
+        var items = await employees.ListLookupsByIdsAsync(ids, companyId, cancellationToken);
+        return Ok(ApiResponse<IReadOnlyList<EmployeeLookupDto>>.Ok(items, HttpContext.TraceIdentifier));
     }
 
     [HttpGet("manpower")]
     [Authorize(Policy = "Permission:hr.employees.read")]
-    public async Task<ActionResult<ApiResponse<PagedResult<ManpowerListItemDto>>>> ManpowerList(
+    public async Task<ActionResult<PaginatedApiResponse<ManpowerListItemDto>>> ManpowerList(
         [FromQuery] ManpowerListQuery query,
         CancellationToken cancellationToken)
     {
         query.CompanyId = TenantCompanyResolver.ResolveCompanyId(tenant, query.CompanyId);
-        var data = await employees.ManpowerListAsync(query, cancellationToken);
-        return Ok(ApiResponse<PagedResult<ManpowerListItemDto>>.Ok(data, HttpContext.TraceIdentifier));
+        var result = await employees.ManpowerListAsync(query, cancellationToken);
+        return Ok(PaginatedApiResponse<ManpowerListItemDto>.Ok(
+            result.Data,
+            result.Pagination,
+            "Data loaded successfully",
+            HttpContext.TraceIdentifier));
     }
 
     [HttpGet("manpower/summary")]
@@ -50,12 +98,17 @@ public sealed class EmployeesController(
 
     [HttpGet("transfers")]
     [Authorize(Policy = "Permission:hr.employees.read")]
-    public async Task<ActionResult<ApiResponse<PagedResult<EmployeeTransferDto>>>> ListTransfers(
+    public async Task<ActionResult<PaginatedApiResponse<EmployeeTransferDto>>> ListTransfers(
         [FromQuery] EmployeeTransferListQuery query,
         CancellationToken cancellationToken)
     {
-        var data = await employees.ListTransfersAsync(query, cancellationToken);
-        return Ok(ApiResponse<PagedResult<EmployeeTransferDto>>.Ok(data, HttpContext.TraceIdentifier));
+        query.CompanyId = TenantCompanyResolver.ResolveCompanyId(tenant, query.CompanyId);
+        var result = await employees.ListTransfersAsync(query, cancellationToken);
+        return Ok(PaginatedApiResponse<EmployeeTransferDto>.Ok(
+            result.Data,
+            result.Pagination,
+            "Data loaded successfully",
+            HttpContext.TraceIdentifier));
     }
 
     [HttpPut("addresses/{addressId:guid}")]
@@ -105,6 +158,103 @@ public sealed class EmployeesController(
     {
         await employeeService.DeleteDocumentAsync(documentId);
         return Ok(ApiResponse<string>.Ok("Document deleted", HttpContext.TraceIdentifier));
+    }
+
+    [HttpGet("export")]
+    [Authorize(Policy = "Permission:hr.employees.read")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<EmployeeImportRowDto>>>> Export(
+        [FromQuery] Guid? companyId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var resolved = TenantCompanyResolver.ResolveCompanyId(tenant, companyId);
+            var data = await employeeImport.ExportAsync(resolved, cancellationToken);
+            return Ok(ApiResponse<IReadOnlyList<EmployeeImportRowDto>>.Ok(data, HttpContext.TraceIdentifier));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return BadRequest(ApiResponse<IReadOnlyList<EmployeeImportRowDto>>.Fail(
+                HttpContext.TraceIdentifier,
+                [new ApiError("COMPANY", ex.Message)]));
+        }
+    }
+
+    [HttpPost("excel-import/preview")]
+    [Authorize(Policy = "Permission:hr.employees.write")]
+    public async Task<ActionResult<ApiResponse<EmployeeExcelImportPreviewResult>>> ExcelImportPreview(
+        IFormFile file,
+        [FromQuery] Guid? companyId,
+        CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(ApiResponse<EmployeeExcelImportPreviewResult>.Fail(
+                HttpContext.TraceIdentifier,
+                [new ApiError("FILE", "Excel file is required.")]));
+        }
+
+        try
+        {
+            var resolved = TenantCompanyResolver.ResolveCompanyId(tenant, companyId);
+            await using var stream = file.OpenReadStream();
+            var data = await employeeExcelImport.PreviewAsync(resolved, stream, cancellationToken);
+            return Ok(ApiResponse<EmployeeExcelImportPreviewResult>.Ok(data, HttpContext.TraceIdentifier));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return BadRequest(ApiResponse<EmployeeExcelImportPreviewResult>.Fail(
+                HttpContext.TraceIdentifier,
+                [new ApiError("COMPANY", ex.Message)]));
+        }
+    }
+
+    [HttpPost("excel-import/confirm")]
+    [Authorize(Policy = "Permission:hr.employees.write")]
+    public async Task<ActionResult<ApiResponse<EmployeeExcelImportConfirmResult>>> ExcelImportConfirm(
+        [FromBody] EmployeeExcelImportConfirmRequest request,
+        [FromQuery] Guid? companyId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var resolved = TenantCompanyResolver.ResolveCompanyId(tenant, companyId);
+            var data = await employeeExcelImport.ConfirmAsync(resolved, request.SessionId, cancellationToken);
+            return Ok(ApiResponse<EmployeeExcelImportConfirmResult>.Ok(data, HttpContext.TraceIdentifier));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return BadRequest(ApiResponse<EmployeeExcelImportConfirmResult>.Fail(
+                HttpContext.TraceIdentifier,
+                [new ApiError("COMPANY", ex.Message)]));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<EmployeeExcelImportConfirmResult>.Fail(
+                HttpContext.TraceIdentifier,
+                [new ApiError("SESSION", ex.Message)]));
+        }
+    }
+
+    [HttpPost("import-upsert")]
+    [Authorize(Policy = "Permission:hr.employees.write")]
+    public async Task<ActionResult<ApiResponse<EmployeeImportUpsertResult>>> ImportUpsert(
+        [FromBody] EmployeeImportUpsertRequest request,
+        [FromQuery] Guid? companyId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var resolved = TenantCompanyResolver.ResolveCompanyId(tenant, companyId);
+            var result = await employeeImport.UpsertAsync(resolved, request, cancellationToken);
+            return Ok(ApiResponse<EmployeeImportUpsertResult>.Ok(result, HttpContext.TraceIdentifier));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return BadRequest(ApiResponse<EmployeeImportUpsertResult>.Fail(
+                HttpContext.TraceIdentifier,
+                [new ApiError("COMPANY", ex.Message)]));
+        }
     }
 
     [HttpGet("{id:guid}")]

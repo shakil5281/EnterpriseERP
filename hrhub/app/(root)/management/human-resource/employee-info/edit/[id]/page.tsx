@@ -112,6 +112,8 @@ export default function EditEmployeePage() {
           lineId: employee.lineId,
           lineName: employee.lineName,
           groupId: employee.groupId,
+          shiftId: employee.shiftId,
+          shiftName: employee.shiftName,
           status: employee.status,
           joinDate: employee.joinDate,
           email: employee.email,

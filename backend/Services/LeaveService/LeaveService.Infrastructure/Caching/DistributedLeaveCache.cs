@@ -8,16 +8,23 @@ namespace LeaveService.Infrastructure.Caching;
 public sealed class DistributedLeaveCache(IDistributedCache cache, ILogger<DistributedLeaveCache> logger) : ILeaveCache
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private static readonly TimeSpan CacheOperationTimeout = TimeSpan.FromMilliseconds(750);
 
     public async Task<T?> GetOrCreateAsync<T>(string key, TimeSpan ttl, Func<CancellationToken, Task<T>> factory, CancellationToken cancellationToken = default) where T : class
     {
         try
         {
-            var existing = await cache.GetStringAsync(key, cancellationToken);
+            var existing = await WithTimeoutAsync(
+                ct => cache.GetStringAsync(key, ct),
+                cancellationToken);
             if (!string.IsNullOrEmpty(existing))
             {
                 return JsonSerializer.Deserialize<T>(existing, JsonOptions);
             }
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogWarning("Leave cache read timed out for {CacheKey}; loading from database.", key);
         }
         catch (Exception ex)
         {
@@ -32,11 +39,17 @@ public sealed class DistributedLeaveCache(IDistributedCache cache, ILogger<Distr
 
         try
         {
-            await cache.SetStringAsync(
-                key,
-                JsonSerializer.Serialize(created, JsonOptions),
-                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = ttl },
+            await WithTimeoutAsync(
+                ct => cache.SetStringAsync(
+                    key,
+                    JsonSerializer.Serialize(created, JsonOptions),
+                    new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = ttl },
+                    ct),
                 cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogWarning("Leave cache write timed out for {CacheKey}; continuing without cache.", key);
         }
         catch (Exception ex)
         {
@@ -44,6 +57,24 @@ public sealed class DistributedLeaveCache(IDistributedCache cache, ILogger<Distr
         }
 
         return created;
+    }
+
+    private static async Task<string?> WithTimeoutAsync(
+        Func<CancellationToken, Task<string?>> operation,
+        CancellationToken cancellationToken)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(CacheOperationTimeout);
+        return await operation(timeoutCts.Token);
+    }
+
+    private static async Task WithTimeoutAsync(
+        Func<CancellationToken, Task> operation,
+        CancellationToken cancellationToken)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(CacheOperationTimeout);
+        await operation(timeoutCts.Token);
     }
 
     public Task RemoveByPrefixAsync(string prefix, CancellationToken cancellationToken = default) =>

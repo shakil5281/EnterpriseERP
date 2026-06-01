@@ -34,6 +34,14 @@ public static class PanelTransferStatuses
     public const string Cancelled = "Cancelled";
 }
 
+public static class BundleStatuses
+{
+    public const string Ready = "Ready";
+    public const string Sent = "Sent";
+    public const string Review = "Review";
+    public const string Cancelled = "Cancelled";
+}
+
 public static class CuttingRoles
 {
     public const string SuperAdmin = "SuperAdmin";
@@ -58,4 +66,5 @@ public static class CuttingPermissions
     public const string TransferConfirm = "CUTTING_TRANSFER_CONFIRM";
     public const string BalanceView = "CUTTING_BALANCE_VIEW";
     public const string ReportView = "CUTTING_REPORT_VIEW";
+    public const string BundleManage = "CUTTING_BUNDLE_MANAGE";
 }

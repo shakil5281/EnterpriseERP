@@ -386,7 +386,33 @@ public sealed class NotificationServiceClient(HttpClient httpClient) : INotifica
 {
     private readonly HttpClient _httpClient = httpClient;
 
-    public Task SendPayrollApprovalNotificationAsync(Guid companyId, Guid payrollPeriodId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public async Task SendPayrollApprovalNotificationAsync(Guid companyId, Guid payrollPeriodId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _httpClient.PostAsJsonAsync("/api/v1/notification/send", new
+            {
+                recipientId = companyId,
+                type = "InApp",
+                subject = "Payroll Approved",
+                body = $"Payroll for period {payrollPeriodId} has been approved and is ready for disbursement."
+            }, cancellationToken);
+        }
+        catch { /* notification failure must not block payroll processing */ }
+    }
 
-    public Task SendPayslipNotificationAsync(Guid companyId, Guid employeeId, Guid payrollPeriodId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public async Task SendPayslipNotificationAsync(Guid companyId, Guid employeeId, Guid payrollPeriodId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _httpClient.PostAsJsonAsync("/api/v1/notification/send", new
+            {
+                recipientId = employeeId,
+                type = "InApp",
+                subject = "Your Payslip is Ready",
+                body = $"Your payslip for payroll period {payrollPeriodId} is now available."
+            }, cancellationToken);
+        }
+        catch { /* notification failure must not block payslip generation */ }
+    }
 }

@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { leaveService } from "@/lib/services/leave";
-import { useCompanyContext } from "@/components/providers/company-context";
+import { ScopedCompanySelect } from "@/components/hr/scoped-company-select";
 
 export type LeaveTypeFormValues = {
   name: string;
@@ -31,6 +31,7 @@ type LeaveTypeFormProps = {
   initial?: LeaveTypeFormValues;
   editingTypeId?: string;
   editingPolicyId?: string;
+  defaultCompanyEntityId?: string;
   onSuccess?: () => void;
   cancelHref?: string;
 };
@@ -39,16 +40,17 @@ export function LeaveTypeForm({
   initial,
   editingTypeId,
   editingPolicyId,
+  defaultCompanyEntityId,
   onSuccess,
   cancelHref = "/management/leave/leave-type",
 }: LeaveTypeFormProps) {
   const router = useRouter();
-  const { activeCompanyId } = useCompanyContext();
+  const [companyEntityId, setCompanyEntityId] = React.useState(defaultCompanyEntityId ?? "");
   const [formData, setFormData] = React.useState<LeaveTypeFormValues>(initial ?? defaultValues);
   const [submitting, setSubmitting] = React.useState(false);
 
   const handleSubmit = async () => {
-    if (!activeCompanyId || !formData.name || !formData.code) {
+    if (!companyEntityId || !formData.name || !formData.code) {
       toast.error("Company, name, and code are required");
       return;
     }
@@ -79,7 +81,7 @@ export function LeaveTypeForm({
         toast.success("Leave type updated");
       } else {
         const newType = await leaveService.createLeaveType({
-          companyId: activeCompanyId,
+          companyId: companyEntityId,
           leaveCode: formData.code,
           leaveName: formData.name,
           isPaid: true,
@@ -88,7 +90,7 @@ export function LeaveTypeForm({
           isEncashable: true,
         });
         await leaveService.createLeavePolicy({
-          companyId: activeCompanyId,
+          companyId: companyEntityId,
           leaveTypeId: newType.id,
           yearlyEntitlement: formData.yearlyLimit,
           monthlyAccrual: parseFloat((formData.yearlyLimit / 12).toFixed(2)),
@@ -113,6 +115,15 @@ export function LeaveTypeForm({
 
   return (
     <div className="space-y-4 max-w-lg">
+      <div className="space-y-2">
+        <Label>Company</Label>
+        <ScopedCompanySelect
+          value={companyEntityId}
+          onChange={(entityId) => setCompanyEntityId(entityId)}
+          disabled={!!editingTypeId}
+          className="h-10"
+        />
+      </div>
       <div className="space-y-2">
         <Label>Leave name</Label>
         <Input

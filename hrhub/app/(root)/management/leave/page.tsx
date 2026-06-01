@@ -56,19 +56,18 @@ import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { leaveService } from "@/lib/services/leave"
 import {
-    enrichApplications,
+    mapLeaveApplicationListItems,
     exportApplicationsCsv,
-    getActiveCompanyIdOrThrow,
     type LeaveApplicationView,
     type LeaveTypeWithPolicy,
     mergeLeaveTypesWithPolicies,
 } from "@/lib/services/leave-helpers"
 import { format } from "date-fns"
 import { DatePicker } from "@/components/ui/date-picker"
-import { useCompanyContext } from "@/components/providers/company-context"
 import { useAuth } from "@/components/providers/auth-provider"
-import { LeaveCompanyBar } from "@/components/leave/leave-company-bar"
+import { LeaveAdvancedFilter, type LeaveFilterParams } from "@/components/leave/leave-advanced-filter"
 import { LeavePermissionGate } from "@/components/leave/leave-permission-gate"
+import { HrReportExportButtons } from "@/components/reports/hr-report-export-buttons"
 import { Badge } from "@/components/ui/badge"
 import { LeaveStatusBadge } from "@/components/leave/leave-status-badge"
 import {
@@ -78,14 +77,17 @@ import {
 
 export default function LeaveManagementPage() {
     const router = useRouter()
-    const { activeCompanyId } = useCompanyContext()
     const { user } = useAuth()
 
+    const [selectedCompanyId, setSelectedCompanyId] = React.useState<string | undefined>()
+    const [listFilters, setListFilters] = React.useState<LeaveFilterParams>({ status: "all" })
     const [isLoading, setIsLoading] = React.useState(false)
     const [isActionLoading, setIsActionLoading] = React.useState<string | null>(null)
     const [applications, setApplications] = React.useState<LeaveApplicationView[]>([])
     const [leaveTypes, setLeaveTypes] = React.useState<LeaveTypeWithPolicy[]>([])
-    const [rawApps, setRawApps] = React.useState<Awaited<ReturnType<typeof leaveService.listLeaveApplications>>>([])
+    const [rawApps, setRawApps] = React.useState<
+        import("@/lib/services/leave").BackendLeaveApplicationListItem[]
+    >([])
 
     const [isSheetOpen, setIsSheetOpen] = React.useState(false)
     const [editingId, setEditingId] = React.useState<string | null>(null)
@@ -101,10 +103,10 @@ export default function LeaveManagementPage() {
     })
 
     const loadData = React.useCallback(async () => {
-        if (!activeCompanyId) return
+        if (!selectedCompanyId) return
         setIsLoading(true)
         try {
-            const companyId = activeCompanyId
+            const companyId = selectedCompanyId
             const [apps, types, policies] = await Promise.all([
                 leaveService.listLeaveApplications(companyId),
                 leaveService.listLeaveTypes(companyId),
@@ -112,17 +114,45 @@ export default function LeaveManagementPage() {
             ])
             setRawApps(apps)
             setLeaveTypes(mergeLeaveTypesWithPolicies(types, policies))
-            setApplications(await enrichApplications(apps, companyId, types))
+            setApplications(mapLeaveApplicationListItems(apps))
         } catch {
             toast.error("Failed to load leave applications")
         } finally {
             setIsLoading(false)
         }
-    }, [activeCompanyId])
+    }, [selectedCompanyId])
+
+    const handleFilterChange = React.useCallback((filters: LeaveFilterParams) => {
+        setSelectedCompanyId(filters.companyEntityId)
+        setListFilters(filters)
+        setEmployee(null)
+    }, [])
+
+    const activeLeaveTypes = React.useMemo(
+        () => leaveTypes.filter((t) => t.type.isActive),
+        [leaveTypes],
+    )
 
     React.useEffect(() => {
-        loadData()
-    }, [loadData])
+        if (selectedCompanyId) loadData()
+    }, [selectedCompanyId, loadData])
+
+    const displayedApplications = React.useMemo(() => {
+        let rows = applications
+        const status = listFilters.status
+        if (status && status !== "all") {
+            rows = rows.filter((a) => a.status === status)
+        }
+        const term = listFilters.searchTerm?.trim().toLowerCase()
+        if (term) {
+            rows = rows.filter(
+                (a) =>
+                    a.employeeName.toLowerCase().includes(term) ||
+                    a.employeeId.toLowerCase().includes(term),
+            )
+        }
+        return rows
+    }, [applications, listFilters.searchTerm, listFilters.status])
 
     const actorId = user?.id ?? ""
 
@@ -164,9 +194,22 @@ export default function LeaveManagementPage() {
             return
         }
 
+        if (!selectedCompanyId) {
+            toast.error("Select a company in filters")
+            return
+        }
+
+        if (
+            employee.companyEntityId &&
+            employee.companyEntityId !== selectedCompanyId
+        ) {
+            toast.error("Employee does not belong to the selected company")
+            return
+        }
+
         setIsApplying(true)
         try {
-            const companyId = getActiveCompanyIdOrThrow()
+            const companyId = selectedCompanyId
             const fromDate = formData.startDate.split("T")[0]
             const toDate = formData.endDate.split("T")[0]
 
@@ -390,8 +433,22 @@ export default function LeaveManagementPage() {
                         <h1 className="text-2xl font-bold tracking-tight">Leave Management</h1>
                         <p className="text-muted-foreground text-sm">Manage employee leave applications</p>
                     </div>
-                    <LeavePermissionGate permission="LEAVE_APPLY">
-                        <Sheet open={isSheetOpen} onOpenChange={(open) => !open && handleSheetClose()}>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {selectedCompanyId && (
+                            <HrReportExportButtons
+                                exportUrl="/api/v1/leave/reports/applications"
+                                params={{
+                                    companyId: selectedCompanyId,
+                                    ...(listFilters.status && listFilters.status !== "all"
+                                        ? { status: listFilters.status }
+                                        : {}),
+                                }}
+                                filePrefix="leave-applications"
+                                disabled={isLoading || displayedApplications.length === 0}
+                            />
+                        )}
+                        <LeavePermissionGate permission="LEAVE_APPLY">
+                            <Sheet open={isSheetOpen} onOpenChange={(open) => !open && handleSheetClose()}>
                             <SheetTrigger asChild>
                                 <Button className="gap-2" onClick={() => setIsSheetOpen(true)}>
                                     <IconPlus className="size-4" /> New Application
@@ -407,7 +464,12 @@ export default function LeaveManagementPage() {
                                     </SheetDescription>
                                 </SheetHeader>
                                 <div className="space-y-4 py-4">
-                                    <EmployeeLeavePicker value={employee} onChange={setEmployee} disabled={!!editingId} />
+                                    <EmployeeLeavePicker
+                                        value={employee}
+                                        onChange={setEmployee}
+                                        companyEntityId={selectedCompanyId}
+                                        disabled={!!editingId}
+                                    />
                                     <div className="space-y-2">
                                         <Label>Leave Type</Label>
                                         <NativeSelect
@@ -415,7 +477,7 @@ export default function LeaveManagementPage() {
                                             onChange={(e) => setFormData((p) => ({ ...p, leaveTypeId: e.target.value }))}
                                         >
                                             <option value="">Select Type</option>
-                                            {leaveTypes.map((t) => (
+                                            {activeLeaveTypes.map((t) => (
                                                 <option key={t.type.id} value={t.type.id}>
                                                     {t.type.leaveName} ({t.type.leaveCode})
                                                 </option>
@@ -457,15 +519,24 @@ export default function LeaveManagementPage() {
                                 </div>
                             </SheetContent>
                         </Sheet>
-                    </LeavePermissionGate>
+                        </LeavePermissionGate>
+                    </div>
                 </div>
-                <LeaveCompanyBar onRefresh={loadData} isLoading={isLoading} showYear={false} />
+            </div>
+
+            <div className="px-6">
+                <LeaveAdvancedFilter
+                    onFilterChange={handleFilterChange}
+                    isLoading={isLoading}
+                    showStatus
+                    showSearch
+                />
             </div>
 
             <div className="grid gap-4 md:grid-cols-3 px-6">
-                <KPICard title="Pending" value={applications.filter((a) => a.status === "Pending").length.toString()} icon={IconHistory} />
-                <KPICard title="Approved" value={applications.filter((a) => a.status === "Approved").length.toString()} icon={IconCheck} />
-                <KPICard title="Total" value={applications.length.toString()} icon={IconCalendarEvent} />
+                <KPICard title="Pending" value={displayedApplications.filter((a) => a.status === "Pending").length.toString()} icon={IconHistory} />
+                <KPICard title="Approved" value={displayedApplications.filter((a) => a.status === "Approved").length.toString()} icon={IconCheck} />
+                <KPICard title="Total" value={displayedApplications.length.toString()} icon={IconCalendarEvent} />
             </div>
 
             <div className="px-6">
@@ -473,7 +544,9 @@ export default function LeaveManagementPage() {
                     <CardHeader className="pb-4 border-b">
                         <CardTitle className="text-base font-semibold">Application History</CardTitle>
                     </CardHeader>
-                    <DataTable columns={columns} data={applications} searchKey="employeeName" isLoading={isLoading} showColumnCustomizer={false} />
+                    <CardContent className="p-0">
+                        <DataTable columns={columns} data={displayedApplications} isLoading={isLoading} showColumnCustomizer={false} />
+                    </CardContent>
                 </Card>
             </div>
 

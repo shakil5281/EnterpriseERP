@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { IconHierarchy, IconPlus, IconSearch, IconLoader2 } from "@tabler/icons-react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -23,11 +23,13 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import storeService, { ItemCategory } from "@/lib/services/store"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { ItemCategory } from "@/lib/types/store"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 
-export default function ItemCategoryPage() {
+function ItemCategoryContent({ companyId }: { companyId: string }) {
     const [categories, setCategories] = React.useState<ItemCategory[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [search, setSearch] = React.useState("");
@@ -37,9 +39,9 @@ export default function ItemCategoryPage() {
 
     const fetchCategories = async () => {
         try {
-            const data = await storeService.getCategories();
+            const data = await storeService.getCategories(companyId);
             setCategories(data);
-        } catch (error) {
+        } catch {
             toast.error("Failed to load categories");
         } finally {
             setLoading(false);
@@ -48,7 +50,7 @@ export default function ItemCategoryPage() {
 
     React.useEffect(() => {
         fetchCategories();
-    }, []);
+    }, [companyId]);
 
     const handleAddCategory = async () => {
         if (!newCategory.categoryName) {
@@ -58,12 +60,12 @@ export default function ItemCategoryPage() {
 
         setSubmitting(true);
         try {
-            await storeService.addCategory(newCategory);
+            await storeService.addCategory({ ...newCategory, companyId });
             toast.success("Category added successfully");
             setIsDialogOpen(false);
             setNewCategory({ categoryName: "", description: "" });
             fetchCategories();
-        } catch (error) {
+        } catch {
             toast.error("Failed to add category");
         } finally {
             setSubmitting(false);
@@ -75,7 +77,7 @@ export default function ItemCategoryPage() {
     );
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
@@ -187,6 +189,16 @@ export default function ItemCategoryPage() {
                     </div>
                 </CardContent>
             </Card>
-        </div>
-    )
+        </>
+    );
+}
+
+export default function ItemCategoryPage() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <ItemCategoryContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
+    );
 }

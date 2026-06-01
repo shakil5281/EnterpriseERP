@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { IconUserCircle, IconMail, IconPhone, IconMapPin, IconBuilding, IconCheck, IconLoader2 } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,6 +18,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { authService, User, UserProfileUpdateDto, TwoFactorSetupResponse } from "@/lib/services/auth"
+import { resolveProfilePictureUrl } from "@/lib/profile-picture"
 import { toast } from "sonner"
 
 export default function ProfilePage() {
@@ -30,12 +31,16 @@ export default function ProfilePage() {
     const [disableDialogOpen, setDisableDialogOpen] = useState(false)
     const [disableForm, setDisableForm] = useState({ password: "", code: "" })
     const [securityBusy, setSecurityBusy] = useState(false)
+    const [profilePictureUrl, setProfilePictureUrl] = useState<string | undefined>()
+    const [isUploadingPicture, setIsUploadingPicture] = useState(false)
+    const fileInputRef = useRef<HTMLInputElement>(null)
     const [formData, setFormData] = useState<UserProfileUpdateDto>({
         fullName: "",
         email: "",
         phoneNumber: "",
         country: "",
-        city: ""
+        city: "",
+        bio: "",
     })
 
     useEffect(() => {
@@ -47,12 +52,14 @@ export default function ProfilePage() {
             setLoading(true)
             const data = await authService.getProfile()
             setUser(data)
+            setProfilePictureUrl(data.profilePictureUrl)
             setFormData({
                 fullName: data.fullName || "",
                 email: data.email || "",
                 phoneNumber: data.phoneNumber || "",
                 country: data.country || "",
-                city: data.city || ""
+                city: data.city || "",
+                bio: data.bio || "",
             })
         } catch (error) {
             console.error("Failed to fetch profile:", error)
@@ -69,22 +76,11 @@ export default function ProfilePage() {
             const result = await authService.updateProfile(formData)
             if (result.success) {
                 toast.success("Profile updated successfully")
-                // Update local user state
-                if (user) {
-                    const updatedUser = { ...user, ...formData }
-                    setUser(updatedUser)
-                    // Update localStorage user
-                    const storedUser = localStorage.getItem('user')
-                    if (storedUser) {
-                        const parsed = JSON.parse(storedUser)
-                        localStorage.setItem('user', JSON.stringify({
-                            ...parsed,
-                            fullName: formData.fullName,
-                            email: formData.email
-                        }))
-                        // Notify other components (like Navbar) to refresh user data
-                        window.dispatchEvent(new Event('profile-updated'))
-                    }
+                if (result.user) {
+                    setUser(result.user)
+                    setProfilePictureUrl(result.user.profilePictureUrl)
+                } else if (user) {
+                    setUser({ ...user, ...formData })
                 }
             } else {
                 toast.error(result.message || "Failed to update profile")
@@ -97,9 +93,32 @@ export default function ProfilePage() {
         }
     }
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { id, value } = e.target
         setFormData(prev => ({ ...prev, [id]: value }))
+    }
+
+    const handlePictureSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0]
+        event.target.value = ""
+        if (!file) return
+        setIsUploadingPicture(true)
+        try {
+            const { optimizeImageFile } = await import("@/lib/image-upload")
+            const optimized = await optimizeImageFile(file, "avatar")
+            const result = await authService.uploadProfilePicture(optimized)
+            if (result.success && result.user) {
+                setUser(result.user)
+                setProfilePictureUrl(result.user.profilePictureUrl)
+                toast.success("Profile picture updated")
+            } else {
+                toast.error(result.message)
+            }
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : "Failed to process image.")
+        } finally {
+            setIsUploadingPicture(false)
+        }
     }
 
     const handleStartTwoFactor = async () => {
@@ -164,25 +183,48 @@ export default function ProfilePage() {
     return (
         <div className="container mx-auto max-w-5xl py-8 px-4 space-y-8">
             {/* Header Section with Gradient Background Effect */}
-            <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-pink-600/10 p-8 border border-border/50">
+            <div className="relative rounded-3xl overflow-hidden bg-linear-to-r from-blue-600/10 via-purple-600/10 to-pink-600/10 p-8 border border-border/50">
                 <div className="absolute top-0 right-0 p-4 opacity-10">
                     <IconUserCircle size={200} />
                 </div>
                 <div className="relative flex flex-col md:flex-row gap-8 items-center md:items-start">
                     <div className="relative group">
-                        <Avatar className="h-32 w-32 border-4 border-background">
-                            <AvatarImage src="" alt={user?.fullName} />
-                            <AvatarFallback className="text-4xl font-bold bg-primary text-primary-foreground">
-                                {initials}
-                            </AvatarFallback>
-                        </Avatar>
+                        <div className="relative">
+                            <Avatar className="h-32 w-32 border-4 border-background rounded-full">
+                                <AvatarImage
+                                    src={resolveProfilePictureUrl(profilePictureUrl) ?? ""}
+                                    alt={user?.fullName}
+                                    className="rounded-full object-cover"
+                                />
+                                <AvatarFallback className="text-4xl font-bold bg-primary text-primary-foreground rounded-full">
+                                    {initials}
+                                </AvatarFallback>
+                            </Avatar>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                className="hidden"
+                                onChange={handlePictureSelect}
+                            />
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full text-xs"
+                                disabled={isUploadingPicture}
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                {isUploadingPicture ? "..." : "Change photo"}
+                            </Button>
+                        </div>
                         <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-4 py-1" variant={user?.isActive ? "default" : "destructive"}>
                             {user?.isActive ? "Active Account" : "Inactive"}
                         </Badge>
                     </div>
                     
                     <div className="text-center md:text-left space-y-2 pt-2">
-                        <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
+                        <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-linear-to-r from-foreground to-foreground/70">
                             {user?.fullName}
                         </h1>
                         <p className="text-xl text-muted-foreground font-medium flex items-center justify-center md:justify-start gap-2">
@@ -274,7 +316,7 @@ export default function ProfilePage() {
 
                 {/* Edit Form Card */}
                 <Card className="lg:col-span-2 overflow-hidden border-none bg-card/30 backdrop-blur-md">
-                    <CardHeader className="border-b border-border/50 bg-gradient-to-r from-background to-background/50">
+                    <CardHeader className="border-b border-border/50 bg-linear-to-r from-background to-background/50">
                         <div className="flex items-center justify-between">
                             <div>
                                 <CardTitle className="text-2xl font-bold">Profile Settings</CardTitle>
@@ -353,6 +395,16 @@ export default function ProfilePage() {
                                         className="bg-background/50 border-border/50 focus:border-primary transition-all duration-200"
                                     />
                                 </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <Label htmlFor="bio">Bio</Label>
+                                    <textarea
+                                        id="bio"
+                                        placeholder="Short professional bio (optional)"
+                                        value={formData.bio}
+                                        onChange={handleChange}
+                                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm"
+                                    />
+                                </div>
                             </div>
 
                             <div className="pt-6 flex items-center justify-between border-t border-border/50">
@@ -362,7 +414,7 @@ export default function ProfilePage() {
                                 <Button 
                                     type="submit" 
                                     disabled={saving}
-                                    className="px-8 bg-gradient-to-r from-primary to-primary/80"
+                                    className="px-8 bg-linear-to-r from-primary to-primary/80"
                                 >
                                     {saving ? (
                                         <>

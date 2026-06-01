@@ -159,6 +159,16 @@ export const merchandisingService = {
     return unwrapApiData<BuyerContact>(res.data);
   },
 
+  async getBuyerPaymentTerms(buyerId: Guid): Promise<BuyerPaymentTerm[]> {
+    const res = await api.get(`${BASE}/buyers/${buyerId}/payment-terms`);
+    return unwrapApiData<BuyerPaymentTerm[]>(res.data);
+  },
+
+  async getBuyerComplianceRules(buyerId: Guid): Promise<BuyerComplianceRule[]> {
+    const res = await api.get(`${BASE}/buyers/${buyerId}/compliance-rules`);
+    return unwrapApiData<BuyerComplianceRule[]>(res.data);
+  },
+
   async createBuyerPaymentTerm(payload: {
     companyId: Guid;
     buyerId: Guid;
@@ -319,10 +329,14 @@ export const merchandisingService = {
   getUnits: (companyId?: Guid) => merchandisingService.getMasterData('units', companyId),
   getSuppliers: (companyId?: Guid) => merchandisingService.getMasterData('suppliers', companyId),
   getBrands: (companyId?: Guid) => merchandisingService.getMasterData('brands', companyId),
+  /** Brands linked to a buyer via master-data `extra` field (buyer GUID). */
   getBrandsByBuyer: async (buyerId: Guid, companyId?: Guid): Promise<MasterDataDto[]> => {
     const brands = await merchandisingService.getBrands(companyId);
     return brands.filter((b) => b.extra === buyerId);
   },
+
+  getBrandsForBuyer: (buyerId: Guid, companyId?: Guid) =>
+    merchandisingService.getBrandsByBuyer(buyerId, companyId),
 
   /* ── Orders ── */
   async getOrders(companyId?: Guid, buyerId?: Guid, status?: string): Promise<Order[]> {
@@ -563,6 +577,11 @@ export const merchandisingService = {
   async updateQuotation(id: Guid, payload: UpdateQuotationRequest): Promise<Quotation> {
     const res = await api.put(`${BASE}/quotations/${id}`, payload);
     return unwrapApiData<Quotation>(res.data);
+  },
+
+  async getQuotationNegotiations(id: Guid, companyId?: Guid): Promise<QuotationNegotiation[]> {
+    const res = await api.get(`${BASE}/quotations/${id}/negotiations`, { params: params(companyId) });
+    return unwrapApiData<QuotationNegotiation[]>(res.data);
   },
 
   async addQuotationNegotiation(id: Guid, payload: AddQuotationNegotiationRequest): Promise<QuotationNegotiation> {

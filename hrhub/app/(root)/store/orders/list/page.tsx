@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { IconList, IconSearch, IconDownload, IconLoader2, IconExternalLink, IconCalendar } from "@tabler/icons-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -14,19 +15,21 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import storeService, { StoreOrder } from "@/lib/services/store"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { StoreOrder } from "@/lib/types/store"
 import { toast } from "sonner"
 
-export default function OrderListPage() {
+function OrderListContent({ companyId }: { companyId: string }) {
     const [orders, setOrders] = React.useState<StoreOrder[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [search, setSearch] = React.useState("");
 
     const fetchOrders = async () => {
         try {
-            const data = await storeService.getOrders();
+            const data = await storeService.getOrders(companyId);
             setOrders(data);
-        } catch (error) {
+        } catch {
             toast.error("Failed to load orders");
         } finally {
             setLoading(false);
@@ -35,7 +38,7 @@ export default function OrderListPage() {
 
     React.useEffect(() => {
         fetchOrders();
-    }, []);
+    }, [companyId]);
 
     const filteredOrders = orders.filter(o =>
         o.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
@@ -43,7 +46,7 @@ export default function OrderListPage() {
     );
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
@@ -134,9 +137,11 @@ export default function OrderListPage() {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="ghost" size="sm" className="gap-1.5 hover:text-indigo-600">
-                                                    <IconExternalLink className="size-3.5" />
-                                                    View
+                                                <Button variant="ghost" size="sm" className="gap-1.5 hover:text-indigo-600" asChild>
+                                                    <Link href={`/store/orders/${ord.id}`}>
+                                                        <IconExternalLink className="size-3.5" />
+                                                        View
+                                                    </Link>
                                                 </Button>
                                             </TableCell>
                                         </TableRow>
@@ -147,6 +152,16 @@ export default function OrderListPage() {
                     </div>
                 </CardContent>
             </Card>
-        </div>
-    )
+        </>
+    );
+}
+
+export default function OrderListPage() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <OrderListContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
+    );
 }

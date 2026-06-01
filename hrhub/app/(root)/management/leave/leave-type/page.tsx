@@ -2,7 +2,18 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { IconSettings, IconPlus, IconDotsVertical, IconEdit, IconTrash } from "@tabler/icons-react"
+import { IconSettings, IconPlus, IconDotsVertical, IconEdit, IconTrash, IconBan } from "@tabler/icons-react"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { getHttpErrorMessage } from "@/lib/api-response"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DataTable } from "@/components/data-table"
@@ -16,12 +27,11 @@ import { leaveService } from "@/lib/services/leave"
 import { mergeLeaveTypesWithPolicies, type LeaveTypeWithPolicy } from "@/lib/services/leave-helpers"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
-import { useCompanyContext } from "@/components/providers/company-context"
-import { LeaveCompanyBar } from "@/components/leave/leave-company-bar"
+import { LeaveAdvancedFilter, type LeaveFilterParams } from "@/components/leave/leave-advanced-filter"
 import { LeavePermissionGate } from "@/components/leave/leave-permission-gate"
 
 export default function LeaveTypePage() {
-    const { activeCompanyId } = useCompanyContext()
+    const [selectedCompanyId, setSelectedCompanyId] = React.useState<string | undefined>()
     const [isLoading, setIsLoading] = React.useState(false)
     const [leaveTypes, setLeaveTypes] = React.useState<LeaveTypeWithPolicy[]>([])
     const [isSheetOpen, setIsSheetOpen] = React.useState(false)
@@ -33,14 +43,16 @@ export default function LeaveTypePage() {
         isCarryForward: false,
         description: "",
     })
+    const [deleteTarget, setDeleteTarget] = React.useState<LeaveTypeWithPolicy | null>(null)
+    const [isDeleting, setIsDeleting] = React.useState(false)
 
     const loadLeaveTypes = React.useCallback(async () => {
-        if (!activeCompanyId) return
+        if (!selectedCompanyId) return
         setIsLoading(true)
         try {
             const [types, policies] = await Promise.all([
-                leaveService.listLeaveTypes(activeCompanyId),
-                leaveService.listLeavePolicies(activeCompanyId),
+                leaveService.listLeaveTypes(selectedCompanyId),
+                leaveService.listLeavePolicies(selectedCompanyId),
             ])
             setLeaveTypes(mergeLeaveTypesWithPolicies(types, policies))
         } catch {
@@ -48,14 +60,18 @@ export default function LeaveTypePage() {
         } finally {
             setIsLoading(false)
         }
-    }, [activeCompanyId])
+    }, [selectedCompanyId])
+
+    const handleFilterChange = React.useCallback((filters: LeaveFilterParams) => {
+        setSelectedCompanyId(filters.companyEntityId)
+    }, [])
 
     React.useEffect(() => {
-        loadLeaveTypes()
-    }, [loadLeaveTypes])
+        if (selectedCompanyId) loadLeaveTypes()
+    }, [selectedCompanyId, loadLeaveTypes])
 
     const handleSubmit = async () => {
-        if (!activeCompanyId || !formData.name || !formData.code) {
+        if (!selectedCompanyId || !formData.name || !formData.code) {
             toast.error("Please fill in all required fields")
             return
         }
@@ -86,7 +102,7 @@ export default function LeaveTypePage() {
                 toast.success("Leave type updated")
             } else {
                 const newType = await leaveService.createLeaveType({
-                    companyId: activeCompanyId,
+                    companyId: selectedCompanyId,
                     leaveCode: formData.code,
                     leaveName: formData.name,
                     isPaid: true,
@@ -95,7 +111,7 @@ export default function LeaveTypePage() {
                     isEncashable: true,
                 })
                 await leaveService.createLeavePolicy({
-                    companyId: activeCompanyId,
+                    companyId: selectedCompanyId,
                     leaveTypeId: newType.id,
                     yearlyEntitlement: formData.yearlyLimit,
                     monthlyAccrual: parseFloat((formData.yearlyLimit / 12).toFixed(2)),
@@ -136,6 +152,21 @@ export default function LeaveTypePage() {
         }
     }
 
+    const handleDeleteConfirm = async () => {
+        if (!deleteTarget) return
+        setIsDeleting(true)
+        try {
+            await leaveService.deleteLeaveType(deleteTarget.type.id)
+            toast.success("Leave type deleted permanently")
+            setDeleteTarget(null)
+            loadLeaveTypes()
+        } catch (err) {
+            toast.error(getHttpErrorMessage(err, "Failed to delete leave type"))
+        } finally {
+            setIsDeleting(false)
+        }
+    }
+
     const handleEdit = (item: LeaveTypeWithPolicy) => {
         setEditingType(item)
         setFormData({
@@ -161,7 +192,8 @@ export default function LeaveTypePage() {
             cell: ({ row }) => <Badge variant="secondary" className="font-mono">{row.original.type.leaveCode}</Badge>,
         },
         {
-            accessorKey: "type.leaveName",
+            id: "leaveName",
+            accessorFn: (row) => row.type.leaveName,
             header: "Name",
             cell: ({ row }) => <span className="font-semibold">{row.original.type.leaveName}</span>,
         },
@@ -195,14 +227,20 @@ export default function LeaveTypePage() {
                                 <IconEdit className="mr-2 size-4" /> Edit
                             </DropdownMenuItem>
                             {row.original.type.isActive ? (
-                                <DropdownMenuItem className="text-destructive" onClick={() => handleDeactivate(row.original)}>
-                                    <IconTrash className="mr-2 size-4" /> Deactivate
+                                <DropdownMenuItem onClick={() => handleDeactivate(row.original)}>
+                                    <IconBan className="mr-2 size-4" /> Deactivate
                                 </DropdownMenuItem>
                             ) : (
                                 <DropdownMenuItem onClick={() => handleActivate(row.original)}>
                                     Activate
                                 </DropdownMenuItem>
                             )}
+                            <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => setDeleteTarget(row.original)}
+                            >
+                                <IconTrash className="mr-2 size-4" /> Delete
+                            </DropdownMenuItem>
                         </LeavePermissionGate>
                     </DropdownMenuContent>
                 </DropdownMenu>
@@ -256,15 +294,42 @@ export default function LeaveTypePage() {
                     </Sheet>
                 </LeavePermissionGate>
             </div>
-            <LeaveCompanyBar onRefresh={loadLeaveTypes} isLoading={isLoading} showYear={false} />
+            <LeaveAdvancedFilter onFilterChange={handleFilterChange} isLoading={isLoading} />
             <Card>
                 <CardHeader>
                     <CardTitle>Leave Types</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <DataTable columns={columns} data={leaveTypes} searchKey="type.leaveName" isLoading={isLoading} showColumnCustomizer={false} />
+                    <DataTable columns={columns} data={leaveTypes} searchKey="leaveName" isLoading={isLoading} showColumnCustomizer={false} />
                 </CardContent>
             </Card>
+
+            <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete leave type?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Permanently remove{" "}
+                            <strong>{deleteTarget?.type.leaveName}</strong> ({deleteTarget?.type.leaveCode}).
+                            This cannot be undone. If applications or balances exist, deletion will be blocked — use
+                            Deactivate instead.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={isDeleting}
+                            onClick={(e) => {
+                                e.preventDefault()
+                                void handleDeleteConfirm()
+                            }}
+                        >
+                            {isDeleting ? "Deleting…" : "Delete permanently"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

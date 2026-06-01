@@ -12,13 +12,10 @@ import { leaveService, type BackendLeaveBalance } from "@/lib/services/leave"
 import { enrichApplication, type LeaveApplicationView } from "@/lib/services/leave-helpers"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { useCompanyContext } from "@/components/providers/company-context"
-
 export default function LeaveApplicationExportPage() {
     const params = useParams()
     const router = useRouter()
     const id = params.id as string
-    const { activeCompanyId } = useCompanyContext()
     const componentRef = React.useRef<HTMLDivElement>(null)
 
     const [application, setApplication] = React.useState<LeaveApplicationView | null>(null)
@@ -27,13 +24,12 @@ export default function LeaveApplicationExportPage() {
 
     React.useEffect(() => {
         const fetchData = async () => {
-            if (!activeCompanyId) return
             try {
                 const app = await leaveService.getLeaveApplicationById(id)
-                const view = await enrichApplication(app, activeCompanyId)
+                const view = await enrichApplication(app, app.companyId)
                 setApplication(view)
                 const balanceData = await leaveService.getEmployeeBalances(app.employeeId, {
-                    companyId: activeCompanyId,
+                    companyId: app.companyId,
                     year: new Date().getFullYear(),
                 })
                 setBalances(balanceData)
@@ -44,7 +40,7 @@ export default function LeaveApplicationExportPage() {
             }
         }
         fetchData()
-    }, [id, activeCompanyId])
+    }, [id])
 
     const handlePrint = () => {
         window.print()

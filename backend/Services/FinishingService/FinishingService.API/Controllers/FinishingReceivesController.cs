@@ -28,6 +28,11 @@ public sealed class FinishingReceivesController(IMediator mediator) : Controller
     public async Task<ActionResult<ApiResponse<IReadOnlyList<FinishingReceiveDto>>>> Get([FromQuery] Guid companyId, [FromQuery] Guid? orderId, [FromQuery] string? status, CancellationToken ct) =>
         Ok(ApiResponse<IReadOnlyList<FinishingReceiveDto>>.Ok(await mediator.Send(new GetFinishingReceivesQuery(companyId, orderId, status), ct)));
 
+    [HttpGet("quantity"), Authorize]
+    public async Task<ActionResult<ApiResponse<int>>> GetQuantity(
+        [FromQuery] Guid companyId, [FromQuery] Guid orderId, [FromQuery] string? color, [FromQuery] string size, CancellationToken ct) =>
+        Ok(ApiResponse<int>.Ok(await mediator.Send(new GetFinishingReceiveQuantityQuery(companyId, orderId, color, size), ct)));
+
     [HttpGet("{id:guid}"), Authorize]
     public async Task<ActionResult<ApiResponse<FinishingReceiveDto>>> GetById(Guid id, CancellationToken ct) =>
         Ok(ApiResponse<FinishingReceiveDto>.Ok(await mediator.Send(new GetFinishingReceiveByIdQuery(id), ct)));

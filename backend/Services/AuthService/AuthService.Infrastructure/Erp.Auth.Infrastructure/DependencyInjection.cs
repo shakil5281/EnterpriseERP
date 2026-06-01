@@ -27,6 +27,7 @@ public static class DependencyInjection
 		services.AddDataProtection();
 		services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
 		services.Configure<AuthFeatureOptions>(configuration.GetSection("Auth"));
+		services.Configure<UserProfileOptions>(configuration.GetSection(UserProfileOptions.SectionName));
 		services.Configure<TwoFactorOptions>(configuration.GetSection(TwoFactorOptions.SectionName));
 		services.AddDbContext<AuthDbContext>(delegate(DbContextOptionsBuilder options)
 		{
@@ -43,7 +44,7 @@ public static class DependencyInjection
 			options.Password.RequireDigit = true;
 			options.Password.RequireLowercase = true;
 			options.Password.RequireUppercase = true;
-			options.Password.RequireNonAlphanumeric = true;
+			options.Password.RequireNonAlphanumeric = false;
 			options.Lockout.AllowedForNewUsers = true;
 			options.Lockout.MaxFailedAccessAttempts = 5;
 			options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15.0);
@@ -56,6 +57,7 @@ public static class DependencyInjection
 		services.AddScoped<IUserAdminService, UserAdminService>();
 		services.AddScoped<IRoleAdminService, RoleAdminService>();
 		services.AddScoped<IPermissionQueryService, PermissionQueryService>();
+		services.AddScoped<IUserProfilePictureStorage, UserProfilePictureStorage>();
 		services.AddScoped<IAuthService, IdentityAuthService>();
 		return services;
 	}

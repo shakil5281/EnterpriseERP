@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { DatePicker } from "@/components/ui/date-picker";
-import { companyService, type Company } from "@/lib/services/company";
 import {
   organogramService,
   type Department,
@@ -17,7 +16,7 @@ import {
   type Line,
   type Group,
 } from "@/lib/services/organogram";
-import { useAuth } from "@/components/providers/auth-provider";
+import { useCompanyFilterScope } from "@/hooks/use-company-filter-scope";
 
 export type AttendanceStatusFilter = "all" | "present" | "late" | "absent" | "leave";
 
@@ -31,6 +30,8 @@ export interface DailyActivityFilterState {
   legacySectionId?: number;
   legacyLineId?: number;
   legacyGroupId?: number;
+  groupEntityId?: string;
+  lineName?: string;
   attendanceStatus: AttendanceStatusFilter;
 }
 
@@ -55,35 +56,42 @@ export function DailyActivityFilters({
   onApply,
   onReset,
 }: DailyActivityFiltersProps) {
-  const { user, hasAnyRole } = useAuth();
-  const isAdmin = hasAnyRole(["SuperAdmin", "Admin"]);
+  const { companies, isCompanyLocked, defaultCompany, loading: companiesLoading } =
+    useCompanyFilterScope();
+  const isCompanyDisabled = isCompanyLocked;
+  const autoAppliedRef = React.useRef(false);
 
   const [filters, setFilters] = React.useState<DailyActivityFilterState>(defaultDailyActivityFilters);
-  const [companies, setCompanies] = React.useState<Company[]>([]);
   const [departments, setDepartments] = React.useState<Department[]>([]);
   const [sections, setSections] = React.useState<Section[]>([]);
   const [lines, setLines] = React.useState<Line[]>([]);
   const [groups, setGroups] = React.useState<Group[]>([]);
-  const [isCompanyDisabled, setIsCompanyDisabled] = React.useState(false);
 
   React.useEffect(() => {
-    companyService.getAll().then((rows) => {
-      if (!isAdmin && user?.assignedCompanyIds?.length) {
-        const filtered = rows.filter((c) => user.assignedCompanyIds!.includes(c.entityId));
-        setCompanies(filtered);
-        if (filtered.length === 1) {
-          setFilters((f) => ({
-            ...f,
-            companyEntityId: filtered[0].entityId,
-            legacyCompanyId: filtered[0].id,
-          }));
-          setIsCompanyDisabled(true);
-        }
-      } else {
-        setCompanies(rows);
-      }
+    if (companiesLoading || !defaultCompany) return;
+    setFilters((f) => {
+      if (f.companyEntityId === defaultCompany.entityId) return f;
+      return {
+        ...f,
+        companyEntityId: defaultCompany.entityId,
+        legacyCompanyId: defaultCompany.id,
+      };
     });
-  }, [user, isAdmin]);
+  }, [companiesLoading, defaultCompany]);
+
+  React.useEffect(() => {
+    if (companiesLoading || autoAppliedRef.current || !isCompanyLocked || !defaultCompany) {
+      return;
+    }
+    autoAppliedRef.current = true;
+    const next: DailyActivityFilterState = {
+      ...defaultDailyActivityFilters(),
+      companyEntityId: defaultCompany.entityId,
+      legacyCompanyId: defaultCompany.id,
+    };
+    setFilters(next);
+    onApply(next);
+  }, [companiesLoading, isCompanyLocked, defaultCompany, onApply]);
 
   React.useEffect(() => {
     if (!filters.companyEntityId) {
@@ -94,10 +102,10 @@ export function DailyActivityFilters({
       return;
     }
     organogramService.getDepartments({ companyId: filters.companyEntityId }).then(setDepartments);
-    const company = companies.find((c) => c.entityId === filters.companyEntityId);
     organogramService
-      .getGroups({ companyId: company?.id ?? filters.companyEntityId })
-      .then(setGroups);
+      .getGroups({ companyId: filters.companyEntityId })
+      .then(setGroups)
+      .catch(() => setGroups([]));
   }, [filters.companyEntityId, companies]);
 
   React.useEffect(() => {
@@ -132,6 +140,8 @@ export function DailyActivityFilters({
       legacySectionId: undefined,
       legacyLineId: undefined,
       legacyGroupId: undefined,
+      groupEntityId: undefined,
+      lineName: undefined,
     }));
   };
 
@@ -144,6 +154,7 @@ export function DailyActivityFilters({
         legacyDepartmentId: undefined,
         legacySectionId: undefined,
         legacyLineId: undefined,
+        lineName: undefined,
       }));
       return;
     }
@@ -155,7 +166,8 @@ export function DailyActivityFilters({
       departmentEntityId: dept?.entityId ?? "",
       sectionEntityId: "",
       legacySectionId: undefined,
-      legacyLineId: undefined,
+        legacyLineId: undefined,
+        lineName: undefined,
     }));
   };
 
@@ -166,6 +178,7 @@ export function DailyActivityFilters({
         sectionEntityId: "",
         legacySectionId: undefined,
         legacyLineId: undefined,
+        lineName: undefined,
       }));
       return;
     }
@@ -181,9 +194,12 @@ export function DailyActivityFilters({
 
   const handleReset = () => {
     const next = defaultDailyActivityFilters();
-    if (isCompanyDisabled && companies[0]) {
-      next.companyEntityId = companies[0].entityId;
-      next.legacyCompanyId = companies[0].id;
+    if (isCompanyLocked && defaultCompany) {
+      next.companyEntityId = defaultCompany.entityId;
+      next.legacyCompanyId = defaultCompany.id;
+    } else if (defaultCompany && !next.companyEntityId) {
+      next.companyEntityId = defaultCompany.entityId;
+      next.legacyCompanyId = defaultCompany.id;
     }
     setFilters(next);
     onReset();
@@ -302,9 +318,20 @@ export function DailyActivityFilters({
               value={filters.legacyLineId ?? "all"}
               onChange={(e) => {
                 const v = e.target.value;
+                if (v === "all") {
+                  setFilters((f) => ({
+                    ...f,
+                    legacyLineId: undefined,
+                    lineName: undefined,
+                  }));
+                  return;
+                }
+                const id = parseInt(v, 10);
+                const line = lines.find((l) => l.id === id);
                 setFilters((f) => ({
                   ...f,
-                  legacyLineId: v === "all" ? undefined : parseInt(v, 10),
+                  legacyLineId: id,
+                  lineName: line?.nameEn,
                 }));
               }}
               className="h-9"
@@ -325,9 +352,20 @@ export function DailyActivityFilters({
               value={filters.legacyGroupId ?? "all"}
               onChange={(e) => {
                 const v = e.target.value;
+                if (v === "all") {
+                  setFilters((f) => ({
+                    ...f,
+                    legacyGroupId: undefined,
+                    groupEntityId: undefined,
+                  }));
+                  return;
+                }
+                const id = parseInt(v, 10);
+                const group = groups.find((g) => g.id === id);
                 setFilters((f) => ({
                   ...f,
-                  legacyGroupId: v === "all" ? undefined : parseInt(v, 10),
+                  legacyGroupId: id,
+                  groupEntityId: group?.entityId,
                 }));
               }}
               className="h-9"

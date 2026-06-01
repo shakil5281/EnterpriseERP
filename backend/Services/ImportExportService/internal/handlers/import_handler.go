@@ -17,6 +17,8 @@ type ImportHandler struct {
 	Store storage.LocalStorage
 }
 
+const maxImportUploadBytes = 25 << 20
+
 // Preview godoc
 // @Summary      Preview import file
 // @Description  Upload an Excel file, validate rows, and return a preview session. Modules: employee, attendance, payroll, shift, leave.
@@ -40,6 +42,14 @@ func (h *ImportHandler) Preview(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
 		response.FailWithStatus(c, http.StatusBadRequest, response.Err("FILE", "file is required"))
+		return
+	}
+	if file.Size <= 0 {
+		response.FailWithStatus(c, http.StatusBadRequest, response.Err("FILE", "file is empty"))
+		return
+	}
+	if file.Size > maxImportUploadBytes {
+		response.FailWithStatus(c, http.StatusBadRequest, response.Err("FILE", "file exceeds 25 MB upload limit"))
 		return
 	}
 	if err := storage.ValidateMIME(file.Filename, nil); err != nil {
@@ -90,7 +100,7 @@ func (h *ImportHandler) Confirm(c *gin.Context) {
 		response.FailWithStatus(c, http.StatusBadRequest, response.Err("VALIDATION", err.Error()))
 		return
 	}
-	job, err := h.Svc.Confirm(companyID, middleware.UserID(c), req.SessionID, middleware.BearerToken(c))
+	job, err := h.Svc.Confirm(c.Request.Context(), companyID, middleware.UserID(c), req.SessionID, middleware.BearerToken(c))
 	if err != nil {
 		response.FailWithStatus(c, http.StatusBadRequest, response.Err("IMPORT", err.Error()))
 		return

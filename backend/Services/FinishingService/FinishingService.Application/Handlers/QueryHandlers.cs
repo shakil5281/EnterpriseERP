@@ -14,6 +14,7 @@ public sealed class FinishingQueryHandlers(
     IRedisCacheService cache) :
     IRequestHandler<GetFinishingReceivesQuery, IReadOnlyList<FinishingReceiveDto>>,
     IRequestHandler<GetFinishingReceiveByIdQuery, FinishingReceiveDto>,
+    IRequestHandler<GetFinishingReceiveQuantityQuery, int>,
     IRequestHandler<GetFinishingBatchesQuery, IReadOnlyList<FinishingBatchDto>>,
     IRequestHandler<GetFinishingBatchByIdQuery, FinishingBatchDto>,
     IRequestHandler<GetFinishingInputsQuery, IReadOnlyList<FinishingInputDto>>,
@@ -45,6 +46,14 @@ public sealed class FinishingQueryHandlers(
         var row = await db.FinishingReceives.Include(x => x.Items).FirstOrDefaultAsync(x => x.Id == q.Id, ct)
             ?? throw new KeyNotFoundException("Finishing receive not found.");
         return mapper.Map<FinishingReceiveDto>(row);
+    }
+
+    public async Task<int> Handle(GetFinishingReceiveQuantityQuery q, CancellationToken ct)
+    {
+        var color = string.IsNullOrWhiteSpace(q.Color) ? null : q.Color.Trim();
+        var balance = await db.FinishingBalances.FirstOrDefaultAsync(x =>
+            x.CompanyId == q.CompanyId && x.OrderId == q.OrderId && x.ColorName == color && x.SizeName == q.Size.Trim(), ct);
+        return balance?.FinishingReceiveQty ?? 0;
     }
 
     // Batches

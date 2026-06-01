@@ -125,6 +125,14 @@ export interface EmployeeShiftAssignment {
   isCurrent: boolean;
 }
 
+export interface PagedResult<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages?: number;
+}
+
 export interface TemporaryShiftAssignment {
   id: string;
   employeeId: string;
@@ -274,7 +282,22 @@ export const shiftService = {
     employeeId?: string;
   }) => {
     const response = await api.get('temporary-shifts/list', { params });
+    const page = unwrap<PagedResult<TemporaryShiftAssignment>>(response);
+    if (page?.items) return page.items;
+    // Backward compatibility if API still returns array
     return unwrap<TemporaryShiftAssignment[]>(response) ?? [];
+  },
+
+  listTemporaryShiftsPage: async (params: {
+    companyId: string;
+    fromDate?: string;
+    toDate?: string;
+    employeeId?: string;
+    page?: number;
+    pageSize?: number; // 0 = All
+  }) => {
+    const response = await api.get('temporary-shifts/list', { params });
+    return unwrap<PagedResult<TemporaryShiftAssignment>>(response);
   },
 
   getTemporaryShift: async (companyId: string, employeeId: string, date: string) => {

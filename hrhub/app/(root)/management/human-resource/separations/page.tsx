@@ -29,9 +29,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { HrFilterCard } from "@/components/hr/hr-filter-card";
 import { HrPageHeader } from "@/components/hr/hr-page-header";
+import { HrPageShell } from "@/components/hr/hr-page-shell";
+import { HrTableCard } from "@/components/hr/hr-table-card";
 import { StatusChangeSheet } from "@/components/hr/status-change-sheet";
-import { companyService, type Company } from "@/lib/services/company";
+import { ScopedCompanySelect } from "@/components/hr/scoped-company-select";
+import { useCompanyFilterScope } from "@/hooks/use-company-filter-scope";
 import { employeeService, type Employee } from "@/lib/services/employee";
 import {
   organogramService,
@@ -47,8 +51,8 @@ type OrganogramFilter = "All" | number;
 type SeparationAction = "Resign" | "Close";
 
 export default function SeparationsPage() {
-  const { user, hasRole, loading: authLoading } = useAuth();
-  const [companies, setCompanies] = React.useState<Company[]>([]);
+  const { loading: authLoading } = useAuth();
+  const { companies } = useCompanyFilterScope();
   const [selectedCompany, setSelectedCompany] = React.useState("");
   const [searchTerm, setSearchTerm] = React.useState("");
   const [employeeIdFilter, setEmployeeIdFilter] = React.useState("");
@@ -76,22 +80,10 @@ export default function SeparationsPage() {
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [selectedOne, setSelectedOne] = React.useState<EmployeeRow | null>(null);
 
-  const canSeeAllCompanies = hasRole("SuperAdmin") || hasRole("Admin");
   const selectedCompanyRow = React.useMemo(
     () => companies.find((c) => c.entityId === selectedCompany),
     [companies, selectedCompany],
   );
-
-  React.useEffect(() => {
-    if (authLoading || !user) return;
-    companyService.getAll().then((list) => {
-      const allowed = canSeeAllCompanies
-        ? list
-        : list.filter((c) => user.assignedCompanyIds?.includes(c.entityId));
-      setCompanies(allowed);
-      setSelectedCompany((c) => c || allowed[0]?.entityId || "");
-    });
-  }, [authLoading, canSeeAllCompanies, user]);
 
   React.useEffect(() => {
     if (!selectedCompanyRow?.id) {
@@ -253,38 +245,28 @@ export default function SeparationsPage() {
     separationAction === "Resign" ? "Apply Resign" : "Apply Close";
 
   return (
-    <div className="flex flex-col gap-6 p-4 lg:p-6">
-      <div className="flex items-center gap-2">
-        <IconUserExclamation className="size-6 text-primary" />
-        <HrPageHeader
-          title="Separations"
-          description="Filter employees and apply resign or close (terminated) in bulk."
-        />
-      </div>
+    <HrPageShell>
+      <HrPageHeader
+        icon={<IconUserExclamation className="size-7" />}
+        title="Separations"
+        description="Filter employees and apply resign or close (terminated) in bulk."
+      />
 
-      <Card className="border shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <IconFilter className="size-4" /> Advanced filter
-          </CardTitle>
-          <CardDescription>Apply filter to load employees, then select rows and apply separation.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <HrFilterCard
+        recordCount={employees.length}
+        isLoading={loadingEmployees}
+        onApply={() => void applyFilter()}
+        applyLabel="Apply filter"
+      >
+          <div className="contents sm:col-span-2 lg:col-span-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 col-span-full w-full">
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold uppercase text-muted-foreground">Company</Label>
-              <NativeSelect
+              <ScopedCompanySelect
                 value={selectedCompany}
-                onChange={(e) => setSelectedCompany(e.target.value)}
+                onChange={(entityId) => setSelectedCompany(entityId)}
                 className="h-10"
-              >
-                <option value="">Select company</option>
-                {companies.map((c) => (
-                  <option key={c.entityId} value={c.entityId}>
-                    {c.companyNameEn}
-                  </option>
-                ))}
-              </NativeSelect>
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold uppercase text-muted-foreground">Search</Label>
@@ -404,11 +386,8 @@ export default function SeparationsPage() {
               </NativeSelect>
             </div>
           </div>
-          <div className="flex flex-wrap gap-3 border-t pt-4">
-            <Button variant="secondary" className="gap-2" onClick={() => void applyFilter()} disabled={loadingEmployees}>
-              {loadingEmployees ? <IconLoader2 className="size-4 animate-spin" /> : <IconFilter className="size-4" />}
-              Apply filter
-            </Button>
+          </div>
+          <div className="col-span-full flex flex-wrap gap-3 border-t pt-4 mt-2">
             <Button
               className="gap-2"
               disabled={selectedEmployees.length === 0 || applying}
@@ -421,11 +400,9 @@ export default function SeparationsPage() {
               )}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+      </HrFilterCard>
 
-      <Card>
-        <CardContent className="p-0">
+      <HrTableCard>
           <DataTable
             data={employees}
             columns={columns}
@@ -437,8 +414,7 @@ export default function SeparationsPage() {
             showActions={false}
             searchKey="fullNameEn"
           />
-        </CardContent>
-      </Card>
+      </HrTableCard>
 
       <Dialog open={applyDialogOpen} onOpenChange={setApplyDialogOpen}>
         <DialogContent>
@@ -480,6 +456,6 @@ export default function SeparationsPage() {
           onSuccess={() => void applyFilter()}
         />
       )}
-    </div>
+    </HrPageShell>
   );
 }

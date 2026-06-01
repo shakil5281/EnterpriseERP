@@ -1,170 +1,207 @@
-"use client"
+"use client";
 
-import * as React from "react"
+import * as React from "react";
 import {
-    IconCurrencyDollar,
-    IconPlus,
-    IconRefresh,
-    IconBuildingBank,
-    IconCreditCard,
-    IconReceipt2,
-    IconHistory
-} from "@tabler/icons-react"
-import { DataTable } from "@/components/data-table"
-import { ColumnDef } from "@tanstack/react-table"
-import { Button } from "@/components/ui/button"
-import { merchandisingService } from "@/lib/services/merchandising"
-import type { Order } from "@/lib/types/merchandising"
-import { toast } from "sonner"
-import { cn } from "@/lib/utils"
-import { Card, CardContent } from "@/components/ui/card"
+  IconCurrencyDollar,
+  IconRefresh,
+  IconBuildingBank,
+} from "@tabler/icons-react";
+import { ColumnDef } from "@tanstack/react-table";
+import { toast } from "sonner";
+import { DataTable } from "@/components/data-table";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  MerchCompanyGate,
+  MerchPageShell,
+  MerchPageHeader,
+  MerchTableCard,
+} from "@/components/merchandising";
+import { merchandisingService } from "@/lib/services/merchandising";
+import type { Order, OrderDetails } from "@/lib/types/merchandising";
+
+type PaymentRow = {
+  id: string;
+  order: Order;
+  buyerName: string;
+  paymentTerms: string;
+  incoterms: string;
+  lcBank: string;
+  currency: string;
+};
 
 export default function PaymentSheetPage() {
-    const [orders, setOrders] = React.useState<Order[]>([])
-    const [loading, setLoading] = React.useState(true)
+  return (
+    <MerchCompanyGate>
+      {(companyId) => <PaymentSheetPageContent companyId={companyId} />}
+    </MerchCompanyGate>
+  );
+}
 
-    const fetchData = React.useCallback(async () => {
-        try {
-            setLoading(true)
-            const data = await merchandisingService.getOrders()
-            setOrders(data)
-        } catch (error) {
-            console.error(error)
-            toast.error("Failed to load payment ledger")
-        } finally {
-            setLoading(false)
-        }
-    }, [])
+function PaymentSheetPageContent({ companyId }: { companyId: string }) {
+  const [rows, setRows] = React.useState<PaymentRow[]>([]);
+  const [loading, setLoading] = React.useState(true);
 
-    React.useEffect(() => {
-        fetchData()
-    }, [fetchData])
+  const fetchData = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      const [orders, buyers] = await Promise.all([
+        merchandisingService.getOrders(companyId),
+        merchandisingService.getBuyers(companyId),
+      ]);
+      const buyerMap = new Map(buyers.map((b) => [b.id, b]));
 
-    const columns: ColumnDef<Order>[] = [
-        {
-            id: "sl",
-            header: "SL",
-            cell: ({ row }) => <span className="text-xs text-muted-foreground font-medium">{row.index + 1}</span>,
-        },
-        {
-            id: "node",
-            header: "Financial Node",
-            cell: ({ row }) => <span className="font-bold tracking-tight text-foreground uppercase">RE-INV/2025/{row.index + 142}</span>
-        },
-        {
-            id: "styleRef",
-            accessorKey: "orderNo",
-            header: "Order Ref",
-            cell: ({ row }) => <span className="font-bold text-indigo-600 dark:text-indigo-400 underline underline-offset-2">{row.original.orderNo}</span>
-        },
-        {
-            id: "bank",
-            header: "Bank Institution",
-            cell: ({ row }) => (
-                <div className="flex items-center gap-2">
-                    <IconBuildingBank className="size-3.5 text-muted-foreground/60" />
-                    <span className="text-[11px] font-bold text-muted-foreground uppercase">HSBC Global Node</span>
-                </div>
-            )
-        },
-        {
-            id: "value",
-            header: "Invoice Value",
-            cell: ({ row }) => <span className="font-bold text-foreground tabular-nums">${row.original.totalValue.toLocaleString()}</span>
-        },
-        {
-            id: "status",
-            header: "Status",
-            cell: ({ row }) => {
-                const status = row.index % 3 === 0 ? "Realized" : row.index % 3 === 1 ? "Partial" : "In-Transit"
-                const colorMap: Record<string, string> = {
-                    "Realized": "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
-                    "Partial": "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
-                    "In-Transit": "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20"
-                }
-                return (
-                    <div className={cn(
-                        "inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-tight",
-                        colorMap[status as keyof typeof colorMap]
-                    )}>
-                        {status}
-                    </div>
-                )
+      const paymentRows: PaymentRow[] = await Promise.all(
+        orders.map(async (order) => {
+          const buyer = buyerMap.get(order.buyerId);
+          let paymentTerms = buyer?.paymentTerms ?? "—";
+          let incoterms = "—";
+          let lcBank = "—";
+
+          try {
+            const details: OrderDetails = await merchandisingService.getOrderDetails(
+              order.id,
+            );
+            const shipment = details.shipmentPlans?.[0];
+            if (shipment?.destination) {
+              incoterms = shipment.destination;
             }
-        },
-        {
-            id: "realized",
-            header: "Realized Funds",
-            cell: ({ row }) => (
-                <span className="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                    ${((row.index % 3 === 0 ? row.original.totalOrderQty * 8.5 : row.original.totalOrderQty * 4.2)).toLocaleString()}
-                </span>
-            )
-        }
-    ]
+          } catch {
+            /* use buyer defaults only */
+          }
 
-    return (
-        <div className="flex flex-col gap-8 py-8 px-4 lg:px-8 bg-background min-h-screen">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-foreground tracking-tight">Payment Sheet</h1>
-                    <p className="text-sm text-muted-foreground font-medium">Export realization, financial ledger and L/C tracking</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 border border-border rounded-lg text-muted-foreground"
-                        onClick={fetchData}
-                        disabled={loading}
-                    >
-                        <IconRefresh className={`size-4 ${loading ? 'animate-spin' : ''}`} />
-                    </Button>
-                    <Button className="h-10 px-6 font-semibold shadow-sm shadow-indigo-500/20 text-white">
-                        <IconPlus className="size-4 mr-2" />
-                        New Transaction
-                    </Button>
-                </div>
-            </div>
+          if (paymentTerms === "—" && buyer) {
+            paymentTerms = buyer.paymentTerms ?? buyer.currency ?? "—";
+          }
 
-            {/* Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <KPICard title="Realization" value="$450.2k" icon={IconBuildingBank} color="text-emerald-600" bgColor="bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400" />
-                <KPICard title="L/C Liability" value="$120.5k" icon={IconCreditCard} color="text-rose-600" bgColor="bg-rose-50 dark:bg-rose-500/10 dark:text-rose-400" />
-                <KPICard title="Incentives" value="$42.5k" icon={IconReceipt2} color="text-amber-600" bgColor="bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400" />
-                <KPICard title="Avg Days" value="18 Days" icon={IconHistory} color="text-blue-600" bgColor="bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400" />
-            </div>
+          return {
+            id: order.id,
+            order,
+            buyerName: buyer?.buyerName ?? "—",
+            paymentTerms,
+            incoterms,
+            lcBank,
+            currency: order.currencyCode || buyer?.currency || "USD",
+          };
+        }),
+      );
 
-            {/* Content Table */}
-            <div className="flex-1">
-                <DataTable
-                    columns={columns}
-                    data={orders}
-                    isLoading={loading}
-                    searchKey="styleRef"
-                    showTabs={false}
-                    showActions={true}
-                    showColumnCustomizer={true}
-                />
-            </div>
+      setRows(paymentRows);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load payment sheet");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const totalValue = rows.reduce((acc, r) => acc + r.order.totalValue, 0);
+
+  const columns: ColumnDef<PaymentRow>[] = [
+    {
+      id: "sl",
+      header: "SL",
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground">{row.index + 1}</span>
+      ),
+    },
+    {
+      id: "orderNo",
+      header: "Order",
+      cell: ({ row }) => (
+        <span className="font-semibold text-primary">{row.original.order.orderNo}</span>
+      ),
+    },
+    {
+      id: "buyer",
+      header: "Buyer",
+      cell: ({ row }) => row.original.buyerName,
+    },
+    {
+      id: "terms",
+      header: "Payment terms",
+      cell: ({ row }) => (
+        <span className="text-sm">{row.original.paymentTerms}</span>
+      ),
+    },
+    {
+      id: "bank",
+      header: "L/C bank",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2 text-xs">
+          <IconBuildingBank className="size-3.5 text-muted-foreground" />
+          {row.original.lcBank}
         </div>
-    )
+      ),
+    },
+    {
+      id: "value",
+      header: "Order value",
+      cell: ({ row }) => (
+        <span className="font-semibold tabular-nums">
+          {row.original.currency} {row.original.order.totalValue.toLocaleString()}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Order status",
+      cell: ({ row }) => (
+        <Badge variant="outline" className="text-[10px] uppercase">
+          {row.original.order.orderStatus}
+        </Badge>
+      ),
+    },
+  ];
+
+  return (
+    <MerchPageShell>
+      <MerchPageHeader
+        icon={<IconCurrencyDollar className="size-6" />}
+        title="Payment sheet"
+        description="Commercial terms from orders and buyer master — no synthetic invoice IDs"
+        actions={
+          <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
+            <IconRefresh className={loading ? "size-4 animate-spin" : "size-4"} />
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Stat title="Orders" value={rows.length} />
+        <Stat title="Total value" value={totalValue.toLocaleString()} />
+        <Stat
+          title="Confirmed"
+          value={rows.filter((r) => r.order.orderStatus === "Confirmed").length}
+        />
+      </div>
+
+      <MerchTableCard isLoading={loading}>
+        <div className="p-4">
+          <DataTable
+            columns={columns}
+            data={rows}
+            isLoading={loading}
+            searchKey="order"
+            showTabs={false}
+            showActions={false}
+            showColumnCustomizer
+          />
+        </div>
+      </MerchTableCard>
+    </MerchPageShell>
+  );
 }
 
-function KPICard({ title, value, icon: Icon, color, bgColor }: any) {
-    return (
-        <Card className="border border-border bg-card shadow-none">
-            <CardContent className="p-4 flex items-center gap-4">
-                <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center", bgColor, color)}>
-                    <Icon className="size-5" />
-                </div>
-                <div>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
-                    <h3 className="text-lg font-bold text-foreground">{value}</h3>
-                </div>
-            </CardContent>
-        </Card>
-    )
+function Stat({ title, value }: { title: string; value: number | string }) {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <p className="text-[10px] font-bold text-muted-foreground uppercase">{title}</p>
+      <p className="text-lg font-bold mt-1">{value}</p>
+    </div>
+  );
 }
-

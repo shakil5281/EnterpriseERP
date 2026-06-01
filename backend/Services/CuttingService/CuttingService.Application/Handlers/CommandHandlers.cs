@@ -33,7 +33,10 @@ public sealed class CuttingCommandHandlers(
     IRequestHandler<CreateCuttingWastageCommand, CuttingWastageDto>,
     IRequestHandler<CreateCuttingPanelTransferCommand, CuttingPanelTransferDto>,
     IRequestHandler<ConfirmCuttingPanelTransferCommand, CuttingPanelTransferDto>,
-    IRequestHandler<CancelCuttingPanelTransferCommand, CuttingPanelTransferDto>
+    IRequestHandler<CancelCuttingPanelTransferCommand, CuttingPanelTransferDto>,
+    IRequestHandler<CreateCuttingBundleCommand, CuttingBundleDto>,
+    IRequestHandler<UpdateCuttingBundleCommand, CuttingBundleDto>,
+    IRequestHandler<UpdateCuttingBundleStatusCommand, CuttingBundleDto>
 {
     public async Task<CuttingPlanDto> Handle(CreateCuttingPlanCommand command, CancellationToken ct)
     {
@@ -238,6 +241,64 @@ public sealed class CuttingCommandHandlers(
         transfer.Status = PanelTransferStatuses.Cancelled;
         await uow.SaveChangesAsync(ct);
         return mapper.Map<CuttingPanelTransferDto>(transfer);
+    }
+
+    public async Task<CuttingBundleDto> Handle(CreateCuttingBundleCommand command, CancellationToken ct)
+    {
+        var r = command.Request;
+        var plan = await uow.CuttingPlans.GetByIdAsync(r.CuttingPlanId, ct) ?? throw new KeyNotFoundException("Cutting plan not found.");
+        if (plan.CompanyId != r.CompanyId) throw new InvalidOperationException("Plan company mismatch.");
+        if (await uow.Bundles.Query().AnyAsync(x => x.CompanyId == r.CompanyId && x.BundleTag == r.BundleTag.Trim(), ct))
+            throw new InvalidOperationException("Bundle tag already exists.");
+        var bundle = new CuttingBundle
+        {
+            CompanyId = r.CompanyId,
+            OrderId = r.OrderId,
+            CuttingPlanId = r.CuttingPlanId,
+            CuttingLayId = r.CuttingLayId,
+            CuttingOutputId = r.CuttingOutputId,
+            BundleTag = r.BundleTag.Trim(),
+            PlanNo = plan.PlanNo,
+            StyleName = r.StyleName,
+            SizeName = r.SizeName.Trim(),
+            PieceCount = r.PieceCount,
+            SerialFrom = r.SerialFrom,
+            SerialTo = r.SerialTo,
+            SerialRange = r.SerialRange ?? (r.SerialFrom.HasValue && r.SerialTo.HasValue ? $"{r.SerialFrom}-{r.SerialTo}" : null),
+            WeightKg = r.WeightKg,
+            CurrentLocation = r.CurrentLocation,
+            Status = BundleStatuses.Ready,
+            CreatedBy = r.CreatedBy,
+        };
+        await uow.Bundles.AddAsync(bundle, ct);
+        await uow.SaveChangesAsync(ct);
+        return mapper.Map<CuttingBundleDto>(bundle);
+    }
+
+    public async Task<CuttingBundleDto> Handle(UpdateCuttingBundleCommand command, CancellationToken ct)
+    {
+        var bundle = await uow.Bundles.GetByIdAsync(command.Id, ct) ?? throw new KeyNotFoundException("Bundle not found.");
+        var r = command.Request;
+        bundle.SizeName = r.SizeName.Trim();
+        bundle.PieceCount = r.PieceCount;
+        bundle.SerialFrom = r.SerialFrom;
+        bundle.SerialTo = r.SerialTo;
+        bundle.SerialRange = r.SerialRange ?? (r.SerialFrom.HasValue && r.SerialTo.HasValue ? $"{r.SerialFrom}-{r.SerialTo}" : bundle.SerialRange);
+        bundle.WeightKg = r.WeightKg;
+        bundle.CurrentLocation = r.CurrentLocation;
+        bundle.UpdatedBy = r.UpdatedBy;
+        await uow.SaveChangesAsync(ct);
+        return mapper.Map<CuttingBundleDto>(bundle);
+    }
+
+    public async Task<CuttingBundleDto> Handle(UpdateCuttingBundleStatusCommand command, CancellationToken ct)
+    {
+        var bundle = await uow.Bundles.GetByIdAsync(command.Id, ct) ?? throw new KeyNotFoundException("Bundle not found.");
+        bundle.Status = command.Request.Status.Trim();
+        if (!string.IsNullOrWhiteSpace(command.Request.CurrentLocation)) bundle.CurrentLocation = command.Request.CurrentLocation;
+        bundle.UpdatedBy = command.Request.UpdatedBy;
+        await uow.SaveChangesAsync(ct);
+        return mapper.Map<CuttingBundleDto>(bundle);
     }
 
     private static void EnsureNotCompleted(CuttingPlan plan)

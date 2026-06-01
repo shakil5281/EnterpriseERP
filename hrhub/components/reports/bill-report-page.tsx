@@ -29,9 +29,11 @@ import { organogramService } from "@/lib/services/organogram"
 import { useCompanyContext } from "@/components/providers/company-context"
 import { DateRange } from "react-day-picker"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { HrReportExportButtons } from "@/components/reports/hr-report-export-buttons"
 
 interface BillReportPageProps {
     title: string
+    exportEndpoint: string
     service: {
         getAll: (params: any) => Promise<BillResponseDto>
         process: (data: any) => Promise<any>
@@ -41,7 +43,7 @@ interface BillReportPageProps {
     }
 }
 
-export function BillReportPage({ title, service }: BillReportPageProps) {
+export function BillReportPage({ title, exportEndpoint, service }: BillReportPageProps) {
     const { activeCompanyId } = useCompanyContext()
     const [data, setData] = React.useState<BillDto[]>([])
     const [summary, setSummary] = React.useState<any>(null)
@@ -60,6 +62,32 @@ export function BillReportPage({ title, service }: BillReportPageProps) {
     React.useEffect(() => {
         fetchDepartments()
     }, [])
+
+    const buildExportParams = React.useCallback(async () => {
+        if (!activeCompanyId) return null
+        const dept = departments.find((d) => String(d.id) === departmentId)
+        let departmentGuid: string | undefined
+        if (departmentId !== "all" && dept) {
+            const fullDept = await organogramService.getDepartments({ companyId: activeCompanyId })
+            departmentGuid = fullDept.find((d) => d.id === dept.id)?.entityId
+        }
+        return {
+            companyId: activeCompanyId,
+            fromDate: format(selectedDate ?? new Date(), "yyyy-MM-dd"),
+            toDate: format(selectedDate ?? new Date(), "yyyy-MM-dd"),
+            departmentId: departmentGuid,
+            employeeType: employeeType !== "all" ? employeeType : undefined,
+            searchTerm: searchTerm.trim() || undefined,
+        }
+    }, [activeCompanyId, departmentId, departments, employeeType, searchTerm, selectedDate])
+
+    const [exportParams, setExportParams] = React.useState<Record<string, string | undefined>>({})
+
+    React.useEffect(() => {
+        void buildExportParams().then((params) => {
+            if (params) setExportParams(params)
+        })
+    }, [buildExportParams])
 
     const fetchDepartments = async () => {
         try {
@@ -267,7 +295,14 @@ export function BillReportPage({ title, service }: BillReportPageProps) {
                     <h1 className="text-3xl font-bold tracking-tight text-foreground/90">{title}</h1>
                     <p className="text-muted-foreground mt-1">Manage and process employee {title.toLowerCase()} reports</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                    <HrReportExportButtons
+                        variant="bill"
+                        exportUrl={exportEndpoint}
+                        params={exportParams}
+                        filePrefix={`${exportEndpoint.replace(/-bills$/, "")}-${format(selectedDate ?? new Date(), "yyyyMMdd")}`}
+                        disabled={!activeCompanyId || data.length === 0}
+                    />
                     <Button
                         variant="outline"
                         onClick={handleExport}
@@ -275,7 +310,7 @@ export function BillReportPage({ title, service }: BillReportPageProps) {
                         className="h-10 hover:bg-muted/50"
                     >
                         {isExporting ? <IconLoader className="mr-2 h-4 w-4 animate-spin" /> : <IconFileSpreadsheet className="mr-2 h-4 w-4" />}
-                        Export
+                        CSV
                     </Button>
                     <Button 
                         onClick={handleProcess} 

@@ -50,6 +50,7 @@ public class AttendanceController(IMediator mediator, ITenantContext tenant) : C
     public async Task<ActionResult<ApiResponse<IReadOnlyList<DailyReportRowDto>>>> GetDailyReport(
         [FromQuery] AttendanceReportQueryParams q)
     {
+        q.CompanyId = TenantCompanyResolver.ResolveCompanyId(tenant, q.CompanyId);
         var data = await mediator.Send(new GetDailyReportQuery(q.ToFilter()));
         return Ok(ApiResponse<IReadOnlyList<DailyReportRowDto>>.Ok(data, HttpContext.TraceIdentifier));
     }
@@ -237,20 +238,41 @@ public sealed class AttendanceReportQueryParams
     public Guid? DepartmentId { get; set; }
     public Guid? SectionId { get; set; }
     public Guid? DesignationId { get; set; }
+    public Guid? GroupId { get; set; }
+    public string? LineName { get; set; }
+    public string? AttendanceStatus { get; set; }
     public string? EmployeeID { get; set; }
     public string? SearchTerm { get; set; }
 
-    public AttendanceFilterDto ToFilter() =>
-        new(
+    public AttendanceFilterDto ToFilter()
+    {
+        var day = Date?.Date;
+        var from = FromDate == default && day.HasValue ? day.Value : FromDate.Date;
+        var to = ToDate == default && day.HasValue ? day.Value : ToDate.Date;
+        if (from == default)
+        {
+            from = DateTime.UtcNow.Date;
+        }
+
+        if (to == default)
+        {
+            to = from;
+        }
+
+        return new AttendanceFilterDto(
             CompanyId,
-            FromDate,
-            ToDate,
+            from,
+            to,
             DepartmentId,
             SectionId,
             DesignationId,
-            EmployeeID,
-            SearchTerm,
-            Date);
+            GroupId,
+            string.IsNullOrWhiteSpace(LineName) ? null : LineName.Trim(),
+            string.IsNullOrWhiteSpace(AttendanceStatus) ? null : AttendanceStatus.Trim(),
+            string.IsNullOrWhiteSpace(EmployeeID) ? null : EmployeeID.Trim(),
+            string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm.Trim(),
+            day ?? (from == to ? from : null));
+    }
 }
 
 [ApiController]

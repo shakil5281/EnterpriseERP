@@ -73,8 +73,11 @@ export function getHttpErrorMessage(error: unknown, fallback = "Request failed")
     return status ? `${fromBody} (HTTP ${status})` : fromBody;
   }
 
-  if (err.response?.status === 502) {
-    return "Bad gateway — PunchData service may be stopped, or the device is unreachable on the LAN. Start PunchDataService on port 5050 and ensure the server can reach the device IP.";
+  if (err.response?.status === 502 || err.response?.status === 503) {
+    const data = err.response?.data as { message?: string; errors?: { message?: string }[] } | undefined;
+    if (data?.message) return data.message;
+    if (data?.errors?.[0]?.message) return data.errors[0].message;
+    return "PunchData service is not running on port 5050. Start it with backend/Infrastructure/Scripts/start-platform.ps1 or: cd backend/Services/PunchDataService && go run ./cmd/server";
   }
 
   if (err.message && err.message !== "Request failed with status code 502") {

@@ -18,11 +18,12 @@ public class OrganogramController(IOrganogramService organogramService) : Contro
 
     /// <summary>Legacy/query list: GET .../Organogram/departments?companyId= (optional — all companies when omitted).</summary>
     [HttpGet("departments")]
-    public async Task<IActionResult> ListDepartments([FromQuery] Guid? companyId, CancellationToken cancellationToken)
+    public async Task<IActionResult> ListDepartments([FromQuery] string? companyId, CancellationToken cancellationToken)
     {
-        if (companyId.HasValue)
+        var companyGuid = OrganogramQueryHelpers.ParseOptionalCompanyId(companyId);
+        if (companyGuid.HasValue)
         {
-            var scoped = await organogramService.GetDepartmentsAsync(companyId.Value);
+            var scoped = await organogramService.GetDepartmentsAsync(companyGuid.Value);
             return Ok(ApiResponse<IEnumerable<DepartmentDto>>.Ok(scoped, HttpContext.TraceIdentifier));
         }
 
@@ -62,19 +63,21 @@ public class OrganogramController(IOrganogramService organogramService) : Contro
     /// <summary>Legacy/query list: GET .../Organogram/sections?departmentId= or ?companyId= (optional — all when both omitted).</summary>
     [HttpGet("sections")]
     public async Task<IActionResult> ListSections(
-        [FromQuery] Guid? departmentId,
-        [FromQuery] Guid? companyId,
+        [FromQuery] string? departmentId,
+        [FromQuery] string? companyId,
         CancellationToken cancellationToken)
     {
-        if (departmentId.HasValue)
+        var deptId = OrganogramQueryHelpers.ParseOptionalCompanyId(departmentId);
+        var companyGuid = OrganogramQueryHelpers.ParseOptionalCompanyId(companyId);
+        if (deptId.HasValue)
         {
-            var scoped = await organogramService.GetSectionsAsync(departmentId.Value);
+            var scoped = await organogramService.GetSectionsAsync(deptId.Value);
             return Ok(ApiResponse<IEnumerable<SectionDto>>.Ok(scoped, HttpContext.TraceIdentifier));
         }
 
-        if (companyId.HasValue)
+        if (companyGuid.HasValue)
         {
-            var byCompany = await organogramService.GetSectionsForCompanyAsync(companyId.Value, cancellationToken);
+            var byCompany = await organogramService.GetSectionsForCompanyAsync(companyGuid.Value, cancellationToken);
             return Ok(ApiResponse<IEnumerable<SectionDto>>.Ok(byCompany, HttpContext.TraceIdentifier));
         }
 
@@ -163,9 +166,11 @@ public class OrganogramController(IOrganogramService organogramService) : Contro
 
     // Groups
     [HttpGet("groups")]
-    public async Task<IActionResult> GetGroups([FromQuery] Guid? companyId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetGroups([FromQuery] string? companyId, CancellationToken cancellationToken)
     {
-        var data = await organogramService.GetGroupsAsync(companyId, cancellationToken);
+        var data = await organogramService.GetGroupsAsync(
+            OrganogramQueryHelpers.ParseOptionalCompanyId(companyId),
+            cancellationToken);
         return Ok(ApiResponse<IEnumerable<GroupDto>>.Ok(data, HttpContext.TraceIdentifier));
     }
 
@@ -192,9 +197,11 @@ public class OrganogramController(IOrganogramService organogramService) : Contro
 
     // Floors
     [HttpGet("floors")]
-    public async Task<IActionResult> GetFloors([FromQuery] Guid? companyId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetFloors([FromQuery] string? companyId, CancellationToken cancellationToken)
     {
-        var data = await organogramService.GetFloorsAsync(companyId, cancellationToken);
+        var data = await organogramService.GetFloorsAsync(
+            OrganogramQueryHelpers.ParseOptionalCompanyId(companyId),
+            cancellationToken);
         return Ok(ApiResponse<IEnumerable<FloorDto>>.Ok(data, HttpContext.TraceIdentifier));
     }
 

@@ -5,22 +5,22 @@ import {
     IconCalendarStats,
     IconCheck,
     IconLoader2,
-    IconInfoCircle,
     IconUser,
     IconRefresh,
 } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { DateRange } from "react-day-picker"
-import { format, startOfMonth } from "date-fns"
+import { differenceInCalendarDays, format } from "date-fns"
 import { attendanceApi } from "@/lib/services/attendance-api"
 import { companyService, type Company } from "@/lib/services/company"
 import { NativeSelect } from "@/components/ui/native-select"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
-import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
 
 function isGuid(value: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
@@ -28,16 +28,32 @@ function isGuid(value: string): boolean {
 
 function defaultProcessRange(): DateRange {
     const today = new Date()
-    return { from: startOfMonth(today), to: today }
+    return { from: today, to: today }
+}
+
+function processProgressLabel(progress: number): string {
+    if (progress < 25) return "Preparing attendance process..."
+    if (progress < 45) return "Reading punch records and employee list..."
+    if (progress < 70) return "Evaluating shifts, holidays, and weekly off..."
+    if (progress < 90) return "Saving daily attendance records..."
+    return "Finalizing result..."
+}
+
+function parseQueryDate(value: string | null): Date | undefined {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined
+    const d = new Date(value + "T00:00:00")
+    return Number.isNaN(d.getTime()) ? undefined : d
 }
 
 export default function DailyProcessPage() {
     const router = useRouter()
+    const searchParams = useSearchParams()
     const [range, setRange] = React.useState<DateRange | undefined>(defaultProcessRange)
     const [companies, setCompanies] = React.useState<Company[]>([])
     const [companyId, setCompanyId] = React.useState("")
     const [processing, setProcessing] = React.useState(false)
     const [progress, setProgress] = React.useState(0)
+    const [elapsedSeconds, setElapsedSeconds] = React.useState(0)
     const [result, setResult] = React.useState<string | null>(null)
     const [lastBatch, setLastBatch] = React.useState<{
         created: number
@@ -54,7 +70,10 @@ export default function DailyProcessPage() {
             .getAll()
             .then((rows) => {
                 setCompanies(rows)
-                if (rows.length === 1) {
+                const queryCompany = searchParams.get("companyId")
+                if (queryCompany && isGuid(queryCompany)) {
+                    setCompanyId(queryCompany)
+                } else if (rows.length === 1) {
                     setCompanyId(rows[0].entityId)
                 }
             })
@@ -62,7 +81,15 @@ export default function DailyProcessPage() {
                 console.error(error)
                 toast.error("Failed to load companies")
             })
-    }, [])
+    }, [searchParams])
+
+    React.useEffect(() => {
+        const from = parseQueryDate(searchParams.get("from"))
+        const to = parseQueryDate(searchParams.get("to"))
+        if (from) {
+            setRange({ from, to: to ?? from })
+        }
+    }, [searchParams])
 
     const handleProcess = async () => {
         if (!range?.from) {
@@ -75,11 +102,22 @@ export default function DailyProcessPage() {
         }
 
         const end = range.to ?? range.from
+        const totalDays = Math.max(1, differenceInCalendarDays(end, range.from) + 1)
 
         setProcessing(true)
-        setProgress(10)
+        setProgress(5)
+        setElapsedSeconds(0)
         setResult(null)
         setLastBatch(null)
+        const startedAt = Date.now()
+        const progressTimer = window.setInterval(() => {
+            const elapsed = Math.floor((Date.now() - startedAt) / 1000)
+            setElapsedSeconds(elapsed)
+            setProgress((current) => {
+                if (current >= 95) return current
+                return Math.min(95, current + (totalDays > 7 ? 1 : 3))
+            })
+        }, 1000)
 
         try {
             const batch = await attendanceApi.processRange({
@@ -88,6 +126,7 @@ export default function DailyProcessPage() {
                 endDate: format(end, "yyyy-MM-dd"),
             })
             setProgress(100)
+            setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000))
             setLastBatch({
                 created: batch.createdCount ?? 0,
                 updated: batch.updatedCount ?? 0,
@@ -122,6 +161,7 @@ export default function DailyProcessPage() {
             toast.error(message || "Processing failed")
             setProgress(0)
         } finally {
+            window.clearInterval(progressTimer)
             setProcessing(false)
         }
     }
@@ -147,9 +187,21 @@ export default function DailyProcessPage() {
                 <Card className="border shadow-none">
                     <CardHeader>
                         <CardTitle className="text-lg">Bulk Processing Parameters</CardTitle>
-                        <CardDescription>
-                            Reads PunchRecords, upserts DailyAttendance (creates or updates), refreshes shift/holiday
-                            flags, and updates device logs. Locked or approved rows are skipped.
+                        <CardDescription className="space-y-2">
+                            <span>
+                                Reads PunchRecords, upserts DailyAttendance (creates or updates), refreshes shift/holiday
+                                flags, and updates device logs. Locked or approved rows are skipped.
+                            </span>
+                            <span className="block text-xs">
+                                Company holidays (Eid, special off) come from{" "}
+                                <Link
+                                    href="/management/leave/holiday"
+                                    className="text-primary underline underline-offset-2"
+                                >
+                                    Leave → Holiday Calendar
+                                </Link>
+                                . Re-run process after adding or editing holidays so attendance shows Holiday / HolidayPresent.
+                            </span>
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
@@ -186,10 +238,15 @@ export default function DailyProcessPage() {
                                 <div className="flex justify-between items-center text-sm font-medium">
                                     <span className="flex items-center gap-2">
                                         <IconLoader2 className="size-4 animate-spin text-primary" />
-                                        Processing attendance...
+                                        {processProgressLabel(progress)}
                                     </span>
                                     <span>{progress}%</span>
                                 </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Processing {range?.from ? format(range.from, "dd MMM yyyy") : ""} to{" "}
+                                    {range?.to ? format(range.to, "dd MMM yyyy") : range?.from ? format(range.from, "dd MMM yyyy") : ""}
+                                    {elapsedSeconds > 0 ? ` • ${elapsedSeconds}s elapsed` : ""}
+                                </p>
                                 <Progress value={progress} className="h-2" />
                             </div>
                         ) : (
@@ -223,18 +280,6 @@ export default function DailyProcessPage() {
                             </div>
                         )}
                     </CardContent>
-                    <CardFooter className="bg-muted/30 border-t py-4">
-                        <div className="flex gap-2 items-start text-xs text-muted-foreground">
-                            <IconInfoCircle className="size-4 shrink-0 text-primary opacity-70" />
-                            <p>
-                                Uses <code className="text-[11px]">POST /api/v1/Attendance/process/range</code>.
-                                HR <code className="text-[11px]">PunchNumber</code> must match PunchRecords (e.g. device
-                                badge 1733).                                 Job card and daily reports read from DailyAttendance — run this again after
-                                importing new punches (Remote Collect), changing shift weekly off, or fixing weekend
-                                days that show as Absent. Approved or payroll-locked rows are skipped.
-                            </p>
-                        </div>
-                    </CardFooter>
                 </Card>
             </div>
         </div>

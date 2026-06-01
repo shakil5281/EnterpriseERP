@@ -31,6 +31,11 @@ public sealed class QuotationsController(IMediator mediator) : ControllerBase
     public async Task<ActionResult<ApiResponse<QuotationDto>>> Update(Guid id, UpdateQuotationRequest request, CancellationToken cancellationToken) =>
         Ok(ApiResponse<QuotationDto>.Ok(await mediator.Send(new UpdateQuotationCommand(id, request), cancellationToken), "Quotation updated."));
 
+    [HttpGet("{id:guid}/negotiations")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<QuotationNegotiationDto>>>> GetNegotiations(Guid id, [FromQuery] Guid companyId, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<IReadOnlyList<QuotationNegotiationDto>>.Ok(await mediator.Send(new GetQuotationNegotiationsQuery(companyId, id), cancellationToken)));
+
     [HttpPost("{id:guid}/negotiations")]
     [Authorize(Policy = MerchandisingPolicies.QuotationManage)]
     public async Task<ActionResult<ApiResponse<QuotationNegotiationDto>>> AddNegotiation(Guid id, AddQuotationNegotiationRequest request, CancellationToken cancellationToken) =>

@@ -25,7 +25,7 @@ import { NativeSelect } from "@/components/ui/native-select"
 import { Badge } from "@/components/ui/badge"
 import { payrollService, type DailySalarySheet } from "@/lib/services/payroll"
 import { organogramService } from "@/lib/services/organogram"
-import { companyService } from "@/lib/services/company"
+import { ManagementLegacyCompanySelect } from "@/components/hr/management-legacy-company-select"
 import { toast } from "sonner"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Label } from "@/components/ui/label"
@@ -47,8 +47,6 @@ export default function DailySalarySheetPage() {
     const [isExporting, setIsExporting] = React.useState(false)
     const [records, setRecords] = React.useState<DailySalarySheet[]>([])
     const [departments, setDepartments] = React.useState<any[]>([])
-    const [companies, setCompanies] = React.useState<any[]>([])
-
     // Process dialog
     const [dialogOpen, setDialogOpen] = React.useState(false)
     const [isProcessing, setIsProcessing] = React.useState(false)
@@ -57,7 +55,6 @@ export default function DailySalarySheetPage() {
     const [processDeptId, setProcessDeptId] = React.useState("all")
 
     React.useEffect(() => {
-        companyService.getAll().then(setCompanies)
         organogramService.getDepartments().then(setDepartments)
         handleSearch()
     }, [])
@@ -280,10 +277,11 @@ export default function DailySalarySheetPage() {
                         </div>
                         <div className="space-y-2">
                             <Label className="text-xs font-bold text-muted-foreground">COMPANY</Label>
-                            <NativeSelect value={selectedCompanyId} onChange={(e) => setSelectedCompanyId(e.target.value)} className="h-10">
-                                <option value="all">All Companies</option>
-                                {companies.map(c => <option key={c.id} value={c.id}>{c.companyNameEn}</option>)}
-                            </NativeSelect>
+                            <ManagementLegacyCompanySelect
+                                value={selectedCompanyId}
+                                onChange={setSelectedCompanyId}
+                                className="h-10"
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label className="text-xs font-bold text-muted-foreground">DEPARTMENT</Label>
@@ -369,10 +367,11 @@ export default function DailySalarySheetPage() {
                         </div>
                         <div className="space-y-2">
                             <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Company</Label>
-                            <NativeSelect value={processCompanyId} onChange={e => setProcessCompanyId(e.target.value)} className="w-full h-10">
-                                <option value="all">All Companies</option>
-                                {companies.map(c => <option key={c.id} value={c.id}>{c.companyNameEn}</option>)}
-                            </NativeSelect>
+                            <ManagementLegacyCompanySelect
+                                value={processCompanyId}
+                                onChange={setProcessCompanyId}
+                                className="w-full h-10"
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Department</Label>

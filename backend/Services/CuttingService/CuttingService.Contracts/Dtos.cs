@@ -12,3 +12,9 @@ public sealed record CuttingPanelTransferItemDto(Guid Id, Guid CompanyId, Guid C
 public sealed record CuttingPanelTransferDto(Guid Id, Guid CompanyId, Guid OrderId, Guid CuttingPlanId, string TransferNo, DateOnly TransferDate, string ToDepartment, int TotalTransferQty, string Status, IReadOnlyList<CuttingPanelTransferItemDto> Items);
 public sealed record CuttingReportRowDto(string ReportType, Guid CompanyId, Guid OrderId, string? PlanNo, DateOnly Date, string? ColorName, string SizeName, int Quantity, decimal WastageQty, string? Status);
 public sealed record ReportExportFile(byte[] Content, string ContentType, string FileName);
+public sealed record CuttingBundleDto(
+    Guid Id, Guid CompanyId, Guid OrderId, Guid CuttingPlanId, Guid? CuttingLayId, Guid? CuttingOutputId,
+    string BundleTag, string? PlanNo, string? StyleName, string SizeName, int PieceCount,
+    int? SerialFrom, int? SerialTo, string? SerialRange, decimal? WeightKg, string? CurrentLocation, string Status);
+
+public sealed record CuttingBundleSummaryDto(int BundleCount, int TotalPieces);

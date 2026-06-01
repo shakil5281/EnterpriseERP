@@ -5,14 +5,11 @@ import { format } from "date-fns"
 import {
     IconUserX,
     IconSearch,
-    IconDownload,
     IconRefresh,
     IconAlertTriangle,
     IconCalendarOff,
     IconActivity,
     IconArrowLeft,
-    IconFileSpreadsheet,
-    IconFileText
 } from "@tabler/icons-react"
 import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
@@ -20,7 +17,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { absenteeismService, type AbsenteeismRecord, type AbsenteeismSummary } from "@/lib/services/absenteeism"
-import { type AttendanceQuery } from "@/lib/services/attendance-api"
+import { type AttendanceQuery, toAttendanceExportParams } from "@/lib/services/attendance-api"
+import { HrReportExportButtons } from "@/components/reports/hr-report-export-buttons"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -111,24 +109,6 @@ export default function AbsenteeismRecordsPage() {
         }
     }
 
-    const handleExportExcel = async () => {
-        try {
-            if (activeQuery) await absenteeismService.exportAbsenteeismExcel(activeQuery);
-            toast.success("Excel exported successfully");
-        } catch (error) {
-            toast.error("Excel export failed");
-        }
-    }
-
-    const handleExportPdf = async () => {
-        try {
-            if (activeQuery) await absenteeismService.exportAbsenteeismPdf(activeQuery);
-            toast.success("PDF exported successfully");
-        } catch (error) {
-            toast.error("PDF export failed");
-        }
-    }
-
     return (
         <div className="flex flex-col gap-6 p-6 font-sans animate-in fade-in duration-500">
             {/* Page Header */}
@@ -146,15 +126,13 @@ export default function AbsenteeismRecordsPage() {
                     <Button variant="outline" size="sm" onClick={handleSearch} className="h-9 px-4">
                         <IconRefresh size={18} className={cn("mr-2", isLoading && "animate-spin")} /> Refresh
                     </Button>
-                    {hasSearched && (
-                        <>
-                            <Button variant="outline" size="sm" onClick={handleExportExcel} className="h-9 px-4 text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:border-emerald-900 dark:hover:bg-emerald-900/20">
-                                <IconFileSpreadsheet className="mr-2 h-4 w-4" /> Export Excel
-                            </Button>
-                            <Button size="sm" onClick={handleExportPdf} className="h-9 px-4 bg-red-600 hover:bg-red-700">
-                                <IconFileText className="mr-2 h-4 w-4" /> Export PDF
-                            </Button>
-                        </>
+                    {hasSearched && activeQuery && (
+                        <HrReportExportButtons
+                            exportUrl="/api/v1/attendance/reports/absenteeism-records"
+                            params={toAttendanceExportParams(activeQuery)}
+                            filePrefix={`absenteeism-${activeQuery.fromDate}`}
+                            disabled={isLoading || filteredData.length === 0}
+                        />
                     )}
                 </div>
             </div>
@@ -163,7 +141,7 @@ export default function AbsenteeismRecordsPage() {
                 {/* Summary Cards */}
                 {summary && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <Card className="border-none bg-gradient-to-br from-red-50 to-white dark:from-red-950/20 dark:to-gray-950 shadow-sm border border-red-100/50 dark:border-red-900/20">
+                        <Card className="border-none bg-linear-to-br from-red-50 to-white dark:from-red-950/20 dark:to-gray-950 shadow-sm border border-red-100/50 dark:border-red-900/20">
                             <CardContent className="p-6">
                                 <div className="flex items-center gap-4">
                                     <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
@@ -176,7 +154,7 @@ export default function AbsenteeismRecordsPage() {
                                 </div>
                             </CardContent>
                         </Card>
-                        <Card className="border-none bg-gradient-to-br from-orange-50 to-white dark:from-orange-950/20 dark:to-gray-950 shadow-sm border border-orange-100/50 dark:border-orange-900/20">
+                        <Card className="border-none bg-linear-to-br from-orange-50 to-white dark:from-orange-950/20 dark:to-gray-950 shadow-sm border border-orange-100/50 dark:border-orange-900/20">
                             <CardContent className="p-6">
                                 <div className="flex items-center gap-4">
                                     <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
@@ -189,7 +167,7 @@ export default function AbsenteeismRecordsPage() {
                                 </div>
                             </CardContent>
                         </Card>
-                        <Card className="border-none bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/20 dark:to-gray-950 shadow-sm border border-blue-100/50 dark:border-blue-900/20">
+                        <Card className="border-none bg-linear-to-br from-blue-50 to-white dark:from-blue-950/20 dark:to-gray-950 shadow-sm border border-blue-100/50 dark:border-blue-900/20">
                             <CardContent className="p-6">
                                 <div className="flex items-center gap-4">
                                     <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
@@ -202,7 +180,7 @@ export default function AbsenteeismRecordsPage() {
                                 </div>
                             </CardContent>
                         </Card>
-                        <Card className="border-none bg-gradient-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-gray-950 shadow-sm border border-purple-100/50 dark:border-purple-900/20">
+                        <Card className="border-none bg-linear-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-gray-950 shadow-sm border border-purple-100/50 dark:border-purple-900/20">
                             <CardContent className="p-6">
                                 <div className="flex items-center gap-4">
                                     <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
@@ -242,7 +220,7 @@ export default function AbsenteeismRecordsPage() {
 
                 {/* Records Table */}
                 <Card className="border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
-                    <CardHeader className="bg-gray-50 dark:bg-gray-900/50 border-b dark:border-gray-800 py-4">
+                    <CardHeader className="bg-muted/50 dark:bg-table-header border-b border-border py-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <IconUserX size={18} className="text-red-500" />

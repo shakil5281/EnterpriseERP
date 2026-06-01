@@ -10,7 +10,7 @@
 #   docker compose --profile gateway-host up -d --build gateway-host
 #
 # SQL Server must accept TCP from Docker. Override ERP_SQL_SERVER in .env if needed
-# (default: host.docker.internal for Docker Desktop on Windows).
+# (default: host.docker.internal,1433 for SQL Express on Docker Desktop Windows).
 
 services:
   redis:
@@ -52,19 +52,20 @@ services:
       dockerfile: Platform.Host/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
-      ConnectionStrings__AuthDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=AuthServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__CompanyDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=CompanyServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__HrDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=HRServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__AttendanceDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=AttendanceServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__LeaveDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=LeaveServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__ShiftDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=ShiftServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__PayrollDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=PayrollServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__NotificationDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=NotificationServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__QualityDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=QualityServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__FinishingDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=FinishingServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__SecurityDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=SecurityServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      ConnectionStrings__AccountsDb: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=AccountsServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__AuthDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=AuthServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__CompanyDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=CompanyServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__HrDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=HRServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__AttendanceDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=AttendanceServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__LeaveDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=LeaveServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__ShiftDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=ShiftServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__PayrollDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=PayrollServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__NotificationDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=NotificationServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__QualityDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=QualityServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__FinishingDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=FinishingServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__SecurityDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=SecurityServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__AccountsDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=AccountsServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
       ConnectionStrings__Redis: "redis:6379"
+      ImportExport__BaseUrl: "http://importexport:8060"
       RabbitMQ__HostName: rabbitmq
       RabbitMQ__UserName: erp
       RabbitMQ__Password: erp_dev_password
@@ -88,9 +89,10 @@ services:
       context: ../../Services/PunchDataService
       dockerfile: Dockerfile
     environment:
-      PUNCHDATA_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=PunchDataDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      PUNCHDATA_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=PunchDataDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
       PUNCHDATA_SERVER_ADDRESS: ":5050"
       PUNCHDATA_JWT_SIGNINGKEY: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
+      PUNCHDATA_SWAGGER_ONLY_ON_DB_FAILURE: "true"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -104,16 +106,221 @@ services:
       context: ../../Services/ImportExportService
       dockerfile: Dockerfile
     environment:
-      IMPORTEXPORT_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=ImportExportDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
-      IMPORTEXPORT_COMPANY_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal};Database=CompanyServiceDB;${ERP_SQL_AUTH:-User Id=sa;Password=123580;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      IMPORTEXPORT_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=ImportExportDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      IMPORTEXPORT_COMPANY_CONNECTIONSTRING: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=CompanyServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
       IMPORTEXPORT_SERVER_ADDRESS: ":8060"
       IMPORTEXPORT_REDIS: "redis:6379"
       IMPORTEXPORT_JWT_SIGNINGKEY: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
       IMPORTEXPORT_HR_BASE_URL: "http://platform-host:8080/api/v1"
+      IMPORTEXPORT_SWAGGER_ONLY_ON_DB_FAILURE: "true"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       - redis
+    networks:
+      - erp
+    restart: unless-stopped
+
+  notification:
+    profiles:
+      - gateway-docker
+    build:
+      context: ../../Services/NotificationService
+      dockerfile: Dockerfile
+    environment:
+      NOTIFICATION_DB_CONNECTION: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=NotificationServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      NOTIFICATION_PORT: "5047"
+      NOTIFICATION_AUTO_MIGRATE: "true"
+      JWT_SIGNING_KEY: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - erp
+    restart: unless-stopped
+
+  inventory:
+    profiles:
+      - gateway-docker
+    build:
+      context: ../..
+      dockerfile: Services/InventoryService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ASPNETCORE_URLS: "http://+:5041"
+      ConnectionStrings__InventoryDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=InventoryServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      Jwt__SigningKey: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
+      Jwt__Issuer: AuthService
+      Jwt__Audience: Erp.Platform
+      Database__UseInMemory: "false"
+      Database__AutoMigrate: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - erp
+    restart: unless-stopped
+
+  production:
+    profiles:
+      - gateway-docker
+    build:
+      context: ../..
+      dockerfile: Services/ProductionPlanningService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ASPNETCORE_URLS: "http://+:5043"
+      ConnectionStrings__PlanningDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=ProductionPlanningServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__AuthDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=AuthServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      Jwt__SigningKey: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
+      Jwt__Issuer: AuthService
+      Jwt__Audience: Erp.Platform
+      Database__UseInMemory: "false"
+      Database__AutoMigrate: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - erp
+    restart: unless-stopped
+
+  merchandising:
+    profiles:
+      - gateway-docker
+    build:
+      context: ../..
+      dockerfile: Services/MerchandisingService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ASPNETCORE_URLS: "http://+:5288"
+      ConnectionStrings__MerchandisingDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=MerchandisingServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__AuthDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=AuthServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__Redis: "redis:6379"
+      Jwt__SigningKey: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
+      Jwt__Issuer: AuthService
+      Jwt__Audience: Erp.Platform
+      Database__AutoMigrate: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - redis
+    networks:
+      - erp
+    restart: unless-stopped
+
+  cutting:
+    profiles:
+      - gateway-docker
+    build:
+      context: ../..
+      dockerfile: Services/CuttingService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ASPNETCORE_URLS: "http://+:5044"
+      ConnectionStrings__CuttingDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=CuttingServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__AuthDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=AuthServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__Redis: "redis:6379"
+      Jwt__SigningKey: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
+      Jwt__Issuer: AuthService
+      Jwt__Audience: Erp.Platform
+      Database__AutoMigrate: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - redis
+    networks:
+      - erp
+    restart: unless-stopped
+
+  procurement:
+    profiles:
+      - gateway-docker
+    build:
+      context: ../..
+      dockerfile: Services/ProcurementService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ASPNETCORE_URLS: "http://+:5060"
+      ConnectionStrings__ProcurementDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=ProcurementServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      Jwt__SigningKey: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
+      Jwt__Issuer: AuthService
+      Jwt__Audience: Erp.Platform
+      Database__AutoMigrate: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - erp
+    restart: unless-stopped
+
+  store:
+    profiles:
+      - gateway-docker
+    build:
+      context: ../..
+      dockerfile: Services/StoreService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ASPNETCORE_URLS: "http://+:5042"
+      ConnectionStrings__StoreDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=StoreServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__AuthDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=AuthServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      InventorySync__BaseUrl: "http://inventory:5041/"
+      Jwt__SigningKey: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
+      Jwt__Issuer: AuthService
+      Jwt__Audience: Erp.Platform
+      Database__AutoMigrate: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - inventory
+    networks:
+      - erp
+    restart: unless-stopped
+
+  sewing:
+    profiles:
+      - gateway-docker
+    build:
+      context: ../..
+      dockerfile: Services/SewingService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ASPNETCORE_URLS: "http://+:5130"
+      ConnectionStrings__SewingDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=SewingServiceDockerDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__AuthDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=AuthServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      ConnectionStrings__Redis: "redis:6379"
+      Services__MerchandisingService: "http://merchandising:5288"
+      Services__ImportExportService: "http://importexport:8060"
+      Jwt__SigningKey: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
+      Jwt__Issuer: AuthService
+      Jwt__Audience: Erp.Platform
+      Database__UseInMemory: "false"
+      Database__AutoMigrate: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - redis
+      - rabbitmq
+      - merchandising
+      - importexport
+    networks:
+      - erp
+    restart: unless-stopped
+
+  shipment:
+    profiles:
+      - gateway-docker
+    build:
+      context: ../..
+      dockerfile: Services/ShipmentService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ASPNETCORE_URLS: "http://+:5140"
+      ConnectionStrings__AuthDb: "Server=${ERP_SQL_SERVER:-host.docker.internal,1433};Database=AuthServiceDB;${ERP_SQL_AUTH:-User Id=erp_docker;Password=erp_dev_password_2026!;Encrypt=Optional;TrustServerCertificate=True;MultipleActiveResultSets=true}"
+      Services__MerchandisingService: "http://merchandising:5288"
+      Jwt__SigningKey: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_32+"
+      Jwt__Issuer: AuthService
+      Jwt__Audience: Erp.Platform
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - merchandising
     networks:
       - erp
     restart: unless-stopped
@@ -128,10 +335,21 @@ services:
       - "5000:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - platform-host
       - punchdata
       - importexport
+      - notification
+      - inventory
+      - production
+      - merchandising
+      - cutting
+      - procurement
+      - store
+      - sewing
+      - shipment
     networks:
       - erp
     restart: unless-stopped
@@ -156,9 +374,13 @@ services:
       ReverseProxy__Clusters__payroll__Destinations__d1__Address: "http://host.docker.internal:5039/"
       ReverseProxy__Clusters__accounts__Destinations__d1__Address: "http://host.docker.internal:5040/"
       ReverseProxy__Clusters__inventory__Destinations__d1__Address: "http://host.docker.internal:5041/"
-      ReverseProxy__Clusters__production__Destinations__d1__Address: "http://host.docker.internal:5042/"
-      ReverseProxy__Clusters__merchandising__Destinations__d1__Address: "http://host.docker.internal:5043/"
+      ReverseProxy__Clusters__procurement__Destinations__d1__Address: "http://host.docker.internal:5060/"
+      ReverseProxy__Clusters__production__Destinations__d1__Address: "http://host.docker.internal:5043/"
+      ReverseProxy__Clusters__merchandising__Destinations__d1__Address: "http://host.docker.internal:5288/"
       ReverseProxy__Clusters__cutting__Destinations__d1__Address: "http://host.docker.internal:5044/"
+      ReverseProxy__Clusters__store__Destinations__d1__Address: "http://host.docker.internal:5042/"
+      ReverseProxy__Clusters__sewing__Destinations__d1__Address: "http://host.docker.internal:5130/"
+      ReverseProxy__Clusters__shipment__Destinations__d1__Address: "http://host.docker.internal:5140/"
       ReverseProxy__Clusters__bills__Destinations__d1__Address: "http://host.docker.internal:5045/"
       ReverseProxy__Clusters__report__Destinations__d1__Address: "http://host.docker.internal:5046/"
       ReverseProxy__Clusters__notification__Destinations__d1__Address: "http://host.docker.internal:5047/"

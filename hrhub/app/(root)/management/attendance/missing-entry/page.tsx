@@ -11,7 +11,6 @@ import {
 import {
     IconArrowLeft,
     IconRefresh,
-    IconDownload,
     IconEdit,
     IconTrash,
     IconCheck,
@@ -29,7 +28,8 @@ import { NativeSelect } from "@/components/ui/native-select"
 import { DataTable } from "@/components/data-table"
 import { Badge } from "@/components/ui/badge"
 import { missingEntryService, type MissingEntry, type MissingEntrySummary } from "@/lib/services/missingEntry"
-import { attendanceApi, type AttendanceQuery } from "@/lib/services/attendance-api"
+import { attendanceApi, toAttendanceExportParams, type AttendanceQuery } from "@/lib/services/attendance-api"
+import { HrReportExportButtons } from "@/components/reports/hr-report-export-buttons"
 import { useAuth } from "@/components/providers/auth-provider"
 import { toast } from "sonner"
 import {
@@ -146,8 +146,18 @@ export default function MissingEntryPage() {
                         const dayBase =
                             parsePunchTimeToDate("09:00", row.original.date)
                             ?? new Date(row.original.date)
-                        setManualInTime(parsePunchTimeToDate(row.original.inTime, row.original.date) ?? dayBase)
-                        setManualOutTime(parsePunchTimeToDate(row.original.outTime, row.original.date) ?? dayBase)
+                        const existingIn = parsePunchTimeToDate(row.original.inTime, row.original.date)
+                        const existingOut = parsePunchTimeToDate(row.original.outTime, row.original.date)
+                        setManualInTime(
+                            row.original.missingType === "OutTime"
+                                ? existingIn
+                                : existingIn ?? dayBase,
+                        )
+                        setManualOutTime(
+                            row.original.missingType === "InTime"
+                                ? existingOut
+                                : existingOut ?? dayBase,
+                        )
                         setManualStatus("Present")
                         setManualReason("Correcting missing punch")
                         setIsSheetOpen(true)
@@ -166,14 +176,22 @@ export default function MissingEntryPage() {
         try {
             if (!activeQuery) return
             const adminId = user?.id ?? "00000000-0000-0000-0000-000000000001"
+            const existingIn = parsePunchTimeToDate(editingEntry.inTime, editingEntry.date)
+            const existingOut = parsePunchTimeToDate(editingEntry.outTime, editingEntry.date)
             await attendanceApi.bulkAdjust({
                 companyId: activeQuery.companyId,
                 adminId,
                 entries: [{
                     employeeID: editingEntry.employeeId,
                     date: editingEntry.date,
-                    inTime: manualInTime?.toISOString(),
-                    outTime: manualOutTime?.toISOString(),
+                    inTime:
+                        editingEntry.missingType === "OutTime"
+                            ? existingIn?.toISOString()
+                            : manualInTime?.toISOString(),
+                    outTime:
+                        editingEntry.missingType === "InTime"
+                            ? existingOut?.toISOString()
+                            : manualOutTime?.toISOString(),
                     remarks: manualReason,
                 }],
             })
@@ -226,8 +244,15 @@ export default function MissingEntryPage() {
         setIsLoading(true)
         try {
             const data = await missingEntryService.getMissingEntries(query)
-            setFilteredData(data.entries)
-            setSummary(data.summary)
+            const entries = data.entries.filter((e) => e.missingType !== "Both")
+            setFilteredData(entries)
+            setSummary({
+                totalMissing: entries.length,
+                missingInTime: entries.filter((e) => e.missingType === "InTime").length,
+                missingOutTime: entries.filter((e) => e.missingType === "OutTime").length,
+                missingBoth: 0,
+                criticalCount: 0,
+            })
             setHasSearched(true)
         } catch (error: any) {
             toast.error("Failed to fetch records")
@@ -245,7 +270,9 @@ export default function MissingEntryPage() {
                     </Button>
                     <div>
                         <h1 className="text-2xl font-bold">Missing Entry Log</h1>
-                        <p className="text-sm text-gray-500">Audit and fix missing employee punch records</p>
+                        <p className="text-sm text-gray-500">
+                            Shows records missing only In or only Out time (not both).
+                        </p>
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -269,15 +296,20 @@ export default function MissingEntryPage() {
                     <Button variant="outline" size="sm" onClick={() => handleSearch()} disabled={isLoading}>
                         <IconRefresh size={18} className={cn("mr-2", isLoading && "animate-spin")} /> Refresh
                     </Button>
-                    <Button variant="outline" size="sm" disabled={filteredData.length === 0}>
-                        <IconDownload className="mr-2 h-4 w-4" /> Export
-                    </Button>
+                    {hasSearched && activeQuery && (
+                        <HrReportExportButtons
+                            exportUrl="/api/v1/attendance/reports/missing-entries"
+                            params={toAttendanceExportParams(activeQuery)}
+                            filePrefix={`missing-entries-${activeQuery.fromDate}`}
+                            disabled={isLoading || filteredData.length === 0}
+                        />
+                    )}
                 </div>
             </div>
 
             <div className="space-y-6">
                 {summary && (
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <Card className="border shadow-none">
                             <CardContent className="p-4">
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Total Missing</p>
@@ -294,18 +326,6 @@ export default function MissingEntryPage() {
                             <CardContent className="p-4">
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Missing Out</p>
                                 <p className="text-2xl font-bold mt-1 text-orange-600">{summary.missingOutTime}</p>
-                            </CardContent>
-                        </Card>
-                        <Card className="border shadow-none">
-                            <CardContent className="p-4">
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No Punch</p>
-                                <p className="text-2xl font-bold mt-1 text-red-600">{summary.missingBoth}</p>
-                            </CardContent>
-                        </Card>
-                        <Card className="border shadow-none">
-                            <CardContent className="p-4">
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Critical</p>
-                                <p className="text-2xl font-bold mt-1 text-purple-600">{summary.criticalCount}</p>
                             </CardContent>
                         </Card>
                     </div>
@@ -377,22 +397,28 @@ export default function MissingEntryPage() {
 
                         <div className="space-y-6 py-6">
                             <div className="grid grid-cols-1 gap-6">
-                                <div className="space-y-2">
-                                    <Label className="text-sm font-bold text-gray-700">In Time</Label>
-                                    <DateTimePicker
-                                        date={manualInTime}
-                                        setDate={setManualInTime}
-                                        placeholder="Select In Date & Time"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-sm font-bold text-gray-700">Out Time</Label>
-                                    <DateTimePicker
-                                        date={manualOutTime}
-                                        setDate={setManualOutTime}
-                                        placeholder="Select Out Date & Time"
-                                    />
-                                </div>
+                                {(!editingEntry || editingEntry.missingType !== "OutTime") && (
+                                    <div className="space-y-2">
+                                        <Label className="text-sm font-bold text-gray-700">In Time</Label>
+                                        <DateTimePicker
+                                            date={manualInTime}
+                                            setDate={setManualInTime}
+                                            attendanceDate={editingEntry?.date}
+                                            placeholder="dd/mm/yyyy hh:mm am"
+                                        />
+                                    </div>
+                                )}
+                                {(!editingEntry || editingEntry.missingType !== "InTime") && (
+                                    <div className="space-y-2">
+                                        <Label className="text-sm font-bold text-gray-700">Out Time</Label>
+                                        <DateTimePicker
+                                            date={manualOutTime}
+                                            setDate={setManualOutTime}
+                                            attendanceDate={editingEntry?.date}
+                                            placeholder="dd/mm/yyyy hh:mm am"
+                                        />
+                                    </div>
+                                )}
                             </div>
 
                             <div className="space-y-2">

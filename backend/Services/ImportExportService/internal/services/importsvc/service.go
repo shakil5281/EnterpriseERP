@@ -1,6 +1,7 @@
 package importsvc
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,13 +42,15 @@ const (
 )
 
 type Service struct {
-	DB             *gorm.DB
-	CompanyDB      *gorm.DB
-	Store          storage.LocalStorage
-	ExportDir      string
-	LargeThreshold int
-	AsynqClient    *asynq.Client
-	HR             *hrclient.Client
+	DB                            *gorm.DB
+	CompanyDB                     *gorm.DB
+	Store                         storage.LocalStorage
+	ExportDir                     string
+	LargeThreshold                int
+	EmployeeImportBatchSize       int
+	EmployeeImportParallelBatches int
+	AsynqClient                   *asynq.Client
+	HR                            *hrclient.Client
 }
 
 type previewCache struct {
@@ -92,7 +95,7 @@ func (s *Service) Preview(companyID, userID uuid.UUID, module, absFilePath, file
 	}, nil
 }
 
-func (s *Service) Confirm(companyID, userID uuid.UUID, sessionID uuid.UUID, bearer string) (*dto.ImportJobDTO, error) {
+func (s *Service) Confirm(ctx context.Context, companyID, userID uuid.UUID, sessionID uuid.UUID, bearer string) (*dto.ImportJobDTO, error) {
 	var sess models.ImportPreviewSession
 	if err := s.DB.First(&sess, "id = ? AND company_id = ?", sessionID, companyID).Error; err != nil {
 		return nil, fmt.Errorf("session not found")
@@ -113,10 +116,13 @@ func (s *Service) Confirm(companyID, userID uuid.UUID, sessionID uuid.UUID, bear
 		sess.PayloadJSON = string(payload)
 		_ = s.DB.Save(&sess).Error
 	}
+	if isEmployeeModule(cache.ModuleName) {
+		return s.runImport(ctx, companyID, userID, sess, cache)
+	}
 	if cache.ValidRows > s.LargeThreshold && s.AsynqClient != nil {
 		return s.enqueueLargeImport(companyID, userID, sess, cache)
 	}
-	return s.runImport(companyID, userID, sess, cache)
+	return s.runImport(ctx, companyID, userID, sess, cache)
 }
 
 func (s *Service) enqueueLargeImport(companyID, userID uuid.UUID, sess models.ImportPreviewSession, cache previewCache) (*dto.ImportJobDTO, error) {
@@ -157,22 +163,23 @@ func (s *Service) ProcessLargeImport(jobID, sessionID uuid.UUID) error {
 	}
 	job.Status = string(enums.ImportProcessing)
 	_ = s.DB.Save(&job)
-	_, err := s.finalizeImport(&job, sess.CompanyID, sess.CreatedBy, cache, cache.BearerToken)
+	_, err := s.finalizeImport(context.Background(), &job, sess.CompanyID, sess.CreatedBy, cache, cache.BearerToken)
 	return err
 }
 
-func (s *Service) runImport(companyID, userID uuid.UUID, sess models.ImportPreviewSession, cache previewCache) (*dto.ImportJobDTO, error) {
+func (s *Service) runImport(ctx context.Context, companyID, userID uuid.UUID, sess models.ImportPreviewSession, cache previewCache) (*dto.ImportJobDTO, error) {
 	now := time.Now()
 	job := models.ImportJob{
 		CompanyID: companyID, ModuleName: cache.ModuleName, ImportType: "Excel",
 		FileName: sess.FileName, FilePath: sess.FilePath,
 		TotalRows: cache.TotalRows, Status: string(enums.ImportProcessing),
 		CreatedBy: userID, PreviewSession: sess.ID.String(), StartedAt: &now,
+		ProgressPercentage: 0,
 	}
 	if err := s.DB.Create(&job).Error; err != nil {
 		return nil, err
 	}
-	dtoJob, err := s.finalizeImport(&job, companyID, userID, cache, cache.BearerToken)
+	dtoJob, err := s.finalizeImport(ctx, &job, companyID, userID, cache, cache.BearerToken)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +187,7 @@ func (s *Service) runImport(companyID, userID uuid.UUID, sess models.ImportPrevi
 	return dtoJob, nil
 }
 
-func (s *Service) finalizeImport(job *models.ImportJob, companyID, userID uuid.UUID, cache previewCache, bearerToken string) (*dto.ImportJobDTO, error) {
+func (s *Service) finalizeImport(ctx context.Context, job *models.ImportJob, companyID, userID uuid.UUID, cache previewCache, bearerToken string) (*dto.ImportJobDTO, error) {
 	bearer := bearerToken
 	if bearer == "" {
 		bearer = cache.BearerToken
@@ -189,13 +196,16 @@ func (s *Service) finalizeImport(job *models.ImportJob, companyID, userID uuid.U
 	allErrors := append([]dto.RowError{}, cache.Errors...)
 	successCount := 0
 	failedPreview := cache.InvalidRows
+	if failedPreview > 0 {
+		s.persistEmployeeImportProgress(job.ID, 0, 0, failedPreview, cache.TotalRows)
+	}
 
 	if isEmployeeModule(cache.ModuleName) {
-		applied, applyErrors, err := s.applyEmployeeImport(job, companyID, cache, bearer)
+		created, updated, applyErrors, err := s.applyEmployeeImport(ctx, job, companyID, cache, bearer)
 		if err != nil {
 			return nil, err
 		}
-		successCount = applied
+		successCount = created + updated
 		allErrors = mergeRowErrors(allErrors, applyErrors)
 		failedPreview = countUniqueErrorRows(allErrors)
 	} else {
@@ -223,10 +233,11 @@ func (s *Service) finalizeImport(job *models.ImportJob, companyID, userID uuid.U
 
 	job.SuccessRows = successCount
 	job.FailedRows = failedPreview
+	job.ProgressPercentage = 100
 	now := time.Now()
 	job.CompletedAt = &now
 	if failedPreview > 0 && successCount > 0 {
-		job.Status = string(enums.ImportCompleted)
+		job.Status = string(enums.ImportCompletedWithErrors)
 		job.Remarks = "partial success"
 	} else if failedPreview > 0 || successCount == 0 && cache.TotalRows > 0 {
 		if successCount == 0 && cache.TotalRows > 0 {
@@ -242,7 +253,29 @@ func (s *Service) finalizeImport(job *models.ImportJob, companyID, userID uuid.U
 		job.Remarks = ""
 	}
 	_ = s.DB.Save(job)
+	s.writeImportAudit(job, userID)
 	return toImportDTO(*job), nil
+}
+
+func (s *Service) writeImportAudit(job *models.ImportJob, userID uuid.UUID) {
+	if s.DB == nil {
+		return
+	}
+	durationMs := int64(0)
+	if job.StartedAt != nil && job.CompletedAt != nil {
+		durationMs = job.CompletedAt.Sub(*job.StartedAt).Milliseconds()
+	}
+	_ = s.DB.Create(&models.ImportAuditLog{
+		ImportJobID: job.ID,
+		CompanyID:   job.CompanyID,
+		ModuleName:  job.ModuleName,
+		TotalRows:   job.TotalRows,
+		SuccessRows: job.SuccessRows,
+		FailedRows:  job.FailedRows,
+		Status:      job.Status,
+		DurationMs:  durationMs,
+		CreatedBy:   userID,
+	}).Error
 }
 
 func (s *Service) writeErrorArtifact(jobID uuid.UUID, errs []dto.RowError) (string, error) {
@@ -268,7 +301,7 @@ func (s *Service) writeErrorArtifact(jobID uuid.UUID, errs []dto.RowError) (stri
 func (s *Service) parseModule(mod, path string) (validJSON string, total, valid, invalid int, errs []dto.RowError, err error) {
 	switch mod {
 	case string(enums.ModuleEmployee):
-		rows, e, err := excelsvc.ParseEmployeeImport(path)
+		rows, e, err := excelsvc.ParseEmployeeFullImport(path)
 		if err != nil {
 			return "", 0, 0, 0, nil, err
 		}
@@ -356,7 +389,7 @@ func (s *Service) ErrorFilePath(companyID, id uuid.UUID) (string, error) {
 	return filepath.Join(s.Store.Root, job.ErrorFilePath), nil
 }
 
-func (s *Service) Export(companyID, userID uuid.UUID, module, format string, _ map[string]any) (*dto.ExportJobDTO, string, error) {
+func (s *Service) Export(companyID, userID uuid.UUID, module, format string, _ map[string]any, bearer string) (*dto.ExportJobDTO, string, error) {
 	mod := normalizeModule(module)
 	fm := strings.TrimSpace(format)
 	if fm == "" {
@@ -372,7 +405,7 @@ func (s *Service) Export(companyID, userID uuid.UUID, module, format string, _ m
 	if err := s.DB.Create(&job).Error; err != nil {
 		return nil, "", err
 	}
-	rel, fileName, err := s.buildExportFile(mod, fm, job.ID)
+	rel, fileName, err := s.buildExportFile(mod, fm, job.ID, companyID, bearer)
 	if err != nil {
 		job.Status = string(enums.ExportFailed)
 		_ = s.DB.Save(&job)
@@ -729,12 +762,21 @@ func deduplicateLines(tx *gorm.DB, keepID, sectionID string, name string) error 
 	return tx.Where("Id <> ? AND SectionId = ? AND UPPER(LTRIM(RTRIM(NameEn))) = UPPER(?)", keepID, sectionID, organogramName(name)).Delete(&models.CompanyLine{}).Error
 }
 
-func (s *Service) buildExportFile(module, format string, jobID uuid.UUID) (rel, name string, err error) {
+func (s *Service) buildExportFile(module, format string, jobID uuid.UUID, companyID uuid.UUID, bearer string) (rel, name string, err error) {
 	dir := filepath.Join(s.Store.Root, s.ExportDir)
 	_ = os.MkdirAll(dir, 0o750)
 	switch normalizeModule(module) {
 	case string(enums.ModuleEmployee):
-		f, err := excelsvc.ExportEmployeesExcel(sampleEmployees())
+		var exportRows []excelsvc.EmployeeFullImportRow
+		if s.HR != nil && strings.TrimSpace(bearer) != "" {
+			if rows, e := s.HR.GetEmployeesExport(context.Background(), bearer, companyID.String()); e == nil {
+				exportRows = mapHRRowsToExcel(rows)
+			}
+		}
+		if len(exportRows) == 0 {
+			exportRows = excelsvc.SampleEmployeeFullRows()
+		}
+		f, err := excelsvc.ExportEmployeesFullExcel(exportRows)
 		if err != nil {
 			return "", "", err
 		}
@@ -829,7 +871,9 @@ func toImportDTO(j models.ImportJob) *dto.ImportJobDTO {
 	return &dto.ImportJobDTO{
 		ID: j.ID, CompanyID: j.CompanyID, ModuleName: j.ModuleName, Status: j.Status,
 		TotalRows: j.TotalRows, SuccessRows: j.SuccessRows, FailedRows: j.FailedRows,
-		ErrorFilePath: j.ErrorFilePath, CreatedAt: j.CreatedAt.Format(time.RFC3339),
+		CreatedRows: j.CreatedRows, UpdatedRows: j.UpdatedRows,
+		ErrorFilePath: j.ErrorFilePath, ProgressPercentage: j.ProgressPercentage,
+		Remarks: j.Remarks, CreatedAt: j.CreatedAt.Format(time.RFC3339),
 	}
 }
 

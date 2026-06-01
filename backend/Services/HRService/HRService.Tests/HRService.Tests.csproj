@@ -20,7 +20,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.CommonResponses\Erp.BuildingBlocks.CommonResponses.csproj" />
     <ProjectReference Include="..\HRService.Application\HRService.Application.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.ReportExport\Erp.BuildingBlocks.ReportExport.csproj" />
     <ProjectReference Include="..\HRService.Infrastructure\HRService.Infrastructure.csproj" />
   </ItemGroup>
 

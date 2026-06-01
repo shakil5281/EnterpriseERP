@@ -14,31 +14,42 @@ public sealed class EmployeeServiceClient(HttpClient http, IOptions<EmployeeServ
 {
     private readonly string _base = options.Value.BaseUrl.TrimEnd('/');
 
-    public async Task<bool> IsEmployeeActiveAsync(Guid companyId, Guid employeeId, CancellationToken cancellationToken = default)
+    public async Task<EmployeeValidationResult> ValidateEmployeeAsync(
+        Guid companyId,
+        Guid employeeId,
+        CancellationToken cancellationToken = default)
     {
-        var doc = await GetEmployeeJsonAsync(employeeId, cancellationToken);
-        if (doc == null)
+        var (doc, unreachable) = await GetEmployeeJsonAsync(employeeId, cancellationToken);
+        if (unreachable)
         {
-            return false;
+            return EmployeeValidationResult.Unreachable;
         }
 
-        if (!doc.RootElement.TryGetProperty("data", out var data))
+        if (doc == null || !doc.RootElement.TryGetProperty("data", out var data))
         {
-            return false;
+            return EmployeeValidationResult.NotFound;
         }
 
         if (!TryGetGuid(data, "companyId", out var cid) || cid != companyId)
         {
-            return false;
+            return EmployeeValidationResult.WrongCompany;
         }
 
         return TryGetString(data, "status", out var st) &&
-               string.Equals(st, "Active", StringComparison.OrdinalIgnoreCase);
+               string.Equals(st, "Active", StringComparison.OrdinalIgnoreCase)
+            ? EmployeeValidationResult.Active
+            : EmployeeValidationResult.Inactive;
+    }
+
+    public async Task<bool> IsEmployeeActiveAsync(Guid companyId, Guid employeeId, CancellationToken cancellationToken = default)
+    {
+        var result = await ValidateEmployeeAsync(companyId, employeeId, cancellationToken);
+        return result.Status == EmployeeValidationStatus.Active;
     }
 
     public async Task<DateOnly?> GetEmployeeJoinDateAsync(Guid companyId, Guid employeeId, CancellationToken cancellationToken = default)
     {
-        var doc = await GetEmployeeJsonAsync(employeeId, cancellationToken);
+        var (doc, _) = await GetEmployeeJsonAsync(employeeId, cancellationToken);
         if (doc == null || !doc.RootElement.TryGetProperty("data", out var data))
         {
             return null;
@@ -49,13 +60,44 @@ public sealed class EmployeeServiceClient(HttpClient http, IOptions<EmployeeServ
             return null;
         }
 
-        if (data.TryGetProperty("joinDate", out var jd) && jd.ValueKind == JsonValueKind.String &&
+        if (TryGetProperty(data, "joinDate", out var jd) && jd.ValueKind == JsonValueKind.String &&
             DateTime.TryParse(jd.GetString(), out var dt))
         {
             return DateOnly.FromDateTime(dt);
         }
 
         return null;
+    }
+
+    public async Task<IReadOnlyList<EmployeeLookupInfo>> LookupEmployeesAsync(
+        IReadOnlyList<Guid> employeeIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (employeeIds.Count == 0)
+            return [];
+
+        try
+        {
+            var ids = employeeIds.Where(x => x != Guid.Empty).Distinct().ToArray();
+            var url = $"{_base}/api/v1/hr/Employees/lookup";
+            var resp = await http.PostAsJsonAsync(url, new { ids }, cancellationToken);
+            if (!resp.IsSuccessStatusCode)
+            {
+                return Array.Empty<EmployeeLookupInfo>();
+            }
+
+            var wrapper = await resp.Content.ReadFromJsonAsync<HrLookupWrapper>(cancellationToken: cancellationToken);
+            return wrapper?.Data?.Select(x => new EmployeeLookupInfo(
+                x.Id,
+                x.EmployeeCode ?? x.EmployeeID ?? string.Empty,
+                x.FullName ?? string.Empty,
+                x.DepartmentName,
+                x.DesignationName)).ToArray() ?? Array.Empty<EmployeeLookupInfo>();
+        }
+        catch
+        {
+            return Array.Empty<EmployeeLookupInfo>();
+        }
     }
 
     public async Task<IReadOnlyList<Guid>> GetActiveEmployeeIdsAsync(Guid companyId, CancellationToken cancellationToken = default)
@@ -79,46 +121,73 @@ public sealed class EmployeeServiceClient(HttpClient http, IOptions<EmployeeServ
         }
     }
 
-    private async Task<JsonDocument?> GetEmployeeJsonAsync(Guid employeeId, CancellationToken cancellationToken)
+    private async Task<(JsonDocument? Doc, bool Unreachable)> GetEmployeeJsonAsync(
+        Guid employeeId,
+        CancellationToken cancellationToken)
     {
         try
         {
             var url = $"{_base}/api/v1/hr/Employees/{employeeId}";
             var resp = await http.GetAsync(url, cancellationToken);
-            if (!resp.IsSuccessStatusCode)
+            if (resp.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
             {
-                return null;
+                return (null, true);
             }
 
-            return await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+            if (!resp.IsSuccessStatusCode)
+            {
+                return (null, false);
+            }
+
+            var doc = await JsonDocument.ParseAsync(
+                await resp.Content.ReadAsStreamAsync(cancellationToken),
+                cancellationToken: cancellationToken);
+            return (doc, false);
+        }
+        catch (HttpRequestException)
+        {
+            return (null, true);
         }
         catch
         {
-            return null;
+            return (null, false);
         }
     }
 
     private static bool TryGetGuid(JsonElement el, string name, out Guid value)
     {
         value = default;
-        if (!el.TryGetProperty(name, out var p))
+        if (!TryGetProperty(el, name, out var p))
         {
             return false;
         }
 
-        return Guid.TryParse(p.GetString(), out value);
+        return p.ValueKind == JsonValueKind.String
+            ? Guid.TryParse(p.GetString(), out value)
+            : p.TryGetGuid(out value);
     }
 
     private static bool TryGetString(JsonElement el, string name, out string value)
     {
         value = string.Empty;
-        if (!el.TryGetProperty(name, out var p) || p.ValueKind != JsonValueKind.String)
+        if (!TryGetProperty(el, name, out var p) || p.ValueKind != JsonValueKind.String)
         {
             return false;
         }
 
         value = p.GetString() ?? string.Empty;
         return true;
+    }
+
+    private static bool TryGetProperty(JsonElement el, string name, out JsonElement property)
+    {
+        if (el.TryGetProperty(name, out property))
+        {
+            return true;
+        }
+
+        var pascal = char.ToUpperInvariant(name[0]) + name[1..];
+        return el.TryGetProperty(pascal, out property);
     }
 
     private sealed class HrPageWrapper
@@ -134,6 +203,21 @@ public sealed class EmployeeServiceClient(HttpClient http, IOptions<EmployeeServ
     private sealed class HrEmp
     {
         public Guid Id { get; set; }
+    }
+
+    private sealed class HrLookupWrapper
+    {
+        public List<HrLookupRow>? Data { get; set; }
+    }
+
+    private sealed class HrLookupRow
+    {
+        public Guid Id { get; set; }
+        public string? EmployeeCode { get; set; }
+        public string? EmployeeID { get; set; }
+        public string? FullName { get; set; }
+        public string? DepartmentName { get; set; }
+        public string? DesignationName { get; set; }
     }
 }
 
@@ -215,11 +299,35 @@ public sealed class PayrollServiceClient : IPayrollServiceClient
         Task.FromResult(false);
 }
 
-public sealed class NotificationServiceClient : INotificationServiceClient
+public sealed class NotificationServiceClient(HttpClient httpClient) : INotificationServiceClient
 {
-    public Task SendLeaveApprovalNotificationAsync(Guid approverUserId, Guid leaveApplicationId, CancellationToken cancellationToken = default) =>
-        Task.CompletedTask;
+    public async Task SendLeaveApprovalNotificationAsync(Guid approverUserId, Guid leaveApplicationId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await httpClient.PostAsJsonAsync("/api/v1/notification/send", new
+            {
+                recipientId = approverUserId,
+                type = "InApp",
+                subject = "Leave Approval Required",
+                body = $"A leave application requires your approval. Application ID: {leaveApplicationId}."
+            }, cancellationToken);
+        }
+        catch { /* notification failure must not block leave application */ }
+    }
 
-    public Task SendLeaveStatusNotificationAsync(Guid employeeId, Guid leaveApplicationId, string status, CancellationToken cancellationToken = default) =>
-        Task.CompletedTask;
+    public async Task SendLeaveStatusNotificationAsync(Guid employeeId, Guid leaveApplicationId, string status, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await httpClient.PostAsJsonAsync("/api/v1/notification/send", new
+            {
+                recipientId = employeeId,
+                type = "InApp",
+                subject = $"Your Leave Application has been {status}",
+                body = $"Your leave application (ID: {leaveApplicationId}) status is now: {status}."
+            }, cancellationToken);
+        }
+        catch { /* notification failure must not block leave status update */ }
+    }
 }

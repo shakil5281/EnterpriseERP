@@ -9,8 +9,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { leaveService, type WeeklyOff } from "@/lib/services/leave"
 import { getHttpErrorMessage } from "@/lib/api-response"
 import { toast } from "sonner"
-import { useCompanyContext } from "@/components/providers/company-context"
-import { LeaveCompanyBar } from "@/components/leave/leave-company-bar"
+import { LeaveAdvancedFilter, type LeaveFilterParams } from "@/components/leave/leave-advanced-filter"
 import { LeavePermissionGate } from "@/components/leave/leave-permission-gate"
 import { Label } from "@/components/ui/label"
 import { NativeSelect } from "@/components/ui/native-select"
@@ -18,31 +17,35 @@ import { NativeSelect } from "@/components/ui/native-select"
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 export default function WeeklyOffsPage() {
-    const { activeCompanyId } = useCompanyContext()
+    const [selectedCompanyId, setSelectedCompanyId] = React.useState<string | undefined>()
     const [isLoading, setIsLoading] = React.useState(false)
     const [rows, setRows] = React.useState<WeeklyOff[]>([])
     const [day, setDay] = React.useState("Friday")
 
     const load = React.useCallback(async () => {
-        if (!activeCompanyId) return
+        if (!selectedCompanyId) return
         setIsLoading(true)
         try {
-            setRows(await leaveService.listWeeklyOffs(activeCompanyId))
+            setRows(await leaveService.listWeeklyOffs(selectedCompanyId))
         } catch (e) {
             toast.error(getHttpErrorMessage(e, "Failed to load weekly offs"))
         } finally {
             setIsLoading(false)
         }
-    }, [activeCompanyId])
+    }, [selectedCompanyId])
+
+    const handleFilterChange = React.useCallback((filters: LeaveFilterParams) => {
+        setSelectedCompanyId(filters.companyEntityId)
+    }, [])
 
     React.useEffect(() => {
-        load()
-    }, [load])
+        if (selectedCompanyId) load()
+    }, [selectedCompanyId, load])
 
     const handleAdd = async () => {
-        if (!activeCompanyId) return
+        if (!selectedCompanyId) return
         try {
-            await leaveService.createWeeklyOff({ companyId: activeCompanyId, dayOfWeekName: day })
+            await leaveService.createWeeklyOff({ companyId: selectedCompanyId, dayOfWeekName: day })
             toast.success("Weekly off added")
             load()
         } catch (e) {
@@ -80,7 +83,7 @@ export default function WeeklyOffsPage() {
             <h1 className="text-2xl font-bold flex items-center gap-2">
                 <IconCalendarOff className="size-7" /> Weekly Offs
             </h1>
-            <LeaveCompanyBar onRefresh={load} isLoading={isLoading} showYear={false} />
+            <LeaveAdvancedFilter onFilterChange={handleFilterChange} isLoading={isLoading} />
             <LeavePermissionGate permission="WEEKLY_OFF_MANAGE">
                 <Card>
                     <CardHeader>

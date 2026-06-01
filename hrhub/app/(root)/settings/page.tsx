@@ -42,6 +42,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 import { authService, User } from "@/lib/services/auth"
+import { resolveProfilePictureUrl } from "@/lib/profile-picture"
 import { useRouter } from "next/navigation"
 
 const SETTINGS_GROUPS = [
@@ -84,7 +85,11 @@ export default function SettingsPage() {
     const [phoneNumber, setPhoneNumber] = React.useState("")
     const [country, setCountry] = React.useState("")
     const [city, setCity] = React.useState("")
+    const [bio, setBio] = React.useState("")
+    const [profilePictureUrl, setProfilePictureUrl] = React.useState<string | undefined>()
     const [isEmailEditable, setIsEmailEditable] = React.useState(false)
+    const [isUploadingPicture, setIsUploadingPicture] = React.useState(false)
+    const fileInputRef = React.useRef<HTMLInputElement>(null)
 
     // Password State
     const [passwordData, setPasswordData] = React.useState({
@@ -105,12 +110,8 @@ export default function SettingsPage() {
                     setPhoneNumber(profile.phoneNumber || "");
                     setCountry(profile.country || "");
                     setCity(profile.city || "");
-                    // Update local storage to ensure header is in sync
-                    localStorage.setItem('user', JSON.stringify({
-                        username: profile.username,
-                        fullName: profile.fullName,
-                        email: profile.email
-                    }));
+                    setBio(profile.bio || "");
+                    setProfilePictureUrl(profile.profilePictureUrl);
                 }
             } catch (error) {
                 // Fallback to local storage if API fails
@@ -134,21 +135,18 @@ export default function SettingsPage() {
                 email,
                 phoneNumber,
                 country,
-                city
+                city,
+                bio,
             })
 
             if (result.success) {
                 toast.success("Profile updated successfully")
-                // Update state and local storage
-                const updatedUser = { ...currentUser, fullName, email, phoneNumber, country, city } as User
-                setCurrentUser(updatedUser)
-                localStorage.setItem('user', JSON.stringify({
-                    username: updatedUser.username,
-                    fullName: fullName,
-                    email: email
-                }))
-                // Notify other components (Navbar, etc.)
-                window.dispatchEvent(new Event('profile-updated'))
+                if (result.user) {
+                    setCurrentUser(result.user)
+                    setProfilePictureUrl(result.user.profilePictureUrl)
+                } else {
+                    setCurrentUser({ ...currentUser, fullName, email, phoneNumber, country, city, bio } as User)
+                }
                 setIsEmailEditable(false)
             } else {
                 toast.error(result.message || "Failed to update profile")
@@ -169,8 +167,8 @@ export default function SettingsPage() {
             return
         }
 
-        if (passwordData.newPassword.length < 6) {
-            toast.error("Password must be at least 6 characters")
+        if (passwordData.newPassword.length < 10) {
+            toast.error("Password must be at least 10 characters")
             return
         }
 
@@ -194,6 +192,47 @@ export default function SettingsPage() {
         }
     }
 
+    const handlePictureSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0]
+        event.target.value = ""
+        if (!file) return
+        setIsUploadingPicture(true)
+        try {
+            const { optimizeImageFile } = await import("@/lib/image-upload")
+            const optimized = await optimizeImageFile(file, "avatar")
+            const result = await authService.uploadProfilePicture(optimized)
+            if (result.success && result.user) {
+                setProfilePictureUrl(result.user.profilePictureUrl)
+                setCurrentUser(result.user)
+                toast.success("Profile picture updated")
+            } else {
+                toast.error(result.message)
+            }
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : "Failed to process image.")
+        } finally {
+            setIsUploadingPicture(false)
+        }
+    }
+
+    const handleRemovePicture = async () => {
+        setIsUploadingPicture(true)
+        try {
+            const result = await authService.removeProfilePicture()
+            if (result.success) {
+                setProfilePictureUrl(undefined)
+                if (result.user) setCurrentUser(result.user)
+                toast.success("Profile picture removed")
+            } else {
+                toast.error(result.message)
+            }
+        } finally {
+            setIsUploadingPicture(false)
+        }
+    }
+
+    const avatarSrc = resolveProfilePictureUrl(profilePictureUrl)
+
     // Initials for avatar
     const initials = fullName
         ? fullName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -206,7 +245,7 @@ export default function SettingsPage() {
             <div className="border-b bg-background/80 backdrop-blur-md sticky top-0 z-20">
                 <div className="container mx-auto px-4 py-6 max-w-7xl">
                     <div className="flex flex-col gap-1">
-                        <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                        <h1 className="text-3xl font-bold tracking-tight bg-linear-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
                             System Settings
                         </h1>
                         <p className="text-sm text-muted-foreground max-w-2xl">
@@ -263,9 +302,9 @@ export default function SettingsPage() {
                                 <CardContent className="p-0 space-y-8">
                                     <div className="flex flex-col sm:flex-row gap-8 items-center sm:items-start bg-accent/30 p-8 rounded-2xl border border-accent">
                                         <div className="relative group">
-                                            <Avatar className="size-32 border-[6px] border-background transition-transform group-hover:scale-105">
-                                                <AvatarImage src="" />
-                                                <AvatarFallback className="text-3xl font-bold bg-primary/10 text-primary">{initials}</AvatarFallback>
+                                            <Avatar className="size-32 border-[6px] border-background rounded-full transition-transform group-hover:scale-105">
+                                                <AvatarImage src={avatarSrc ?? ""} className="rounded-full object-cover" />
+                                                <AvatarFallback className="text-3xl font-bold bg-primary/10 text-primary rounded-full">{initials}</AvatarFallback>
                                             </Avatar>
                                             <div className="absolute -bottom-2 -right-2 bg-primary text-primary-foreground size-8 rounded-full flex items-center justify-center border-4 border-background scale-0 group-hover:scale-100 transition-transform">
                                                 <IconPalette className="size-3" />
@@ -276,9 +315,31 @@ export default function SettingsPage() {
                                                 <h4 className="text-lg font-semibold">Profile Avatar</h4>
                                                 <p className="text-sm text-muted-foreground pr-4">Square images (JPG/PNG) work best. Max 2MB.</p>
                                             </div>
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                accept="image/jpeg,image/png,image/webp"
+                                                className="hidden"
+                                                onChange={handlePictureSelect}
+                                            />
                                             <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                                                <Button size="sm" className="rounded-full px-6">Upload New</Button>
-                                                <Button variant="ghost" size="sm" className="text-destructive rounded-full px-6">Remove</Button>
+                                                <Button
+                                                    size="sm"
+                                                    className="rounded-full px-6"
+                                                    disabled={isUploadingPicture}
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                >
+                                                    {isUploadingPicture ? "Uploading..." : "Upload New"}
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-destructive rounded-full px-6"
+                                                    disabled={isUploadingPicture || !profilePictureUrl}
+                                                    onClick={handleRemovePicture}
+                                                >
+                                                    Remove
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
@@ -299,7 +360,9 @@ export default function SettingsPage() {
                                             <textarea
                                                 id="bio"
                                                 className="flex min-h-[100px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                                                defaultValue="Passionate System Administrator with over 5 years of experience in managing high-scale ERP infrastructures."
+                                                value={bio}
+                                                onChange={(e) => setBio(e.target.value)}
+                                                placeholder="Short professional bio (optional)"
                                             />
                                             <p className="text-[10px] text-muted-foreground italic">Markdown is supported for bios.</p>
                                         </div>
@@ -597,7 +660,7 @@ function ThemeCard({ value, activeTheme, label }: { value: string; activeTheme?:
                 <RadioGroupItem value={value} className="sr-only" />
                 <div className={cn(
                     "h-24 p-3 space-y-2",
-                    value === 'light' ? "bg-slate-100" : value === 'dark' ? "bg-slate-900" : "bg-gradient-to-br from-slate-100 to-slate-900"
+                    value === 'light' ? "bg-slate-100" : value === 'dark' ? "bg-slate-900" : "bg-linear-to-br from-slate-100 to-slate-900"
                 )}>
                     <div className="flex gap-1.5">
                         <div className="size-2 rounded-full bg-muted-foreground/30" />

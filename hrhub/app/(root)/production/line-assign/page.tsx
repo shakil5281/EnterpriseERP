@@ -17,7 +17,8 @@ import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { productionAssignmentService, ProductionAssignment } from "@/lib/services/production-assignment"
 import { productionLineService, ProductionLine } from "@/lib/services/production-line"
-import { productionService, ProductionItem } from "@/lib/services/production"
+import { getProductionOrderOptions, type ProductionOrderOption } from "@/lib/services/production/orders"
+import { ProductionCompanyGate } from "@/components/production"
 import { toast } from "sonner"
 import {
     Dialog,
@@ -43,10 +44,18 @@ import {
 } from "@/components/ui/alert-dialog"
 
 export default function LineAssignPage() {
+    return (
+        <ProductionCompanyGate>
+            {(companyId) => <LineAssignContent companyId={companyId} />}
+        </ProductionCompanyGate>
+    )
+}
+
+function LineAssignContent({ companyId }: { companyId: string }) {
     const [isLoading, setIsLoading] = React.useState(true)
     const [assignments, setAssignments] = React.useState<ProductionAssignment[]>([])
     const [lines, setLines] = React.useState<ProductionLine[]>([])
-    const [productions, setProductions] = React.useState<ProductionItem[]>([])
+    const [orders, setOrders] = React.useState<ProductionOrderOption[]>([])
 
     // Modal states
     const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false)
@@ -55,26 +64,26 @@ export default function LineAssignPage() {
     const [editingAssignment, setEditingAssignment] = React.useState<ProductionAssignment | null>(null)
 
     // Delete Alert state
-    const [deleteId, setDeleteId] = React.useState<number | null>(null)
+    const [deleteId, setDeleteId] = React.useState<string | null>(null)
 
     const fetchData = React.useCallback(async () => {
         setIsLoading(true)
         try {
-            const [assignData, linesData, prodData] = await Promise.all([
-                productionAssignmentService.getAll(),
-                productionLineService.getAll(),
-                productionService.getProductions()
+            const [assignData, linesData, orderOpts] = await Promise.all([
+                productionAssignmentService.getAll(companyId),
+                productionLineService.getAll(companyId),
+                getProductionOrderOptions(companyId),
             ])
             setAssignments(assignData)
             setLines(linesData)
-            setProductions(prodData)
+            setOrders(orderOpts)
         } catch (error) {
             console.error(error)
             toast.error("Failed to load line assignments")
         } finally {
             setIsLoading(false)
         }
-    }, [])
+    }, [companyId])
 
     React.useEffect(() => {
         fetchData()
@@ -85,15 +94,19 @@ export default function LineAssignPage() {
         setIsSaving(true)
         const formData = new FormData(e.currentTarget)
 
-        const data = {
-            productionId: parseInt(formData.get("productionId") as string),
-            lineId: parseInt(formData.get("lineId") as string),
-            totalTarget: parseInt(formData.get("totalTarget") as string),
-            status: "Active"
-        }
+        const orderId = formData.get("orderId") as string
+        const lineId = formData.get("lineId") as string
+        const order = orders.find((o) => o.orderId === orderId)
 
         try {
-            await productionAssignmentService.create(data)
+            await productionAssignmentService.create({
+                orderId,
+                lineId,
+                totalTarget: parseInt(formData.get("totalTarget") as string, 10),
+                status: "Active",
+                styleNo: order?.orderNo,
+                buyerName: order?.buyerName,
+            }, companyId)
             toast.success("Assignment created successfully")
             setIsCreateModalOpen(false)
             fetchData()
@@ -110,15 +123,19 @@ export default function LineAssignPage() {
         setIsSaving(true)
         const formData = new FormData(e.currentTarget)
 
-        const data = {
-            productionId: parseInt(formData.get("productionId") as string),
-            lineId: parseInt(formData.get("lineId") as string),
-            totalTarget: parseInt(formData.get("totalTarget") as string),
-            status: formData.get("status") as string
-        }
+        const orderId = formData.get("orderId") as string
+        const lineId = formData.get("lineId") as string
+        const order = orders.find((o) => o.orderId === orderId)
 
         try {
-            await productionAssignmentService.update(editingAssignment.id, data)
+            await productionAssignmentService.update(editingAssignment.id, {
+                orderId,
+                lineId,
+                totalTarget: parseInt(formData.get("totalTarget") as string, 10),
+                status: formData.get("status") as string,
+                styleNo: order?.orderNo,
+                buyerName: order?.buyerName,
+            }, companyId)
             toast.success("Assignment updated successfully")
             setIsUpdateModalOpen(false)
             setEditingAssignment(null)
@@ -251,11 +268,11 @@ export default function LineAssignPage() {
                         </DialogHeader>
                         <div className="grid gap-4 py-6">
                             <div className="grid gap-2">
-                                <Label htmlFor="productionId">Style / Order</Label>
-                                <NativeSelect name="productionId" id="productionId" required>
-                                    <option value="">Select Style</option>
-                                    {productions.map(p => (
-                                        <option key={p.id} value={p.id}>{p.styleNo} ({p.buyer})</option>
+                                <Label htmlFor="orderId">Order</Label>
+                                <NativeSelect name="orderId" id="orderId" required>
+                                    <option value="">Select order</option>
+                                    {orders.map((p) => (
+                                        <option key={p.orderId} value={p.orderId}>{p.label}</option>
                                     ))}
                                 </NativeSelect>
                             </div>
@@ -304,16 +321,16 @@ export default function LineAssignPage() {
                         {editingAssignment && (
                             <div className="grid gap-4 py-6">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="edit-productionId">Style / Order</Label>
+                                    <Label htmlFor="edit-orderId">Order</Label>
                                     <NativeSelect
-                                        name="productionId"
-                                        id="edit-productionId"
-                                        defaultValue={editingAssignment.productionId}
+                                        name="orderId"
+                                        id="edit-orderId"
+                                        defaultValue={editingAssignment.orderId}
                                         required
                                     >
-                                        <option value="">Select Style</option>
-                                        {productions.map(p => (
-                                            <option key={p.id} value={p.id}>{p.styleNo} ({p.buyer})</option>
+                                        <option value="">Select order</option>
+                                        {orders.map((p) => (
+                                            <option key={p.orderId} value={p.orderId}>{p.label}</option>
                                         ))}
                                     </NativeSelect>
                                 </div>

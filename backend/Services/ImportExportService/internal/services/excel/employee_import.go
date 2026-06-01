@@ -41,7 +41,7 @@ func ParseEmployeeImport(path string) ([]EmployeeImportRow, []dto.RowError, erro
 	}
 	defer f.Close()
 	sheet := f.GetSheetName(0)
-	if name := findSheet(f, "Employee", "Employees", "Data"); name != "" {
+	if name := findSheet(f, "Template", "Employee", "Employees", "Data"); name != "" {
 		sheet = name
 	}
 	rows, err := f.GetRows(sheet)
@@ -59,7 +59,8 @@ func ParseEmployeeImport(path string) ([]EmployeeImportRow, []dto.RowError, erro
 		}
 		return nil, re, nil
 	}
-	seen := map[string]struct{}{}
+	seenEmployeeIDs := map[string]struct{}{}
+	seenPunchNumbers := map[int]struct{}{}
 	var out []EmployeeImportRow
 	var errs []dto.RowError
 	for i := 1; i < len(rows); i++ {
@@ -139,10 +140,17 @@ func ParseEmployeeImport(path string) ([]EmployeeImportRow, []dto.RowError, erro
 		}
 		key := strings.ToUpper(er.CompanyCode + "|" + er.EmployeeID)
 		if er.EmployeeID != "" && er.CompanyCode != "" {
-			if _, dup := seen[key]; dup {
+			if _, dup := seenEmployeeIDs[key]; dup {
 				errs = append(errs, dto.RowError{Row: excelRow, Column: "EmployeeID", Message: "duplicate within file for company"})
 			} else {
-				seen[key] = struct{}{}
+				seenEmployeeIDs[key] = struct{}{}
+			}
+		}
+		if er.PunchNumber > 0 {
+			if _, dup := seenPunchNumbers[er.PunchNumber]; dup {
+				errs = append(errs, dto.RowError{Row: excelRow, Column: "PunchNumber", Message: "duplicate within file"})
+			} else {
+				seenPunchNumbers[er.PunchNumber] = struct{}{}
 			}
 		}
 		if hasRowError(errs, excelRow) {

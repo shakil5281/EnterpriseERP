@@ -2,9 +2,9 @@
 # 1) Drops each database (all data removed)
 # 2) Recreates schema via EF migrations (.NET) or GORM AutoMigrate (Punch Data)
 param(
-    [string]$Server = "unity3\SQLEXPRESS",
+    [string]$Server = "SHAKIL\SQLEXPRESS",
     [string]$User = "sa",
-    [string]$Password = "123580"
+    [string]$Password = "shakil52814542A"
 )
 
 $ErrorActionPreference = "Stop"

@@ -19,9 +19,9 @@ import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { DateRange } from "react-day-picker"
-import { format } from "date-fns"
+import { differenceInCalendarDays, format } from "date-fns"
 import { attendanceApi } from "@/lib/services/attendance-api"
-import { companyService, type Company } from "@/lib/services/company"
+import { ScopedCompanySelect } from "@/components/hr/scoped-company-select"
 import { employeeService, EmployeeMini } from "@/lib/services/employee"
 import { organogramService, Department, Section, Designation, Line, Shift, Group } from "@/lib/services/organogram"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
@@ -30,6 +30,14 @@ import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { NativeSelect } from "@/components/ui/native-select"
 import { cn } from "@/lib/utils"
+
+function processProgressLabel(progress: number): string {
+    if (progress < 25) return "Preparing selected employees..."
+    if (progress < 45) return "Reading punch records..."
+    if (progress < 70) return "Evaluating shifts and attendance rules..."
+    if (progress < 90) return "Saving daily attendance..."
+    return "Finalizing result..."
+}
 
 export default function DailyProcessSinglePage() {
     const router = useRouter()
@@ -61,16 +69,11 @@ export default function DailyProcessSinglePage() {
     const [selectedEmployees, setSelectedEmployees] = React.useState<EmployeeMini[]>([])
     const [loading, setLoading] = React.useState(false)
     const [processing, setProcessing] = React.useState(false)
+    const [progress, setProgress] = React.useState(0)
+    const [elapsedSeconds, setElapsedSeconds] = React.useState(0)
+    const [processingScope, setProcessingScope] = React.useState("")
     const [result, setResult] = React.useState<string | null>(null)
-    const [companies, setCompanies] = React.useState<Company[]>([])
     const [companyId, setCompanyId] = React.useState("")
-
-    React.useEffect(() => {
-        companyService.getAll().then((rows) => {
-            setCompanies(rows)
-            if (rows.length === 1) setCompanyId(rows[0].entityId)
-        })
-    }, [])
 
     // Load initial dropdown data
     React.useEffect(() => {
@@ -142,21 +145,45 @@ export default function DailyProcessSinglePage() {
         const employeeIDs =
             type === "selected"
                 ? selectedEmployees.map((e) => e.employeeId)
-                : undefined
+                : employees.map((e) => e.employeeId)
         if (type === "selected" && (!employeeIDs || employeeIDs.length === 0)) {
             return toast.error("No employees selected")
         }
+        if (type === "all" && employeeIDs.length === 0) {
+            return toast.error("No filtered employees found")
+        }
 
         setProcessing(true)
+        setProgress(5)
+        setElapsedSeconds(0)
+        setProcessingScope(
+            `${employeeIDs.length} ${employeeIDs.length === 1 ? "employee" : "employees"}${
+                type === "all" ? " from current filter" : ""
+            }`,
+        )
         setResult(null)
+        const end = range.to ?? range.from
+        const totalDays = Math.max(1, differenceInCalendarDays(end, range.from) + 1)
+        const startedAt = Date.now()
+        const progressTimer = window.setInterval(() => {
+            const elapsed = Math.floor((Date.now() - startedAt) / 1000)
+            setElapsedSeconds(elapsed)
+            setProgress((current) => {
+                if (current >= 95) return current
+                const rowFactor = employeeIDs.length > 500 || totalDays > 7 ? 1 : 3
+                return Math.min(95, current + rowFactor)
+            })
+        }, 1000)
 
         try {
             const response = await attendanceApi.processRange({
                 companyId,
                 startDate: format(range.from, "yyyy-MM-dd"),
-                endDate: range.to ? format(range.to, "yyyy-MM-dd") : format(range.from, "yyyy-MM-dd"),
+                endDate: format(end, "yyyy-MM-dd"),
                 employeeIDs,
             })
+            setProgress(100)
+            setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000))
             setResult(
                 `Processed ${response.recordsProcessed} records across ${response.daysProcessed} day(s).` +
                     (response.errors.length ? ` ${response.errors.length} day(s) had errors.` : ""),
@@ -165,7 +192,9 @@ export default function DailyProcessSinglePage() {
         } catch (error: any) {
             console.error(error)
             toast.error(error.response?.data?.message || "Processing failed")
+            setProgress(0)
         } finally {
+            window.clearInterval(progressTimer)
             setProcessing(false)
         }
     }
@@ -234,12 +263,11 @@ export default function DailyProcessSinglePage() {
                             
                             <div className="space-y-1.5">
                                 <Label className="text-[11px] font-bold uppercase text-muted-foreground">Company</Label>
-                                <NativeSelect value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
-                                    <option value="">Select company</option>
-                                    {companies.map((c) => (
-                                        <option key={c.entityId} value={c.entityId}>{c.companyNameEn}</option>
-                                    ))}
-                                </NativeSelect>
+                                <ScopedCompanySelect
+                                    value={companyId}
+                                    onChange={(entityId) => setCompanyId(entityId)}
+                                    className="h-10"
+                                />
                             </div>
                             <div className="space-y-1.5">
                                 <Label className="text-[11px] font-bold uppercase text-muted-foreground">Department</Label>
@@ -358,8 +386,17 @@ export default function DailyProcessSinglePage() {
                                     <div className="flex items-center gap-3">
                                         <IconLoader2 className="size-5 animate-spin text-primary" />
                                         <div className="space-y-1 flex-1">
-                                            <p className="text-sm font-semibold">Attendance engine is running...</p>
-                                            <p className="text-xs text-muted-foreground italic">Performing calculations for selected scope and date range.</p>
+                                            <div className="flex items-center justify-between gap-3 text-sm font-semibold">
+                                                <p>{processProgressLabel(progress)}</p>
+                                                <span>{progress}%</span>
+                                            </div>
+                                            <Progress value={progress} className="h-2" />
+                                            <p className="text-xs text-muted-foreground italic">
+                                                Processing {processingScope || "employees"} for{" "}
+                                                {range?.from ? format(range.from, "dd MMM yyyy") : ""}
+                                                {range?.to ? ` to ${format(range.to, "dd MMM yyyy")}` : ""}
+                                                {elapsedSeconds > 0 ? ` • ${elapsedSeconds}s elapsed` : ""}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>

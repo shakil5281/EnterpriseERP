@@ -23,15 +23,19 @@ type ConfirmImportRequest struct {
 }
 
 type ImportJobDTO struct {
-	ID            uuid.UUID `json:"id"`
-	CompanyID     uuid.UUID `json:"companyId"`
-	ModuleName    string    `json:"moduleName"`
-	Status        string    `json:"status"`
-	TotalRows     int       `json:"totalRows"`
-	SuccessRows   int       `json:"successRows"`
-	FailedRows    int       `json:"failedRows"`
-	ErrorFilePath string    `json:"errorFilePath,omitempty"`
-	CreatedAt     string    `json:"createdAt"`
+	ID                 uuid.UUID `json:"id"`
+	CompanyID          uuid.UUID `json:"companyId"`
+	ModuleName         string    `json:"moduleName"`
+	Status             string    `json:"status"`
+	TotalRows          int       `json:"totalRows"`
+	SuccessRows        int       `json:"successRows"`
+	FailedRows         int       `json:"failedRows"`
+	CreatedRows        int       `json:"createdRows,omitempty"`
+	UpdatedRows        int       `json:"updatedRows,omitempty"`
+	ErrorFilePath      string    `json:"errorFilePath,omitempty"`
+	ProgressPercentage int       `json:"progressPercentage"`
+	Remarks            string    `json:"remarks,omitempty"`
+	CreatedAt          string    `json:"createdAt"`
 }
 
 type ExportJobDTO struct {

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { IconBoxSeam, IconPlus, IconSearch, IconScan, IconLoader2, IconTrash } from "@tabler/icons-react"
+import { IconBoxSeam, IconPlus, IconScan, IconLoader2, IconTrash } from "@tabler/icons-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -15,58 +15,57 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import storeService, { StoreItem, StockTransaction } from "@/lib/services/store"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { StoreItem } from "@/lib/types/store"
 import { toast } from "sonner"
 
 interface StockInItem {
-    itemId: number;
+    itemId: string;
     itemName: string;
     quantity: number;
     unit: string;
     location: string;
 }
 
-export default function StockInPage() {
+function StockInContent({ companyId }: { companyId: string }) {
     const [items, setItems] = React.useState<StoreItem[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [submitting, setSubmitting] = React.useState(false);
 
-    // Receipt Details
     const [grnNumber, setGrnNumber] = React.useState(`GRN-${Math.floor(Math.random() * 90000) + 10000}`);
     const [supplier, setSupplier] = React.useState("");
     const [challanNo, setChallanNo] = React.useState("");
     const [date, setDate] = React.useState(new Date().toISOString().split('T')[0]);
-
-    // Transaction Items
     const [receiveList, setReceiveList] = React.useState<StockInItem[]>([]);
 
     React.useEffect(() => {
         const fetchItems = async () => {
             try {
-                const data = await storeService.getItems();
+                const data = await storeService.getItems(companyId);
                 setItems(data);
-            } catch (error) {
+            } catch {
                 toast.error("Failed to load items");
             } finally {
                 setLoading(false);
             }
         };
         fetchItems();
-    }, []);
+    }, [companyId]);
 
     const addItemToList = () => {
-        setReceiveList([...receiveList, { itemId: 0, itemName: "", quantity: 0, unit: "", location: "" }]);
+        setReceiveList([...receiveList, { itemId: "", itemName: "", quantity: 0, unit: "", location: "" }]);
     };
 
-    const updateItemInList = (index: number, field: keyof StockInItem, value: any) => {
+    const updateItemInList = (index: number, field: keyof StockInItem, value: string | number) => {
         const newList = [...receiveList];
         if (field === 'itemId') {
             const item = items.find(i => i.id === value);
             newList[index] = {
                 ...newList[index],
-                itemId: value,
+                itemId: value as string,
                 itemName: item?.itemName || "",
-                unit: item?.unitName || ""
+                unit: item?.unitName || "",
             };
         } else {
             newList[index] = { ...newList[index], [field]: value };
@@ -84,45 +83,48 @@ export default function StockInPage() {
             return;
         }
 
-        if (receiveList.some(i => i.itemId === 0 || i.quantity <= 0)) {
+        if (receiveList.some(i => !i.itemId || i.quantity <= 0)) {
             toast.error("Please provide valid item and quantity for all entries");
             return;
         }
 
         setSubmitting(true);
         try {
-            // Processing each item as a transaction
-            const promises = receiveList.map(item => {
-                const tx: Partial<StockTransaction> = {
-                    transactionNumber: grnNumber,
+            const promises = receiveList.map(item =>
+                storeService.stockIn({
+                    companyId,
                     itemId: item.itemId,
                     quantity: item.quantity,
-                    referenceNumber: challanNo,
+                    referenceNumber: challanNo || grnNumber,
                     supplierName: supplier,
                     locationOrBin: item.location,
                     transactionDate: date,
-                    type: "StockIn"
-                };
-                return storeService.stockIn(tx);
-            });
+                })
+            );
 
             await Promise.all(promises);
             toast.success("Stock In process completed successfully!");
-
-            // Reset form
             setReceiveList([]);
             setSupplier("");
             setChallanNo("");
             setGrnNumber(`GRN-${Math.floor(Math.random() * 90000) + 10000}`);
-        } catch (error) {
+        } catch {
             toast.error("Failed to process Stock In. Please check server logs.");
         } finally {
             setSubmitting(false);
         }
     };
 
+    if (loading) {
+        return (
+            <div className="flex h-[400px] items-center justify-center">
+                <IconLoader2 className="animate-spin size-8 text-primary" />
+            </div>
+        );
+    }
+
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">
@@ -150,27 +152,15 @@ export default function StockInPage() {
                         </div>
                         <div className="space-y-2">
                             <Label>Supplier Name</Label>
-                            <Input
-                                placeholder="e.g. TexWorld Bangladesh"
-                                value={supplier}
-                                onChange={e => setSupplier(e.target.value)}
-                            />
+                            <Input placeholder="e.g. TexWorld Bangladesh" value={supplier} onChange={e => setSupplier(e.target.value)} />
                         </div>
                         <div className="space-y-2">
                             <Label>Challan / Bill No</Label>
-                            <Input
-                                placeholder="Enter Reference Number"
-                                value={challanNo}
-                                onChange={e => setChallanNo(e.target.value)}
-                            />
+                            <Input placeholder="Enter Reference Number" value={challanNo} onChange={e => setChallanNo(e.target.value)} />
                         </div>
                         <div className="space-y-2">
                             <Label>Arrival Date</Label>
-                            <Input
-                                type="date"
-                                value={date}
-                                onChange={e => setDate(e.target.value)}
-                            />
+                            <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
                         </div>
                     </CardContent>
                 </Card>
@@ -201,42 +191,28 @@ export default function StockInPage() {
                                     {receiveList.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={5} className="h-32 text-center text-muted-foreground italic">
-                                                No items added yet. Click "Add Item" to start receiving.
+                                                No items added yet. Click &quot;Add Item&quot; to start receiving.
                                             </TableCell>
                                         </TableRow>
                                     ) : (
                                         receiveList.map((item, idx) => (
                                             <TableRow key={idx} className="hover:bg-muted/30 transition-colors">
                                                 <TableCell>
-                                                    <Select
-                                                        value={item.itemId === 0 ? "" : item.itemId.toString()}
-                                                        onValueChange={val => updateItemInList(idx, 'itemId', parseInt(val))}
-                                                    >
+                                                    <Select value={item.itemId} onValueChange={val => updateItemInList(idx, 'itemId', val)}>
                                                         <SelectTrigger className="border-none shadow-none focus:ring-0 h-8">
                                                             <SelectValue placeholder="Search Inventory..." />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            {items.map(i => <SelectItem key={i.id} value={i.id.toString()}>{i.itemName} ({i.itemCode})</SelectItem>)}
+                                                            {items.map(i => <SelectItem key={i.id} value={i.id}>{i.itemName} ({i.itemCode})</SelectItem>)}
                                                         </SelectContent>
                                                     </Select>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Input
-                                                        type="number"
-                                                        placeholder="0"
-                                                        className="h-8 border-muted-foreground/20"
-                                                        value={item.quantity === 0 ? "" : item.quantity}
-                                                        onChange={e => updateItemInList(idx, 'quantity', parseFloat(e.target.value))}
-                                                    />
+                                                    <Input type="number" placeholder="0" className="h-8 border-muted-foreground/20" value={item.quantity === 0 ? "" : item.quantity} onChange={e => updateItemInList(idx, 'quantity', parseFloat(e.target.value))} />
                                                 </TableCell>
                                                 <TableCell className="text-xs font-bold text-muted-foreground uppercase">{item.unit || "—"}</TableCell>
                                                 <TableCell>
-                                                    <Input
-                                                        placeholder="e.g. Bin A-1"
-                                                        className="h-8 border-muted-foreground/20"
-                                                        value={item.location}
-                                                        onChange={e => updateItemInList(idx, 'location', e.target.value)}
-                                                    />
+                                                    <Input placeholder="e.g. Bin A-1" className="h-8 border-muted-foreground/20" value={item.location} onChange={e => updateItemInList(idx, 'location', e.target.value)} />
                                                 </TableCell>
                                                 <TableCell className="text-right px-2">
                                                     <Button variant="ghost" size="sm" onClick={() => removeItemFromList(idx)} className="h-8 w-8 p-0 text-rose-500 hover:text-rose-600 hover:bg-rose-50">
@@ -254,11 +230,7 @@ export default function StockInPage() {
                             <div className="text-sm text-emerald-800 dark:text-emerald-300 font-medium">
                                 Total Items to Receive: <span className="font-bold">{receiveList.length}</span>
                             </div>
-                            <Button
-                                className="w-full md:w-auto px-10 bg-emerald-600 hover:bg-emerald-700 text-white border-none shadow-lg shadow-emerald-600/20"
-                                onClick={handleCompleteStockIn}
-                                disabled={submitting || receiveList.length === 0}
-                            >
+                            <Button className="w-full md:w-auto px-10 bg-emerald-600 hover:bg-emerald-700 text-white border-none shadow-lg shadow-emerald-600/20" onClick={handleCompleteStockIn} disabled={submitting || receiveList.length === 0}>
                                 {submitting && <IconLoader2 className="animate-spin size-4 mr-2" />}
                                 Post GRN Entry
                             </Button>
@@ -266,6 +238,16 @@ export default function StockInPage() {
                     </CardContent>
                 </Card>
             </div>
-        </div>
-    )
+        </>
+    );
+}
+
+export default function StockInPage() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <StockInContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
+    );
 }

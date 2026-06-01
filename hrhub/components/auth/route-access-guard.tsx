@@ -1,37 +1,75 @@
-"use client"
+"use client";
 
-import { useAuth } from "@/components/providers/auth-provider"
-import { useRouter, usePathname } from "next/navigation"
-import { useEffect } from "react"
-import { getRedirectUrlForUser } from "@/lib/role-redirect"
-import { canAccessRoute } from "@/lib/auth/access-config"
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/components/providers/auth-provider";
+import { FullScreenLoading } from "@/components/loading-state";
+import { canAccessRoute } from "@/lib/auth/access-config";
+import { isPublicPath } from "@/lib/auth/route-protection";
+import { getRedirectUrlForUser } from "@/lib/role-redirect";
+import { authService } from "@/lib/services/auth";
 
 export function RouteAccessGuard({ children }: { children: React.ReactNode }) {
-    const { user, loading } = useAuth()
-    const router = useRouter()
-    const pathname = usePathname()
+  const { user, loading, isAuthenticated } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
 
-    useEffect(() => {
-        if (loading || !user || !user.roles) return
+  const publicRoute = isPublicPath(pathname);
 
-        const publicPaths = ['/login', '/register', '/forgot-password', '/unauthorized']
-        if (publicPaths.some(path => pathname.startsWith(path))) return
+  useEffect(() => {
+    if (loading || publicRoute) return;
 
-        if (!canAccessRoute(pathname, user.roles, user.permissions ?? [])) {
-            router.replace('/unauthorized')
-            return
-        }
+    if (!isAuthenticated || !user?.roles?.length) {
+      const returnUrl = encodeURIComponent(
+        pathname + (typeof window !== "undefined" ? window.location.search : ""),
+      );
+      router.replace(`/login?returnUrl=${returnUrl}`);
+      return;
+    }
 
-        if (pathname === '/' || pathname === '') {
-            const userHomePath = getRedirectUrlForUser(user.roles)
-            const managementRoles = ['HR', 'Management', 'HR Officer', 'IT Officer', 'SuperAdmin']
-            const isManagementUser = user.roles.some(role => managementRoles.includes(role))
+    if (!canAccessRoute(pathname, user.roles, user.permissions ?? [])) {
+      router.replace("/unauthorized");
+      return;
+    }
 
-            if (!isManagementUser && userHomePath !== '/') {
-                router.replace(userHomePath)
-            }
-        }
-    }, [user, loading, pathname, router])
+    if (pathname === "/" || pathname === "") {
+      const userHomePath = getRedirectUrlForUser(user.roles);
+      const managementRoles = [
+        "HR",
+        "Management",
+        "HR Officer",
+        "IT Officer",
+        "SuperAdmin",
+        "Admin",
+      ];
+      const isManagementUser = user.roles.some((role) =>
+        managementRoles.includes(role),
+      );
 
-    return <>{children}</>
+      if (!isManagementUser && userHomePath !== "/") {
+        router.replace(userHomePath);
+      }
+    }
+  }, [user, loading, isAuthenticated, pathname, router, publicRoute]);
+
+  if (publicRoute) {
+    return <>{children}</>;
+  }
+
+  if (loading) {
+    return <FullScreenLoading message="Verifying your session..." />;
+  }
+
+  if (!isAuthenticated || !user?.roles?.length) {
+    if (authService.isAuthenticated()) {
+      return <FullScreenLoading message="Verifying your session..." />;
+    }
+    return <FullScreenLoading message="Redirecting to login..." />;
+  }
+
+  if (!canAccessRoute(pathname, user.roles, user.permissions ?? [])) {
+    return <FullScreenLoading message="Access denied..." />;
+  }
+
+  return <>{children}</>;
 }

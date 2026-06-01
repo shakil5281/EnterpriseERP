@@ -38,9 +38,7 @@ using PayrollService.Application;
 using PayrollService.Domain.Enums;
 using PayrollService.Infrastructure;
 using PayrollService.Infrastructure.Persistence;
-using NotificationService.Api.Controllers;
-using NotificationService.Infrastructure;
-using NotificationService.Infrastructure.Persistence;
+
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
@@ -51,15 +49,22 @@ using Serilog;
 using Erp.BuildingBlocks.Hosting;
 using Erp.BuildingBlocks.CommonSecurity;
 using AuthService.Application.Abstractions.CompanyAccess;
+using EnterpriseERP.Platform.Host.ImportExport;
+using EnterpriseERP.Platform.Host.Middleware;
 using EnterpriseERP.Platform.Host.Services;
 using Asp.Versioning;
 using FinishingService.API.Controllers;
+using FinishingService.Application;
+using FinishingService.Domain;
 using FinishingService.Infrastructure;
 using QualityService.API.Controllers;
+using QualityService.Application;
+using QualityService.Domain;
 using QualityService.Infrastructure;
 using SecurityService.API.Controllers;
 using SecurityService.Application;
 using SecurityService.Infrastructure;
+using SecurityService.Domain;
 using AccountsService.API.Controllers;
 using AccountsService.Application;
 using AccountsService.Domain;
@@ -75,27 +80,33 @@ builder.Host.UseSerilog((ctx, cfg) =>
     cfg.WriteTo.Console();
 });
 
+builder.Services.AddMemoryCache();
 builder.Services.AddEnterpriseTenantSecurity(builder.Configuration);
 builder.Services.AddScoped<ITenantCompanyAccessResolver, AuthTenantCompanyAccessResolver>();
 builder.Services.AddScoped<ICompanyExistenceChecker, CompanyExistenceChecker>();
 builder.Services.AddAuthApplication();
 builder.Services.AddAuthInfrastructure(builder.Configuration);
 builder.Services.AddCompanyInfrastructure(builder.Configuration);
+builder.Services.AddScoped<CompanyOrganogramImportService>();
+builder.Services.AddScoped<AddressImportService>();
 builder.Services.AddHrInfrastructure(builder.Configuration);
 builder.Services.AddAttendanceApplication();
 builder.Services.AddAttendanceInfrastructure(builder.Configuration);
 builder.Services.AddLeaveApplication();
 builder.Services.AddLeaveInfrastructure(builder.Configuration);
+builder.Services.AddScoped<LeaveService.Application.Common.Interfaces.IEmployeeServiceClient,
+    EnterpriseERP.Platform.Host.Integration.LeaveInProcessEmployeeClient>();
 builder.Services.AddShiftApplication();
 builder.Services.AddShiftInfrastructure(builder.Configuration);
 builder.Services.AddScoped<ShiftService.Application.Common.Interfaces.ILeaveCalendarProvider, EnterpriseERP.Platform.Host.Integration.LeaveCalendarProvider>();
 builder.Services.AddPayrollApplication();
 builder.Services.AddPayrollInfrastructure(builder.Configuration);
 builder.Services.AddScoped<PayrollService.Application.IEmployeeServiceClient, EnterpriseERP.Platform.Host.Integration.PayrollInProcessEmployeeClient>();
-builder.Services.AddNotificationInfrastructure(builder.Configuration);
 
 // Bootstrapping newly integrated ERP microservices
+builder.Services.AddFinishingApplication();
 builder.Services.AddFinishingInfrastructure(builder.Configuration);
+QualityService.Application.DependencyInjection.AddApplication(builder.Services);
 QualityService.Infrastructure.DependencyInjection.AddInfrastructure(builder.Services, builder.Configuration);
 builder.Services.AddSecurityApplication();
 builder.Services.AddSecurityInfrastructure(builder.Configuration);
@@ -128,7 +139,6 @@ builder.Services.AddControllers()
     .AddApplicationPart(typeof(LeaveTypesController).Assembly)
     .AddApplicationPart(typeof(ShiftsController).Assembly)
     .AddApplicationPart(typeof(PayrollController).Assembly)
-    .AddApplicationPart(typeof(NotificationsController).Assembly)
     .AddApplicationPart(typeof(FinishingReceivesController).Assembly)
     .AddApplicationPart(typeof(FinalInspectionsController).Assembly)
     .AddApplicationPart(typeof(SecurityService.API.Controllers.GatesController).Assembly)
@@ -203,41 +213,99 @@ builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionAuthorizat
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddAuthorization(options =>
 {
+    // Auth-service role aliases (seeded in AuthDataSeeder) mapped to domain role policies.
+    const string Admin = "Admin";
+    const string Hr = "HR";
+    const string Management = "Management";
+    const string HrOfficer = "HR Officer";
+    const string Accounts = "Accounts";
+    const string Accountant = "Accountant";
+    const string AccountOfficer = "Account Officer";
+    const string Production = "Production";
+    const string ProductionManager = "ProductionManager";
+
     options.AddPolicy(PayrollPermissions.PayrollPolicyManage, p => p.RequireRole(PayrollRoles.SuperAdmin));
-    options.AddPolicy(PayrollPermissions.SalaryStructureManage, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.HRManager));
-    options.AddPolicy(PayrollPermissions.EmployeeSalaryManage, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.HRManager));
-    options.AddPolicy(PayrollPermissions.SalaryIncrementRequest, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.HRManager));
-    options.AddPolicy(PayrollPermissions.SalaryIncrementApprove, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin));
-    options.AddPolicy(PayrollPermissions.SalaryAdvanceRequest, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.HRManager, PayrollRoles.PayrollOfficer));
-    options.AddPolicy(PayrollPermissions.SalaryAdvanceApprove, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.AccountsOfficer));
-    options.AddPolicy(PayrollPermissions.PayrollProcess, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.PayrollOfficer));
-    options.AddPolicy(PayrollPermissions.PayrollReprocess, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin));
-    options.AddPolicy(PayrollPermissions.PayrollApprove, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin));
-    options.AddPolicy(PayrollPermissions.PayrollLock, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin));
+    options.AddPolicy(PayrollPermissions.SalaryStructureManage, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin, PayrollRoles.HRManager, Hr, Management));
+    options.AddPolicy(PayrollPermissions.EmployeeSalaryManage, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin, PayrollRoles.HRManager, Hr, Management));
+    options.AddPolicy(PayrollPermissions.SalaryIncrementRequest, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin, PayrollRoles.HRManager, Hr, Management));
+    options.AddPolicy(PayrollPermissions.SalaryIncrementApprove, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin));
+    options.AddPolicy(PayrollPermissions.SalaryAdvanceRequest, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin, PayrollRoles.HRManager, Hr, Management, PayrollRoles.PayrollOfficer, HrOfficer));
+    options.AddPolicy(PayrollPermissions.SalaryAdvanceApprove, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin, PayrollRoles.AccountsOfficer, Accounts, Accountant));
+    options.AddPolicy(PayrollPermissions.PayrollProcess, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin, PayrollRoles.PayrollOfficer, Hr, Management, HrOfficer));
+    options.AddPolicy(PayrollPermissions.PayrollReprocess, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin));
+    options.AddPolicy(PayrollPermissions.PayrollApprove, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin, Hr, Management));
+    options.AddPolicy(PayrollPermissions.PayrollLock, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin));
     options.AddPolicy(PayrollPermissions.PayrollUnlock, p => p.RequireRole(PayrollRoles.SuperAdmin));
-    options.AddPolicy(PayrollPermissions.PayslipView, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.PayrollOfficer, PayrollRoles.Employee));
-    options.AddPolicy(PayrollPermissions.SalarySheetView, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.PayrollOfficer, PayrollRoles.AccountsOfficer, PayrollRoles.Auditor));
-    options.AddPolicy(PayrollPermissions.BankSheetExport, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.AccountsOfficer));
-    options.AddPolicy(PayrollPermissions.FinalSettlementProcess, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, PayrollRoles.HRManager));
-    options.AddPolicy(PayrollPermissions.FinalSettlementApprove, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin));
-    options.AddPolicy(AccountsPermissions.CoaManage, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.GroupAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
-    options.AddPolicy(AccountsPermissions.VoucherCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer));
-    options.AddPolicy(AccountsPermissions.VoucherApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
-    options.AddPolicy(AccountsPermissions.VoucherPost, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer));
-    options.AddPolicy(AccountsPermissions.CashReceiveCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer, AccountsRoles.Cashier));
-    options.AddPolicy(AccountsPermissions.CashReceiveApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
-    options.AddPolicy(AccountsPermissions.DailyExpenseCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer, AccountsRoles.Cashier));
-    options.AddPolicy(AccountsPermissions.DailyExpenseApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
-    options.AddPolicy(AccountsPermissions.MoneyRequestCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer));
-    options.AddPolicy(AccountsPermissions.MoneyRequestApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
-    options.AddPolicy(AccountsPermissions.AdvancePayCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer));
-    options.AddPolicy(AccountsPermissions.AdvancePayApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
-    options.AddPolicy(AccountsPermissions.AdvanceSalaryPayCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer));
-    options.AddPolicy(AccountsPermissions.AdvanceSalaryPayApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
-    options.AddPolicy(AccountsPermissions.CompanyTransferCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
-    options.AddPolicy(AccountsPermissions.CompanyTransferApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager));
-    options.AddPolicy(AccountsPermissions.LedgerView, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.AccountsOfficer, AccountsRoles.Auditor, AccountsRoles.Viewer));
-    options.AddPolicy(AccountsPermissions.ReportView, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, AccountsRoles.AccountsManager, AccountsRoles.Auditor, AccountsRoles.Viewer));
+    options.AddPolicy(PayrollPermissions.PayslipView, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin, PayrollRoles.PayrollOfficer, HrOfficer, PayrollRoles.Employee));
+    options.AddPolicy(PayrollPermissions.SalarySheetView, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin, PayrollRoles.PayrollOfficer, Hr, Management, HrOfficer, PayrollRoles.AccountsOfficer, Accounts, Accountant, PayrollRoles.Auditor));
+    options.AddPolicy(PayrollPermissions.BankSheetExport, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin, PayrollRoles.AccountsOfficer, Accounts, Accountant));
+    options.AddPolicy(PayrollPermissions.FinalSettlementProcess, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin, PayrollRoles.HRManager, Hr, Management));
+    options.AddPolicy(PayrollPermissions.FinalSettlementApprove, p => p.RequireRole(PayrollRoles.SuperAdmin, PayrollRoles.CompanyAdmin, Admin));
+    options.AddPolicy(AccountsPermissions.CoaManage, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.GroupAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts));
+    options.AddPolicy(AccountsPermissions.VoucherCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts, AccountsRoles.AccountsOfficer, Accountant, AccountOfficer));
+    options.AddPolicy(AccountsPermissions.VoucherApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts));
+    options.AddPolicy(AccountsPermissions.VoucherPost, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts, AccountsRoles.AccountsOfficer, Accountant, AccountOfficer));
+    options.AddPolicy(AccountsPermissions.CashReceiveCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts, AccountsRoles.AccountsOfficer, Accountant, AccountOfficer, AccountsRoles.Cashier));
+    options.AddPolicy(AccountsPermissions.CashReceiveApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts));
+    options.AddPolicy(AccountsPermissions.DailyExpenseCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts, AccountsRoles.AccountsOfficer, Accountant, AccountOfficer, AccountsRoles.Cashier));
+    options.AddPolicy(AccountsPermissions.DailyExpenseApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts));
+    options.AddPolicy(AccountsPermissions.MoneyRequestCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts, AccountsRoles.AccountsOfficer, Accountant, AccountOfficer));
+    options.AddPolicy(AccountsPermissions.MoneyRequestApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts));
+    options.AddPolicy(AccountsPermissions.AdvancePayCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts, AccountsRoles.AccountsOfficer, Accountant, AccountOfficer));
+    options.AddPolicy(AccountsPermissions.AdvancePayApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts));
+    options.AddPolicy(AccountsPermissions.AdvanceSalaryPayCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts, AccountsRoles.AccountsOfficer, Accountant, AccountOfficer));
+    options.AddPolicy(AccountsPermissions.AdvanceSalaryPayApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts));
+    options.AddPolicy(AccountsPermissions.CompanyTransferCreate, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts));
+    options.AddPolicy(AccountsPermissions.CompanyTransferApprove, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts));
+    options.AddPolicy(AccountsPermissions.LedgerView, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts, AccountsRoles.AccountsOfficer, Accountant, AccountOfficer, AccountsRoles.Auditor, AccountsRoles.Viewer));
+    options.AddPolicy(AccountsPermissions.ReportView, p => p.RequireRole(AccountsRoles.SuperAdmin, AccountsRoles.CompanyAdmin, Admin, AccountsRoles.AccountsManager, Accounts, AccountsRoles.Auditor, AccountsRoles.Viewer, Accountant));
+
+    // SecurityService gate operations (embedded controllers; policies must match SecurityService.API/Program.cs)
+    options.AddPolicy(SecurityPermissions.GateManage, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.GroupAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.SecurityManager, "Admin"));
+    options.AddPolicy(SecurityPermissions.VisitorEntryCreate, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.SecurityManager, SecurityRoles.SecurityOfficer, SecurityRoles.GateOfficer, "Admin"));
+    options.AddPolicy(SecurityPermissions.VisitorCheckout, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.SecurityManager, SecurityRoles.SecurityOfficer, SecurityRoles.GateOfficer, "Admin"));
+    options.AddPolicy(SecurityPermissions.EmployeeOutPassCreate, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.HRManager, SecurityRoles.SecurityOfficer, SecurityRoles.GateOfficer, "Admin"));
+    options.AddPolicy(SecurityPermissions.EmployeeOutPassApprove, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.SecurityManager, SecurityRoles.HRManager, "Admin"));
+    options.AddPolicy(SecurityPermissions.VehicleEntryCreate, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.SecurityManager, SecurityRoles.SecurityOfficer, SecurityRoles.GateOfficer, "Admin"));
+    options.AddPolicy(SecurityPermissions.VehicleExit, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.SecurityManager, SecurityRoles.SecurityOfficer, SecurityRoles.GateOfficer, "Admin"));
+    options.AddPolicy(SecurityPermissions.GatePassCreate, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.SecurityManager, SecurityRoles.StoreManager, SecurityRoles.SecurityOfficer, "Admin"));
+    options.AddPolicy(SecurityPermissions.GatePassApprove, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.SecurityManager, SecurityRoles.StoreManager, "Admin"));
+    options.AddPolicy(SecurityPermissions.GatePassIssue, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.SecurityManager, SecurityRoles.SecurityOfficer, SecurityRoles.GateOfficer, "Admin"));
+    options.AddPolicy(SecurityPermissions.ChalanCreate, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.StoreManager, SecurityRoles.SecurityOfficer, SecurityRoles.GateOfficer, "Admin"));
+    options.AddPolicy(SecurityPermissions.ChalanApprove, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.SecurityManager, SecurityRoles.StoreManager, "Admin"));
+    options.AddPolicy(SecurityPermissions.BillEntryCreate, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.AccountsOfficer, SecurityRoles.SecurityOfficer, "Admin"));
+    options.AddPolicy(SecurityPermissions.BillEntryApprove, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.AccountsOfficer, SecurityRoles.SecurityManager, "Admin"));
+    options.AddPolicy(SecurityPermissions.BillSendToAccounts, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.AccountsOfficer, "Admin"));
+    options.AddPolicy(SecurityPermissions.SecurityCheckCreate, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.SecurityManager, SecurityRoles.SecurityOfficer, SecurityRoles.GateOfficer, "Admin"));
+    options.AddPolicy(SecurityPermissions.GateReportView, p => p.RequireRole(
+        SecurityRoles.SuperAdmin, SecurityRoles.GroupAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.SecurityManager,
+        SecurityRoles.SecurityOfficer, SecurityRoles.GateOfficer, SecurityRoles.Auditor, SecurityRoles.Viewer, "Admin"));
+    options.AddPolicy(SecurityPermissions.GateReportExport, p => p.RequireRole(SecurityRoles.SuperAdmin, SecurityRoles.CompanyAdmin, SecurityRoles.SecurityManager, SecurityRoles.Auditor, "Admin"));
+
+    options.AddPolicy(FinishingPermissions.ReceiveCreate, p => p.RequireRole(FinishingRoles.SuperAdmin, FinishingRoles.CompanyAdmin, Admin, FinishingRoles.FinishingManager, FinishingRoles.FinishingOfficer, Production, ProductionManager));
+    options.AddPolicy(FinishingPermissions.ReceiveConfirm, p => p.RequireRole(FinishingRoles.SuperAdmin, FinishingRoles.CompanyAdmin, Admin, FinishingRoles.FinishingManager, ProductionManager));
+    options.AddPolicy(FinishingPermissions.BatchCreate, p => p.RequireRole(FinishingRoles.SuperAdmin, FinishingRoles.CompanyAdmin, Admin, FinishingRoles.FinishingManager, FinishingRoles.FinishingOfficer, Production, ProductionManager));
+    options.AddPolicy(FinishingPermissions.InputCreate, p => p.RequireRole(FinishingRoles.SuperAdmin, FinishingRoles.CompanyAdmin, Admin, FinishingRoles.FinishingManager, FinishingRoles.FinishingOfficer, Production, ProductionManager));
+    options.AddPolicy(FinishingPermissions.IroningCreate, p => p.RequireRole(FinishingRoles.SuperAdmin, FinishingRoles.CompanyAdmin, Admin, FinishingRoles.FinishingManager, FinishingRoles.FinishingOfficer, Production, ProductionManager));
+    options.AddPolicy(FinishingPermissions.QCCreate, p => p.RequireRole(FinishingRoles.SuperAdmin, FinishingRoles.CompanyAdmin, Admin, FinishingRoles.QualityOfficer, FinishingRoles.FinishingManager, ProductionManager));
+    options.AddPolicy(FinishingPermissions.CartonCreate, p => p.RequireRole(FinishingRoles.SuperAdmin, FinishingRoles.CompanyAdmin, Admin, FinishingRoles.FinishingManager, FinishingRoles.FinishingOfficer, Production, ProductionManager));
+    options.AddPolicy(FinishingPermissions.CartonClose, p => p.RequireRole(FinishingRoles.SuperAdmin, FinishingRoles.CompanyAdmin, Admin, FinishingRoles.FinishingManager, FinishingRoles.StoreManager, ProductionManager));
+    options.AddPolicy(FinishingPermissions.TransferCreate, p => p.RequireRole(FinishingRoles.SuperAdmin, FinishingRoles.CompanyAdmin, Admin, FinishingRoles.FinishingManager, FinishingRoles.FinishingOfficer, Production, ProductionManager));
+    options.AddPolicy(FinishingPermissions.TransferConfirm, p => p.RequireRole(FinishingRoles.SuperAdmin, FinishingRoles.CompanyAdmin, Admin, FinishingRoles.StoreManager, FinishingRoles.FinishingManager, ProductionManager));
+    options.AddPolicy(FinishingPermissions.WastageCreate, p => p.RequireRole(FinishingRoles.SuperAdmin, FinishingRoles.CompanyAdmin, Admin, FinishingRoles.FinishingManager, FinishingRoles.FinishingOfficer, Production, ProductionManager));
+    options.AddPolicy(FinishingPermissions.BalanceView, p => p.RequireRole(FinishingRoles.SuperAdmin, FinishingRoles.CompanyAdmin, Admin, FinishingRoles.FinishingManager, FinishingRoles.FinishingOfficer, Production, ProductionManager, FinishingRoles.Auditor, FinishingRoles.Viewer));
+    options.AddPolicy(FinishingPermissions.ReportView, p => p.RequireRole(FinishingRoles.SuperAdmin, FinishingRoles.CompanyAdmin, Admin, FinishingRoles.FinishingManager, Production, ProductionManager, FinishingRoles.Auditor, FinishingRoles.Viewer));
+
+    options.AddPolicy(QualityPermissions.CheckpointManage, p => p.RequireRole(QualityRoles.SuperAdmin, QualityRoles.CompanyAdmin, Admin, QualityRoles.QualityManager, ProductionManager));
+    options.AddPolicy(QualityPermissions.DefectManage, p => p.RequireRole(QualityRoles.SuperAdmin, QualityRoles.CompanyAdmin, Admin, QualityRoles.QualityManager, QualityRoles.QualityOfficer, Production, ProductionManager));
+    options.AddPolicy(QualityPermissions.InspectionCreate, p => p.RequireRole(QualityRoles.SuperAdmin, QualityRoles.CompanyAdmin, Admin, QualityRoles.QualityOfficer, QualityRoles.QualityManager, QualityRoles.ProductionManager, Production, ProductionManager));
+    options.AddPolicy(QualityPermissions.InspectionApprove, p => p.RequireRole(QualityRoles.SuperAdmin, QualityRoles.CompanyAdmin, Admin, QualityRoles.QualityManager, ProductionManager));
+    options.AddPolicy(QualityPermissions.ReworkCreate, p => p.RequireRole(QualityRoles.SuperAdmin, QualityRoles.CompanyAdmin, Admin, QualityRoles.QualityOfficer, QualityRoles.QualityManager, QualityRoles.ProductionManager, Production, ProductionManager));
+    options.AddPolicy(QualityPermissions.RejectCreate, p => p.RequireRole(QualityRoles.SuperAdmin, QualityRoles.CompanyAdmin, Admin, QualityRoles.QualityOfficer, QualityRoles.QualityManager, QualityRoles.ProductionManager, Production, ProductionManager));
+    options.AddPolicy(QualityPermissions.FinalInspectionCreate, p => p.RequireRole(QualityRoles.SuperAdmin, QualityRoles.CompanyAdmin, Admin, QualityRoles.QualityOfficer, QualityRoles.QualityManager, Production, ProductionManager));
+    options.AddPolicy(QualityPermissions.FinalInspectionApprove, p => p.RequireRole(QualityRoles.SuperAdmin, QualityRoles.CompanyAdmin, Admin, QualityRoles.QualityManager, ProductionManager));
+    options.AddPolicy(QualityPermissions.ReportView, p => p.RequireRole(QualityRoles.SuperAdmin, QualityRoles.CompanyAdmin, Admin, QualityRoles.QualityManager, Production, ProductionManager, QualityRoles.Auditor, QualityRoles.Viewer));
+    options.AddPolicy(QualityPermissions.ReportExport, p => p.RequireRole(QualityRoles.SuperAdmin, QualityRoles.CompanyAdmin, Admin, QualityRoles.QualityManager, ProductionManager, QualityRoles.Auditor));
 });
 
 var configuredCorsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
@@ -258,7 +326,7 @@ builder.Services.AddCors(options =>
                     return true;
                 }
 
-                if (!builder.Environment.IsDevelopment())
+                if (!builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("Docker"))
                 {
                     return false;
                 }
@@ -286,8 +354,7 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<AttendanceDbContext>("attendance-db")
     .AddDbContextCheck<LeaveDbContext>("leave-db")
     .AddDbContextCheck<ShiftDbContext>("shift-db")
-    .AddDbContextCheck<PayrollDbContext>("payroll-db")
-    .AddDbContextCheck<NotificationDbContext>("notification-db");
+    .AddDbContextCheck<PayrollDbContext>("payroll-db");
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -343,7 +410,7 @@ app.Use(async (ctx, next) =>
             health = "/health",
             swagger = "/swagger",
             api = "/api/v1/...",
-            hint = "Single-process host: Auth, Company, HR, Attendance, Leave, Shift, Payroll, Notification on this port. Add ReverseProxy routes in appsettings to forward paths to a legacy monolith (e.g. :5011).",
+            hint = "Single-process host: Auth, Company, HR, Attendance, Leave, Shift, Payroll on this port. Add ReverseProxy routes in appsettings to forward paths to a legacy monolith (e.g. :5011). NotificationService runs as a standalone Go service on :5047.",
         });
         return;
     }
@@ -367,13 +434,21 @@ app.UseSwaggerUI(o =>
 app.UseAuthentication();
 app.UseEnterpriseTenantSecurity();
 app.UseAuthorization();
+app.UseMiddleware<ImportExportProxyAvailabilityMiddleware>();
+app.UseMiddleware<PunchDataProxyAvailabilityMiddleware>();
 
 app.MapHealthChecks("/health");
 app.MapControllers().RequireRateLimiting("per-ip");
 app.MapReverseProxy().RequireRateLimiting("per-ip");
 
-await using (var scope = app.Services.CreateAsyncScope())
+var skipServiceDatabaseMigrations = app.Configuration.GetValue("PlatformHost:SkipServiceDatabaseMigrations", false);
+if (skipServiceDatabaseMigrations)
 {
+    app.Logger.LogInformation("Skipping Platform.Host database migrations and startup seeding.");
+}
+else
+{
+    await using var scope = app.Services.CreateAsyncScope();
     var companyDb = scope.ServiceProvider.GetRequiredService<CompanyDbContext>();
     await companyDb.Database.MigrateAsync();
     if (!await companyDb.Companies.AnyAsync())
@@ -389,7 +464,15 @@ await using (var scope = app.Services.CreateAsyncScope())
     }
 
     var hrDb = scope.ServiceProvider.GetRequiredService<HrDbContext>();
-    await hrDb.Database.MigrateAsync();
+    try
+    {
+        await hrDb.Database.MigrateAsync();
+    }
+    catch (InvalidOperationException ex) when (ex.Message.Contains("pending changes", StringComparison.OrdinalIgnoreCase))
+    {
+        var startupLog = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+        startupLog.LogWarning(ex, "HR database has pending EF model changes; skipping auto-migrate so Platform.Host can start.");
+    }
     if (!await hrDb.Employees.AnyAsync())
     {
         var companyId = await companyDb.Companies.Select(c => c.Id).FirstAsync();
@@ -455,32 +538,28 @@ await using (var scope = app.Services.CreateAsyncScope())
     var leaveDb = scope.ServiceProvider.GetRequiredService<LeaveDbContext>();
     var shiftDb = scope.ServiceProvider.GetRequiredService<ShiftDbContext>();
     var payrollDb = scope.ServiceProvider.GetRequiredService<PayrollDbContext>();
-    var notificationDb = scope.ServiceProvider.GetRequiredService<NotificationDbContext>();
 
     var finishingDb = scope.ServiceProvider.GetRequiredService<FinishingService.Infrastructure.Persistence.FinishingDbContext>();
     var qualityDb = scope.ServiceProvider.GetRequiredService<QualityService.Infrastructure.Persistence.QualityDbContext>();
     var securityDb = scope.ServiceProvider.GetRequiredService<SecurityService.Infrastructure.Persistence.SecurityDbContext>();
     var accountsDb = scope.ServiceProvider.GetRequiredService<AccountsService.Infrastructure.Persistence.AccountsDbContext>();
 
-    if (!app.Configuration.GetValue("PlatformHost:SkipServiceDatabaseMigrations", false))
+    await authDb.Database.MigrateAsync();
+    await attendanceDb.Database.MigrateAsync();
+
+    if (app.Configuration.GetValue("PlatformHost:RunLeaveDatabaseMigration", true))
     {
-        await attendanceDb.Database.MigrateAsync();
-
-        if (app.Configuration.GetValue("PlatformHost:RunLeaveDatabaseMigration", true))
-        {
-            await leaveDb.Database.MigrateAsync();
-        }
-
-        await shiftDb.Database.MigrateAsync();
-        await ShiftService.Application.Common.ShiftPolicyProvisioning.BackfillAllShiftsAsync(shiftDb);
-        await payrollDb.Database.MigrateAsync();
-        await notificationDb.Database.MigrateAsync();
-
-        await finishingDb.Database.MigrateAsync();
-        await qualityDb.Database.MigrateAsync();
-        await securityDb.Database.MigrateAsync();
-        await accountsDb.Database.MigrateAsync();
+        await leaveDb.Database.MigrateAsync();
     }
+
+    await shiftDb.Database.MigrateAsync();
+    await ShiftService.Application.Common.ShiftPolicyProvisioning.BackfillAllShiftsAsync(shiftDb);
+    await payrollDb.Database.MigrateAsync();
+
+    await finishingDb.Database.MigrateAsync();
+    await qualityDb.Database.MigrateAsync();
+    await securityDb.Database.MigrateAsync();
+    await accountsDb.Database.MigrateAsync();
 }
 
 await app.RunAsync();

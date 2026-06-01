@@ -125,6 +125,36 @@ const createBillService = (endpoint: string) => ({
     })
     downloadBlob(response.data, `${endpoint}_${new Date().toISOString().split("T")[0]}.csv`, "text/csv")
   },
+  exportFormatted: async (
+    params: {
+      companyId: string
+      fromDate: string
+      toDate: string
+      departmentId?: string
+      employeeType?: string
+      searchTerm?: string
+    },
+    format: "xlsx" | "pdf",
+    filePrefix?: string,
+  ) => {
+    const response = await api.get(platformApiUrl(`/api/v1/${endpoint}/export.${format}`), {
+      params: {
+        companyId: params.companyId,
+        fromDate: params.fromDate,
+        toDate: params.toDate,
+        departmentId: params.departmentId,
+        employeeType: params.employeeType && params.employeeType !== "all" ? params.employeeType : undefined,
+        searchTerm: params.searchTerm,
+      },
+      responseType: "blob",
+    })
+    const prefix = filePrefix ?? endpoint.replace(/-bills$/, "-bill")
+    downloadBlob(
+      response.data,
+      `${prefix}.${format}`,
+      format === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+  },
 })
 
 export const nightBillService = createBillService("night-bills")

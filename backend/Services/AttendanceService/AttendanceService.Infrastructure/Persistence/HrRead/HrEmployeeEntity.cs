@@ -19,6 +19,8 @@ public sealed class HrEmployeeJobInfoEntity
     public Guid? DepartmentId { get; set; }
     public Guid? SectionId { get; set; }
     public Guid? DesignationId { get; set; }
+    public Guid? GroupId { get; set; }
+    public string? WorkLocation { get; set; }
     public bool IsCurrent { get; set; }
 }
 

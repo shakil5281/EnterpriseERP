@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { IconTruckDelivery, IconPlus, IconSearch, IconLoader2, IconTrash, IconExclamationCircle } from "@tabler/icons-react"
+import { IconTruckDelivery, IconPlus, IconLoader2, IconTrash, IconExclamationCircle } from "@tabler/icons-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -15,60 +15,59 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import storeService, { StoreItem, StockTransaction } from "@/lib/services/store"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { StoreItem } from "@/lib/types/store"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 
 interface StockOutItem {
-    itemId: number;
+    itemId: string;
     itemName: string;
     quantity: number;
     availableStock: number;
     unit: string;
 }
 
-export default function StockOutPage() {
+function StockOutContent({ companyId }: { companyId: string }) {
     const [items, setItems] = React.useState<StoreItem[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [submitting, setSubmitting] = React.useState(false);
 
-    // Issue Details
     const [issueNumber, setIssueNumber] = React.useState(`ISS-${Math.floor(Math.random() * 90000) + 10000}`);
     const [department, setDepartment] = React.useState("");
     const [reqNo, setReqNo] = React.useState("");
     const [date, setDate] = React.useState(new Date().toISOString().split('T')[0]);
-
-    // Issue List
     const [issueList, setIssueList] = React.useState<StockOutItem[]>([]);
 
     React.useEffect(() => {
         const fetchItems = async () => {
             try {
-                const data = await storeService.getItems();
+                const data = await storeService.getItems(companyId);
                 setItems(data);
-            } catch (error) {
+            } catch {
                 toast.error("Failed to load items");
             } finally {
                 setLoading(false);
             }
         };
         fetchItems();
-    }, []);
+    }, [companyId]);
 
     const addItemToList = () => {
-        setIssueList([...issueList, { itemId: 0, itemName: "", quantity: 0, availableStock: 0, unit: "" }]);
+        setIssueList([...issueList, { itemId: "", itemName: "", quantity: 0, availableStock: 0, unit: "" }]);
     };
 
-    const updateItemInList = (index: number, field: keyof StockOutItem, value: any) => {
+    const updateItemInList = (index: number, field: keyof StockOutItem, value: string | number) => {
         const newList = [...issueList];
         if (field === 'itemId') {
             const item = items.find(i => i.id === value);
             newList[index] = {
                 ...newList[index],
-                itemId: value,
+                itemId: value as string,
                 itemName: item?.itemName || "",
                 availableStock: item?.currentStock || 0,
-                unit: item?.unitName || ""
+                unit: item?.unitName || "",
             };
         } else {
             newList[index] = { ...newList[index], [field]: value };
@@ -86,54 +85,56 @@ export default function StockOutPage() {
             return;
         }
 
-        // Validate stock levels
         const insufficient = issueList.filter(i => i.quantity > i.availableStock);
         if (insufficient.length > 0) {
             toast.error(`Insufficient stock for: ${insufficient.map(i => i.itemName).join(", ")}`);
             return;
         }
 
-        if (issueList.some(i => i.itemId === 0 || i.quantity <= 0)) {
+        if (issueList.some(i => !i.itemId || i.quantity <= 0)) {
             toast.error("Please provide valid item and quantity for all entries");
             return;
         }
 
         setSubmitting(true);
         try {
-            const promises = issueList.map(item => {
-                const tx: Partial<StockTransaction> = {
-                    transactionNumber: issueNumber,
+            const promises = issueList.map(item =>
+                storeService.stockOut({
+                    companyId,
                     itemId: item.itemId,
                     quantity: item.quantity,
-                    referenceNumber: reqNo,
+                    referenceNumber: reqNo || issueNumber,
                     departmentOrLine: department,
                     transactionDate: date,
-                    type: "StockOut"
-                };
-                return storeService.stockOut(tx);
-            });
+                })
+            );
 
             await Promise.all(promises);
             toast.success("Materials issued and stock updated successfully!");
 
-            // Refresh item data (especially current stock levels)
-            const freshItems = await storeService.getItems();
+            const freshItems = await storeService.getItems(companyId);
             setItems(freshItems);
-
-            // Reset form
             setIssueList([]);
             setDepartment("");
             setReqNo("");
             setIssueNumber(`ISS-${Math.floor(Math.random() * 90000) + 10000}`);
-        } catch (error) {
+        } catch {
             toast.error("Failed to process Stock Out.");
         } finally {
             setSubmitting(false);
         }
     };
 
+    if (loading) {
+        return (
+            <div className="flex h-[400px] items-center justify-center">
+                <IconLoader2 className="animate-spin size-8 text-primary" />
+            </div>
+        );
+    }
+
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <>
             <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400">
                     <IconTruckDelivery className="size-7" />
@@ -170,19 +171,11 @@ export default function StockOutPage() {
                         </div>
                         <div className="space-y-2">
                             <Label>Requisition Number</Label>
-                            <Input
-                                placeholder="e.g. REQ-2024-500"
-                                value={reqNo}
-                                onChange={e => setReqNo(e.target.value)}
-                            />
+                            <Input placeholder="e.g. REQ-2024-500" value={reqNo} onChange={e => setReqNo(e.target.value)} />
                         </div>
                         <div className="space-y-2">
                             <Label>Issue Date</Label>
-                            <Input
-                                type="date"
-                                value={date}
-                                onChange={e => setDate(e.target.value)}
-                            />
+                            <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
                         </div>
                     </CardContent>
                 </Card>
@@ -213,23 +206,20 @@ export default function StockOutPage() {
                                     {issueList.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={5} className="h-40 text-center text-muted-foreground italic">
-                                                List is empty. Click "Add Line" to select items.
+                                                List is empty. Click &quot;Add Line&quot; to select items.
                                             </TableCell>
                                         </TableRow>
                                     ) : (
                                         issueList.map((item, idx) => (
                                             <TableRow key={idx} className="hover:bg-muted/30 transition-colors">
                                                 <TableCell>
-                                                    <Select
-                                                        value={item.itemId === 0 ? "" : item.itemId.toString()}
-                                                        onValueChange={val => updateItemInList(idx, 'itemId', parseInt(val))}
-                                                    >
+                                                    <Select value={item.itemId} onValueChange={val => updateItemInList(idx, 'itemId', val)}>
                                                         <SelectTrigger className="border-none shadow-none focus:ring-0 h-8">
                                                             <SelectValue placeholder="Search Item..." />
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             {items.map(i => (
-                                                                <SelectItem key={i.id} value={i.id.toString()} disabled={i.currentStock <= 0}>
+                                                                <SelectItem key={i.id} value={i.id} disabled={i.currentStock <= 0}>
                                                                     {i.itemName} ({i.itemCode}) - {i.currentStock} {i.unitName}
                                                                 </SelectItem>
                                                             ))}
@@ -237,12 +227,7 @@ export default function StockOutPage() {
                                                     </Select>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Input
-                                                        type="number"
-                                                        className={`h-8 border-muted-foreground/20 ${item.quantity > item.availableStock ? 'border-rose-400 focus-visible:ring-rose-400' : ''}`}
-                                                        value={item.quantity === 0 ? "" : item.quantity}
-                                                        onChange={e => updateItemInList(idx, 'quantity', parseFloat(e.target.value))}
-                                                    />
+                                                    <Input type="number" className={`h-8 border-muted-foreground/20 ${item.quantity > item.availableStock ? 'border-rose-400 focus-visible:ring-rose-400' : ''}`} value={item.quantity === 0 ? "" : item.quantity} onChange={e => updateItemInList(idx, 'quantity', parseFloat(e.target.value))} />
                                                 </TableCell>
                                                 <TableCell className="text-center">
                                                     <Badge variant="outline" className={`font-mono ${item.availableStock <= 0 ? 'text-rose-500 bg-rose-50' : 'text-emerald-600 bg-emerald-50'}`}>
@@ -271,11 +256,7 @@ export default function StockOutPage() {
 
                         <div className="mt-8 flex flex-col md:flex-row items-center justify-end gap-4 p-4 rounded-xl bg-orange-50/50 dark:bg-orange-950/10 border border-orange-100 dark:border-orange-900/30">
                             <Button variant="outline" onClick={() => setIssueList([])}>Clear All</Button>
-                            <Button
-                                className="w-full md:w-auto px-10 bg-orange-600 hover:bg-orange-700 text-white border-none shadow-lg shadow-orange-600/20"
-                                onClick={handleCompleteStockOut}
-                                disabled={submitting || issueList.length === 0 || issueList.some(i => i.quantity > i.availableStock)}
-                            >
+                            <Button className="w-full md:w-auto px-10 bg-orange-600 hover:bg-orange-700 text-white border-none shadow-lg shadow-orange-600/20" onClick={handleCompleteStockOut} disabled={submitting || issueList.length === 0 || issueList.some(i => i.quantity > i.availableStock)}>
                                 {submitting && <IconLoader2 className="animate-spin size-4 mr-2" />}
                                 Finalize Material Issue
                             </Button>
@@ -283,6 +264,16 @@ export default function StockOutPage() {
                     </CardContent>
                 </Card>
             </div>
-        </div>
-    )
+        </>
+    );
+}
+
+export default function StockOutPage() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <StockOutContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
+    );
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { IconBoxSeam, IconSearch, IconFilter, IconArrowUpRight, IconArrowDownRight, IconDownload, IconLoader2, IconDatabase, IconChartBar, IconCurrencyTaka } from "@tabler/icons-react"
+import { IconBoxSeam, IconSearch, IconFilter, IconDownload, IconLoader2, IconDatabase, IconChartBar, IconCurrencyTaka } from "@tabler/icons-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -14,10 +14,12 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import storeService, { StoreItem, StockDashboardSummary } from "@/lib/services/store"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { StoreItem, StockDashboardSummary } from "@/lib/types/store"
 import { toast } from "sonner"
 
-export default function CurrentStockPage() {
+function CurrentStockContent({ companyId }: { companyId: string }) {
     const [items, setItems] = React.useState<StoreItem[]>([]);
     const [summary, setSummary] = React.useState<StockDashboardSummary | null>(null);
     const [loading, setLoading] = React.useState(true);
@@ -26,12 +28,12 @@ export default function CurrentStockPage() {
     const fetchData = async () => {
         try {
             const [itemData, summaryData] = await Promise.all([
-                storeService.getItems(),
-                storeService.getDashboardSummary()
+                storeService.getItems(companyId),
+                storeService.getDashboardSummary(companyId),
             ]);
             setItems(itemData);
             setSummary(summaryData);
-        } catch (error) {
+        } catch {
             toast.error("Failed to load inventory data");
         } finally {
             setLoading(false);
@@ -40,7 +42,7 @@ export default function CurrentStockPage() {
 
     React.useEffect(() => {
         fetchData();
-    }, []);
+    }, [companyId]);
 
     const filteredItems = items.filter(i =>
         i.itemName.toLowerCase().includes(search.toLowerCase()) ||
@@ -51,7 +53,7 @@ export default function CurrentStockPage() {
     const totalStockQty = items.reduce((sum, i) => sum + i.currentStock, 0);
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
@@ -62,15 +64,13 @@ export default function CurrentStockPage() {
                         <p className="text-muted-foreground text-sm">Real-time inventory levels and total warehouse valuation.</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" className="gap-2 h-10">
-                        <IconDownload className="size-4" /> Export Ledger
-                    </Button>
-                </div>
+                <Button variant="outline" className="gap-2 h-10">
+                    <IconDownload className="size-4" /> Export Ledger
+                </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
-                <Card className="border-none shadow-sm bg-gradient-to-br from-blue-50/50 via-white to-white dark:from-blue-900/10 dark:via-background dark:to-background">
+                <Card className="border-none shadow-sm bg-linear-to-br from-blue-50/50 via-white to-white dark:from-blue-900/10 dark:via-background dark:to-background">
                     <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
                             <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-tight">Total Units in Stock</CardTitle>
@@ -82,8 +82,7 @@ export default function CurrentStockPage() {
                         <div className="text-[10px] text-muted-foreground mt-1 font-medium">Updated just now</div>
                     </CardContent>
                 </Card>
-
-                <Card className="border-none shadow-sm bg-gradient-to-br from-indigo-50/50 via-white to-white dark:from-indigo-900/10 dark:via-background dark:to-background">
+                <Card className="border-none shadow-sm bg-linear-to-br from-indigo-50/50 via-white to-white dark:from-indigo-900/10 dark:via-background dark:to-background">
                     <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
                             <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-tight">Active SKUs</CardTitle>
@@ -95,8 +94,7 @@ export default function CurrentStockPage() {
                         <div className="text-[10px] text-muted-foreground mt-1 font-medium italic">Across {new Set(items.map(i => i.categoryId)).size} categories</div>
                     </CardContent>
                 </Card>
-
-                <Card className="border-none shadow-sm bg-gradient-to-br from-emerald-50/50 via-white to-white dark:from-emerald-900/10 dark:via-background dark:to-background">
+                <Card className="border-none shadow-sm bg-linear-to-br from-emerald-50/50 via-white to-white dark:from-emerald-900/10 dark:via-background dark:to-background">
                     <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
                             <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-tight">Stock Valuation</CardTitle>
@@ -115,12 +113,7 @@ export default function CurrentStockPage() {
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="relative flex-1 max-w-[500px]">
                             <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-4" />
-                            <Input
-                                placeholder="Search by name, SKU or category..."
-                                className="pl-10 h-10 border-muted-foreground/20"
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                            />
+                            <Input placeholder="Search by name, SKU or category..." className="pl-10 h-10 border-muted-foreground/20" value={search} onChange={e => setSearch(e.target.value)} />
                         </div>
                         <Button variant="outline" size="sm" className="gap-2 h-10">
                             <IconFilter className="size-4" /> Filter
@@ -186,6 +179,16 @@ export default function CurrentStockPage() {
                     </div>
                 </CardContent>
             </Card>
-        </div>
-    )
+        </>
+    );
+}
+
+export default function CurrentStockPage() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <CurrentStockContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
+    );
 }

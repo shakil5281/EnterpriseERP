@@ -23,6 +23,13 @@ public sealed class GetDailyReportQueryHandler(
     public async Task<IReadOnlyList<DailyReportRowDto>> Handle(GetDailyReportQuery request, CancellationToken cancellationToken)
     {
         var rows = await AttendanceReportHelper.LoadAttendancesAsync(db, request.Filter, employeeQuery, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(request.Filter.AttendanceStatus))
+        {
+            rows = rows
+                .Where(a => AttendanceReportHelper.MatchesAttendanceStatusFilter(a.Status, request.Filter.AttendanceStatus))
+                .ToList();
+        }
+
         var profiles = await employeeQuery.GetProfilesAsync(AttendanceReportHelper.ToEmployeeFilter(request.Filter), cancellationToken);
         var employees = await employeeDirectory.GetEmployeesByIdAsync(request.Filter.CompanyId, cancellationToken);
         var legacyCompanyId = AttendanceReportHelper.LegacyCompanyId(request.Filter.CompanyId);
@@ -41,6 +48,7 @@ public sealed class GetDailyReportQueryHandler(
                 profile?.DepartmentName ?? string.Empty,
                 profile?.SectionName ?? string.Empty,
                 profile?.DesignationName ?? string.Empty,
+                profile?.LineName ?? string.Empty,
                 a.ShiftName ?? string.Empty,
                 AttendanceReportHelper.FormatDate(a.AttendanceDate),
                 AttendanceReportHelper.FormatTime(a.InTime),

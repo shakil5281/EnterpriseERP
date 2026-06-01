@@ -36,7 +36,15 @@ public class AssignmentHandlers(IShiftDbContext db) :
         if (current != null)
         {
             current.IsCurrent = false;
-            current.EffectiveTo ??= request.EffectiveFrom.AddDays(-1);
+            var closeDate = request.EffectiveFrom.Date.AddDays(-1);
+            if (closeDate >= current.EffectiveFrom.Date)
+            {
+                current.EffectiveTo ??= closeDate;
+            }
+            else
+            {
+                current.EffectiveTo ??= request.EffectiveFrom.Date;
+            }
         }
 
         var assignment = new EmployeeShiftAssignment

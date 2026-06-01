@@ -1,5 +1,6 @@
-using Microsoft.Extensions.DependencyInjection;
+using Erp.BuildingBlocks.ReportExport;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using AttendanceService.Infrastructure.Persistence;
 using AttendanceService.Infrastructure.Persistence.PunchData;
@@ -44,6 +45,8 @@ public static class DependencyInjection
         {
             client.BaseAddress = new Uri(configuration["ExternalServices:ShiftServiceUrl"] ?? "http://127.0.0.1:5000/api/v1/");
         });
+
+        services.AddReportExportClient(configuration, "attendance");
 
         return services;
     }

@@ -2,6 +2,7 @@ import { getActiveCompanyHeaderValue } from "@/lib/active-company-storage";
 import { employeeService, type Employee } from "@/lib/services/employee";
 import type {
   BackendLeaveApplication,
+  BackendLeaveApplicationListItem,
   BackendLeaveBalance,
   BackendLeavePolicy,
   BackendLeaveType,
@@ -81,6 +82,38 @@ export function getActiveCompanyIdOrThrow(): string {
   return id;
 }
 
+export function listItemToLeaveApplicationView(
+  row: BackendLeaveApplicationListItem,
+): LeaveApplicationView {
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    employeeEntityId: row.employeeId,
+    employeeCard: 0,
+    employeeId: row.employeeCode,
+    employeeName: row.employeeName,
+    department: row.departmentName ?? "",
+    designation: row.designationName ?? "",
+    leaveTypeId: row.leaveTypeId,
+    leaveTypeName: row.leaveTypeName ?? row.leaveCode ?? "Leave",
+    leaveCode: row.leaveCode,
+    startDate: row.fromDate,
+    endDate: row.toDate,
+    totalDays: row.totalDays,
+    isHalfDay: row.isHalfDay,
+    halfDayType: row.halfDayType,
+    reason: row.reason ?? "",
+    status: row.status,
+    appliedDate: row.appliedAt,
+    appliedBy: row.appliedBy,
+    remarks: undefined,
+    steps: [],
+    approvedAt: row.approvedAt,
+    rejectedAt: row.rejectedAt,
+    cancelledAt: row.cancelledAt,
+  };
+}
+
 export function toLeaveApplicationView(
   app: BackendLeaveApplication,
   employee?: Employee | null,
@@ -120,17 +153,40 @@ export function toLeaveApplicationView(
   };
 }
 
+/** Maps API list rows (already enriched) to table views. */
+export function mapLeaveApplicationListItems(
+  items: BackendLeaveApplicationListItem[],
+): LeaveApplicationView[] {
+  return items.map(listItemToLeaveApplicationView);
+}
+
+/** @deprecated Prefer mapLeaveApplicationListItems when using paginated list API. */
 export async function enrichApplications(
-  apps: BackendLeaveApplication[],
+  apps: BackendLeaveApplication[] | BackendLeaveApplicationListItem[],
   companyId: string,
   leaveTypes?: BackendLeaveType[]
 ): Promise<LeaveApplicationView[]> {
-  const employees = await employeeService.getEmployees();
+  if (apps.length > 0 && "employeeName" in apps[0]) {
+    return mapLeaveApplicationListItems(
+      apps as BackendLeaveApplicationListItem[],
+    );
+  }
+
+  const employeeIds = Array.from(
+    new Set(
+      (apps as BackendLeaveApplication[])
+        .map((a) => a.employeeId)
+        .map((x) => String(x).trim())
+        .filter(Boolean),
+    ),
+  );
+  const employees = await employeeService.getEmployeesByEntityIds(employeeIds);
+  const employeeById = new Map(employees.map((e) => [e.entityId, e]));
   const { leaveService } = await import("@/lib/services/leave");
   const types = leaveTypes ?? (await leaveService.listLeaveTypes(companyId));
 
-  return apps.map((app) => {
-    const emp = employees.find((e) => e.entityId === app.employeeId);
+  return (apps as BackendLeaveApplication[]).map((app) => {
+    const emp = employeeById.get(app.employeeId);
     const lt = types.find((t) => t.id === app.leaveTypeId);
     return toLeaveApplicationView(app, emp, lt);
   });
@@ -142,10 +198,10 @@ export async function enrichApplication(
 ): Promise<LeaveApplicationView> {
   const { leaveService } = await import("@/lib/services/leave");
   const [employees, types] = await Promise.all([
-    employeeService.getEmployees(),
+    employeeService.getEmployeesByEntityIds([app.employeeId]),
     leaveService.listLeaveTypes(companyId),
   ]);
-  const emp = employees.find((e) => e.entityId === app.employeeId);
+  const emp = employees[0];
   const lt = types.find((t) => t.id === app.leaveTypeId);
   return toLeaveApplicationView(app, emp, lt);
 }
@@ -182,7 +238,8 @@ export function groupHolidaysByRange(rows: Holiday[]): GroupedHoliday[] {
       if (
         diffDays === 1 &&
         last.name === item.holidayName &&
-        last.type === item.holidayType
+        last.type === item.holidayType &&
+        last.isPaid === item.isPaid
       ) {
         last.endDate = item.holidayDate;
         last.entityIds.push(item.id);
@@ -209,7 +266,7 @@ export function groupHolidaysByRange(rows: Holiday[]): GroupedHoliday[] {
 }
 
 export function buildMonthlyLeaveReport(
-  apps: BackendLeaveApplication[],
+  apps: BackendLeaveApplicationListItem[],
   employees: Employee[],
   leaveTypes: BackendLeaveType[],
   params: { year: number; month: number }
@@ -228,14 +285,16 @@ export function buildMonthlyLeaveReport(
     }
 
     const emp = employees.find((e) => e.entityId === app.employeeId);
-    if (!emp) continue;
+    const employeeCode = app.employeeCode || emp?.employeeId || app.employeeId;
+    const employeeName = app.employeeName || emp?.fullNameEn || "Unknown";
+    const department = app.departmentName ?? emp?.departmentName ?? "";
 
     if (!agg[app.employeeId]) {
       agg[app.employeeId] = {
         id: app.employeeId,
-        employeeId: emp.employeeId,
-        employeeName: emp.fullNameEn,
-        department: emp.departmentName ?? "",
+        employeeId: employeeCode,
+        employeeName,
+        department,
         sickLeave: 0,
         casualLeave: 0,
         earnedLeave: 0,
@@ -277,7 +336,9 @@ export function buildMonthlyLeaveReport(
   return Object.values(agg);
 }
 
-export function exportApplicationsCsv(apps: BackendLeaveApplication[]): void {
+export function exportApplicationsCsv(
+  apps: BackendLeaveApplicationListItem[],
+): void {
   const headers = [
     "Application ID",
     "Employee ID",
@@ -290,8 +351,8 @@ export function exportApplicationsCsv(apps: BackendLeaveApplication[]): void {
   ];
   const rows = apps.map((app) => [
     app.id,
-    app.employeeId,
-    app.leaveCode || "Leave",
+    app.employeeCode || app.employeeId,
+    app.leaveTypeName || app.leaveCode || "Leave",
     app.fromDate,
     app.toDate,
     String(app.totalDays),

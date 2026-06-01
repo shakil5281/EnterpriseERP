@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { productionLineService, ProductionLine } from "@/lib/services/production-line"
+import { ProductionCompanyGate } from "@/components/production"
 import { toast } from "sonner"
 import {
     Dialog,
@@ -38,6 +39,14 @@ import {
 } from "@/components/ui/alert-dialog"
 
 export default function ProductionLinePage() {
+    return (
+        <ProductionCompanyGate>
+            {(companyId) => <ProductionLineContent companyId={companyId} />}
+        </ProductionCompanyGate>
+    )
+}
+
+function ProductionLineContent({ companyId }: { companyId: string }) {
     const [isLoading, setIsLoading] = React.useState(true)
     const [lines, setLines] = React.useState<ProductionLine[]>([])
 
@@ -51,7 +60,7 @@ export default function ProductionLinePage() {
     const fetchData = React.useCallback(async () => {
         setIsLoading(true)
         try {
-            const data = await productionLineService.getAll()
+            const data = await productionLineService.getAll(companyId)
             setLines(data)
         } catch (error) {
             console.error(error)
@@ -59,7 +68,7 @@ export default function ProductionLinePage() {
         } finally {
             setIsLoading(false)
         }
-    }, [])
+    }, [companyId])
 
     React.useEffect(() => {
         fetchData()
@@ -81,7 +90,7 @@ export default function ProductionLinePage() {
                 await productionLineService.update(editingItem.id, data)
                 toast.success("Line updated successfully")
             } else {
-                await productionLineService.create(data)
+                await productionLineService.create(data, companyId)
                 toast.success("Line created successfully")
             }
             setIsModalOpen(false)
@@ -93,7 +102,7 @@ export default function ProductionLinePage() {
         }
     }
 
-    const handleDelete = async (id: number) => {
+    const handleDelete = async (id: string) => {
         try {
             await productionLineService.delete(id)
             toast.success("Line deleted successfully")

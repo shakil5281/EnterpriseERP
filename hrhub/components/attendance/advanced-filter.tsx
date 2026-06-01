@@ -19,9 +19,8 @@ import { NativeSelect } from "@/components/ui/native-select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { organogramService } from "@/lib/services/organogram"
-import { companyService } from "@/lib/services/company"
 import { CommonFilterParams } from "@/lib/services/attendance"
-import { useAuth } from "@/components/providers/auth-provider"
+import { useCompanyFilterScope } from "@/hooks/use-company-filter-scope"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 
@@ -52,14 +51,15 @@ export function AdvancedFilter({
         { label: "On Leave", value: "On Leave" }
     ]
 }: AdvancedFilterProps) {
-    const { user, hasAnyRole } = useAuth()
-    const isAdmin = hasAnyRole(["SuperAdmin", "Admin"])
+    const { companies, isCompanyLocked, defaultCompany, loading: companiesLoading } =
+        useCompanyFilterScope()
+    const isCompanyDisabled = isCompanyLocked
+    const autoAppliedRef = React.useRef(false)
     const [isExpanded, setIsExpanded] = React.useState(true)
     const [filters, setFilters] = React.useState<CommonFilterParams>({
         status: 'all',
         ...initialFilters
     })
-    const [isCompanyDisabled, setIsCompanyDisabled] = React.useState(false)
 
     // Sync internal filters with initialFilters when they change from parent
     React.useEffect(() => {
@@ -69,8 +69,6 @@ export function AdvancedFilter({
         }))
     }, [initialFilters])
 
-    // Data for dropdowns
-    const [companies, setCompanies] = React.useState<any[]>([])
     const [departments, setDepartments] = React.useState<any[]>([])
     const [sections, setSections] = React.useState<any[]>([])
     const [designations, setDesignations] = React.useState<any[]>([])
@@ -79,39 +77,38 @@ export function AdvancedFilter({
     const [groups, setGroups] = React.useState<any[]>([])
     const [floors, setFloors] = React.useState<any[]>([])
 
-    // Auto-select company for users with assigned companies
     React.useEffect(() => {
-        if (!isAdmin && user && user.assignedCompanyIds && user.assignedCompanyIds.length > 0) {
-            // If user has assigned companies and is NOT an admin, auto-select the first one and disable
-            companyService.getAll().then(allCompanies => {
-                const assignedCompany = allCompanies.find(c => c.entityId === user.assignedCompanyIds![0])
-                if (assignedCompany) {
-                    setFilters(prev => ({ ...prev, companyName: assignedCompany.companyNameEn }))
-                    setIsCompanyDisabled(true)
-                }
-            })
-        } else {
-            setIsCompanyDisabled(false)
-        }
-    }, [user, isAdmin])
-
-    React.useEffect(() => {
-        // Fetch initial data
-        companyService.getAll().then(allCompanies => {
-            // Filter companies based on user's assigned companies (only for non-admins)
-            if (!isAdmin && user && user.assignedCompanyIds && user.assignedCompanyIds.length > 0) {
-                const filteredCompanies = allCompanies.filter(c => user.assignedCompanyIds!.includes(c.entityId))
-                setCompanies(filteredCompanies)
-            } else {
-                setCompanies(allCompanies)
+        if (companiesLoading || !defaultCompany) return
+        setFilters((prev) => {
+            if (prev.companyId === defaultCompany.id) return prev
+            return {
+                ...prev,
+                companyId: defaultCompany.id,
+                companyName: defaultCompany.companyNameEn,
             }
         })
+    }, [companiesLoading, defaultCompany])
 
-        // Don't load departments/sections/etc initially - they'll be loaded based on company selection
+    React.useEffect(() => {
+        if (companiesLoading || autoAppliedRef.current || !isCompanyLocked || !defaultCompany) {
+            return
+        }
+        autoAppliedRef.current = true
+        const next: CommonFilterParams = {
+            status: "all",
+            ...initialFilters,
+            companyId: defaultCompany.id,
+            companyName: defaultCompany.companyNameEn,
+        }
+        setFilters(next)
+        onFilterChange(next)
+    }, [companiesLoading, isCompanyLocked, defaultCompany, initialFilters, onFilterChange])
+
+    React.useEffect(() => {
         organogramService.getGroups().then(setGroups)
         organogramService.getShifts().then(setShifts)
         organogramService.getFloors().then(setFloors)
-    }, [user, isAdmin])
+    }, [])
 
     // Company -> Department cascade
     React.useEffect(() => {
@@ -176,7 +173,13 @@ export function AdvancedFilter({
             date: initialFilters.date,
             startDate: initialFilters.startDate,
             endDate: initialFilters.endDate,
-            status: 'all'
+            status: 'all',
+            ...(isCompanyLocked && defaultCompany
+                ? {
+                      companyId: defaultCompany.id,
+                      companyName: defaultCompany.companyNameEn,
+                  }
+                : {}),
         } as CommonFilterParams
         setFilters(cleared)
         onFilterChange(cleared)

@@ -33,7 +33,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import { companyService } from "@/lib/services/company"
+import { ManagementLegacyCompanySelect } from "@/components/hr/management-legacy-company-select"
 
 const MONTHS = [
     { label: "January", value: 1 },
@@ -66,7 +66,6 @@ export default function FestivalBonusPage() {
     const [year, setYear] = React.useState(new Date().getFullYear())
     const [month, setMonth] = React.useState<string>("all")
     const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>("all")
-    const [companies, setCompanies] = React.useState<any[]>([])
     const [isLoading, setIsLoading] = React.useState(false)
     const [records, setRecords] = React.useState<Bonus[]>([])
 
@@ -82,7 +81,6 @@ export default function FestivalBonusPage() {
     const [processCompanyId, setProcessCompanyId] = React.useState<string>("all")
 
     React.useEffect(() => {
-        companyService.getAll().then(setCompanies)
         handleSearch()
     }, [])
 
@@ -277,10 +275,11 @@ export default function FestivalBonusPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                         <div className="space-y-2">
                             <Label className="text-xs font-bold text-muted-foreground">COMPANY</Label>
-                            <NativeSelect value={selectedCompanyId} onChange={(e) => setSelectedCompanyId(e.target.value)} className="h-10">
-                                <option value="all">All Companies</option>
-                                {companies.map(c => <option key={c.id} value={c.id}>{c.companyNameEn}</option>)}
-                            </NativeSelect>
+                            <ManagementLegacyCompanySelect
+                                value={selectedCompanyId}
+                                onChange={setSelectedCompanyId}
+                                className="h-10"
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label className="text-xs font-bold text-muted-foreground">MONTH</Label>
@@ -359,10 +358,11 @@ export default function FestivalBonusPage() {
                         {/* Company */}
                         <div className="space-y-2">
                             <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Company</Label>
-                            <NativeSelect value={processCompanyId} onChange={e => setProcessCompanyId(e.target.value)} className="w-full h-10">
-                                <option value="all">All Companies</option>
-                                {companies.map(c => <option key={c.id} value={c.id}>{c.companyNameEn}</option>)}
-                            </NativeSelect>
+                            <ManagementLegacyCompanySelect
+                                value={processCompanyId}
+                                onChange={setProcessCompanyId}
+                                className="w-full h-10"
+                            />
                         </div>
 
                         {/* Year & Month */}

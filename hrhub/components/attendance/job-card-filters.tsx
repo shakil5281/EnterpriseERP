@@ -10,14 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { companyService, type Company } from "@/lib/services/company";
 import {
   organogramService,
   type Department,
   type Section,
   type Designation,
 } from "@/lib/services/organogram";
-import { useAuth } from "@/components/providers/auth-provider";
+import { useCompanyFilterScope } from "@/hooks/use-company-filter-scope";
 import type { DateRange } from "react-day-picker";
 
 export interface JobCardFilterState {
@@ -71,15 +70,15 @@ export function JobCardFilters({
   onApply,
   onReset,
 }: JobCardFiltersProps) {
-  const { user, hasAnyRole } = useAuth();
-  const isAdmin = hasAnyRole(["SuperAdmin", "Admin"]);
+  const { companies, isCompanyLocked, defaultCompany, loading: companiesLoading } =
+    useCompanyFilterScope();
+  const isCompanyDisabled = isCompanyLocked;
+  const autoAppliedRef = React.useRef(false);
 
   const [filters, setFilters] = React.useState<JobCardFilterState>(defaultJobCardFilters);
-  const [companies, setCompanies] = React.useState<Company[]>([]);
   const [departments, setDepartments] = React.useState<Department[]>([]);
   const [sections, setSections] = React.useState<Section[]>([]);
   const [designations, setDesignations] = React.useState<Designation[]>([]);
-  const [isCompanyDisabled, setIsCompanyDisabled] = React.useState(false);
 
   const dateRange: DateRange | undefined = React.useMemo(() => {
     if (!filters.startDate) return undefined;
@@ -89,19 +88,25 @@ export function JobCardFilters({
   }, [filters.startDate, filters.endDate]);
 
   React.useEffect(() => {
-    companyService.getAll().then((rows) => {
-      if (!isAdmin && user?.assignedCompanyIds?.length) {
-        const filtered = rows.filter((c) => user.assignedCompanyIds!.includes(c.entityId));
-        setCompanies(filtered);
-        if (filtered.length === 1) {
-          setFilters((f) => ({ ...f, companyEntityId: filtered[0].entityId }));
-          setIsCompanyDisabled(true);
-        }
-      } else {
-        setCompanies(rows);
-      }
+    if (companiesLoading || !defaultCompany) return;
+    setFilters((f) => {
+      if (f.companyEntityId === defaultCompany.entityId) return f;
+      return { ...f, companyEntityId: defaultCompany.entityId };
     });
-  }, [user, isAdmin]);
+  }, [companiesLoading, defaultCompany]);
+
+  React.useEffect(() => {
+    if (companiesLoading || autoAppliedRef.current || !isCompanyLocked || !defaultCompany) {
+      return;
+    }
+    autoAppliedRef.current = true;
+    const next: JobCardFilterState = {
+      ...defaultJobCardFilters(),
+      companyEntityId: defaultCompany.entityId,
+    };
+    setFilters(next);
+    onApply(next);
+  }, [companiesLoading, isCompanyLocked, defaultCompany, onApply]);
 
   React.useEffect(() => {
     if (!filters.companyEntityId) {
@@ -215,8 +220,10 @@ export function JobCardFilters({
 
   const handleReset = () => {
     const next = defaultJobCardFilters();
-    if (isCompanyDisabled && companies[0]) {
-      next.companyEntityId = companies[0].entityId;
+    if (isCompanyLocked && defaultCompany) {
+      next.companyEntityId = defaultCompany.entityId;
+    } else if (defaultCompany && !next.companyEntityId) {
+      next.companyEntityId = defaultCompany.entityId;
     }
     setFilters(next);
     onReset();

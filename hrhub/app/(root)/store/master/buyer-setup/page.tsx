@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { IconUsers, IconPlus, IconSearch, IconLoader2, IconWorld } from "@tabler/icons-react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -23,30 +23,32 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import storeService, { Buyer } from "@/lib/services/store"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { StoreBuyer, CreateStoreBuyerRequest } from "@/lib/types/store"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 
-export default function BuyerSetupPage() {
-    const [buyers, setBuyers] = React.useState<Buyer[]>([]);
+function BuyerSetupContent({ companyId }: { companyId: string }) {
+    const [buyers, setBuyers] = React.useState<StoreBuyer[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [search, setSearch] = React.useState("");
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
     const [submitting, setSubmitting] = React.useState(false);
 
-    const [newBuyer, setNewBuyer] = React.useState<Partial<Buyer>>({
+    const [newBuyer, setNewBuyer] = React.useState<Omit<CreateStoreBuyerRequest, "companyId">>({
         buyerName: "",
         country: "",
         contactPerson: "",
         email: "",
-        phone: ""
+        phone: "",
     });
 
     const fetchBuyers = async () => {
         try {
-            const data = await storeService.getBuyers();
+            const data = await storeService.getBuyers(companyId);
             setBuyers(data);
-        } catch (error) {
+        } catch {
             toast.error("Failed to load buyers");
         } finally {
             setLoading(false);
@@ -55,7 +57,7 @@ export default function BuyerSetupPage() {
 
     React.useEffect(() => {
         fetchBuyers();
-    }, []);
+    }, [companyId]);
 
     const handleAddBuyer = async () => {
         if (!newBuyer.buyerName) {
@@ -65,12 +67,12 @@ export default function BuyerSetupPage() {
 
         setSubmitting(true);
         try {
-            await storeService.addBuyer(newBuyer);
+            await storeService.addBuyer({ ...newBuyer, companyId });
             toast.success("Buyer registered successfully");
             setIsDialogOpen(false);
             setNewBuyer({ buyerName: "", country: "", contactPerson: "", email: "", phone: "" });
             fetchBuyers();
-        } catch (error) {
+        } catch {
             toast.error("Failed to register buyer");
         } finally {
             setSubmitting(false);
@@ -83,7 +85,7 @@ export default function BuyerSetupPage() {
     );
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400">
@@ -245,6 +247,16 @@ export default function BuyerSetupPage() {
                     </div>
                 </CardContent>
             </Card>
-        </div>
-    )
+        </>
+    );
+}
+
+export default function BuyerSetupPage() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <BuyerSetupContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
+    );
 }

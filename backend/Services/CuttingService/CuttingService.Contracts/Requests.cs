@@ -13,3 +13,11 @@ public sealed record CreateCuttingWastageRequest(Guid CompanyId, Guid CuttingPla
 public sealed record CreatePanelTransferItemRequest(string? ColorName, string SizeName, int TransferQty);
 public sealed record CreatePanelTransferRequest(Guid CompanyId, Guid OrderId, Guid CuttingPlanId, string TransferNo, DateOnly TransferDate, string? ToDepartment, Guid? CreatedBy, IReadOnlyList<CreatePanelTransferItemRequest> Items);
 public sealed record CuttingReportExportRequest(Guid CompanyId, Guid? OrderId, string ReportType, DateOnly? FromDate, DateOnly? ToDate, string Format);
+public sealed record CreateCuttingBundleRequest(
+    Guid CompanyId, Guid OrderId, Guid CuttingPlanId, Guid? CuttingLayId, Guid? CuttingOutputId,
+    string BundleTag, string SizeName, int PieceCount, int? SerialFrom, int? SerialTo, string? SerialRange,
+    decimal? WeightKg, string? CurrentLocation, string? StyleName, Guid? CreatedBy);
+public sealed record UpdateCuttingBundleRequest(
+    string SizeName, int PieceCount, int? SerialFrom, int? SerialTo, string? SerialRange,
+    decimal? WeightKg, string? CurrentLocation, Guid? UpdatedBy);
+public sealed record UpdateBundleStatusRequest(string Status, string? CurrentLocation, Guid? UpdatedBy);

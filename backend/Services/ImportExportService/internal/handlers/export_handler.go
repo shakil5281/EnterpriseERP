@@ -43,7 +43,7 @@ func (h *ExportHandler) Create(c *gin.Context) {
 		req.Format = "Excel"
 	}
 	module := c.Param("module")
-	job, fullPath, err := h.Svc.Export(companyID, middleware.UserID(c), module, req.Format, req.Filters)
+	job, fullPath, err := h.Svc.Export(companyID, middleware.UserID(c), module, req.Format, req.Filters, middleware.BearerToken(c))
 	if err != nil {
 		response.FailWithStatus(c, http.StatusBadRequest, response.Err("EXPORT", err.Error()))
 		return

@@ -5,6 +5,10 @@ export interface HrPagedResult<T> {
   page: number;
   pageSize: number;
   totalCount: number;
+  totalPages: number;
+  hasNextPage?: boolean;
+  hasPreviousPage?: boolean;
+  getAll?: boolean;
 }
 
 export interface HrEmployeeListItem {
@@ -165,8 +169,14 @@ export interface HrStatusHistoryItem {
 
 export interface HrTransferItem {
   id: string;
-  employeeId: string;
-  employeeID: string;
+  /** Employee entity Guid from API */
+  employeeEntityId: string;
+  /** Business employee code (e.g. EMP-0042) */
+  employeeCode: string;
+  /** @deprecated use employeeEntityId */
+  employeeId?: string;
+  /** @deprecated use employeeCode */
+  employeeID?: string;
   fullName: string;
   fromDepartmentId?: string | null;
   fromDepartmentName?: string | null;

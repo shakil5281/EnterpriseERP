@@ -27,7 +27,7 @@ import { toast } from "sonner"
 import Link from "next/link"
 import { Label } from "@/components/ui/label"
 
-import { companyService } from "@/lib/services/company"
+import { ManagementLegacyCompanySelect } from "@/components/hr/management-legacy-company-select"
 
 const MONTHS = [
     { label: "January", value: 1 },
@@ -50,7 +50,6 @@ export default function MonthlySalarySheetPage() {
     const [year, setYear] = React.useState(new Date().getFullYear())
     const [month, setMonth] = React.useState(new Date().getMonth() + 1)
     const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>("all")
-    const [companies, setCompanies] = React.useState<any[]>([])
     const [departmentId, setDepartmentId] = React.useState("all")
     const [searchTerm, setSearchTerm] = React.useState("")
 
@@ -61,7 +60,6 @@ export default function MonthlySalarySheetPage() {
     const [hasSearched, setHasSearched] = React.useState(false)
 
     React.useEffect(() => {
-        companyService.getAll().then(setCompanies)
         handleSearch()
     }, [])
 
@@ -287,10 +285,11 @@ export default function MonthlySalarySheetPage() {
                             </div>
                             <div className="space-y-1.5">
                                 <Label className="text-xs font-semibold text-muted-foreground">Company</Label>
-                                <NativeSelect value={selectedCompanyId} onChange={(e) => setSelectedCompanyId(e.target.value)} className="h-9">
-                                    <option value="all">All Companies</option>
-                                    {companies.map(c => <option key={c.id} value={c.id}>{c.nameEn}</option>)}
-                                </NativeSelect>
+                                <ManagementLegacyCompanySelect
+                                    value={selectedCompanyId}
+                                    onChange={setSelectedCompanyId}
+                                    className="h-9"
+                                />
                             </div>
                             <div className="space-y-1.5">
                                 <Label className="text-xs font-semibold text-muted-foreground">Department</Label>

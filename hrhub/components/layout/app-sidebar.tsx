@@ -189,12 +189,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       </Avatar>
                     </div>
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold uppercase tracking-wider text-primary">
+                      <span className="truncate font-semibold uppercase tracking-wider text-sidebar-foreground dark:text-white">
                         HR Hub
                       </span>
-                      <span className="truncate text-xs opacity-60">{selectedModuleName}</span>
+                      <span className="truncate text-xs text-sidebar-foreground/70 dark:text-white">
+                        {selectedModuleName}
+                      </span>
                     </div>
-                    <IconSelector className="ml-auto" />
+                    <IconSelector className="ml-auto dark:text-white" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -237,10 +239,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   </Avatar>
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold uppercase tracking-wider text-primary">
+                  <span className="truncate font-semibold uppercase tracking-wider text-sidebar-foreground dark:text-white">
                     HR Hub
                   </span>
-                  <span className="truncate text-xs opacity-60">{selectedModuleName}</span>
+                  <span className="truncate text-xs text-sidebar-foreground/70 dark:text-white">
+                    {selectedModuleName}
+                  </span>
                 </div>
               </SidebarMenuButton>
             )}

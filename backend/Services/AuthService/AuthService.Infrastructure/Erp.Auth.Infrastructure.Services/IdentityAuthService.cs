@@ -39,7 +39,8 @@ public sealed class IdentityAuthService(
 	IHostEnvironment environment,
 	ILogger<IdentityAuthService> logger,
 	IPendingTwoFactorLoginTokenIssuer pendingTwoFactor,
-	ITwoFactorAuthenticatorService twoFactor) : IAuthService
+	ITwoFactorAuthenticatorService twoFactor,
+	IUserProfilePictureStorage profilePictures) : IAuthService
 {
 	private readonly JwtOptions _jwt = jwtOptions.Value;
 
@@ -261,11 +262,140 @@ public sealed class IdentityAuthService(
 		{
 			return (Response: null, Errors: new string[1] { "User not found." });
 		}
+
+		return (await BuildProfileResponseAsync(user, cancellationToken), Array.Empty<string>());
+	}
+
+	public async Task<(UserProfileResponse? Response, IReadOnlyList<string> Errors)> UpdateProfileAsync(
+		Guid userId,
+		UpdateUserProfileRequest request,
+		CancellationToken cancellationToken = default)
+	{
+		AppUser? user = await userManager.FindByIdAsync(userId.ToString());
+		if (user?.IsDeleted ?? true)
+		{
+			return (null, new[] { "User not found." });
+		}
+
+		var normalizedEmail = request.Email.Trim();
+		var existingByEmail = await userManager.FindByEmailAsync(normalizedEmail);
+		if (existingByEmail is not null && existingByEmail.Id != user.Id)
+		{
+			return (null, new[] { "Email is already in use." });
+		}
+
+		user.FullName = request.FullName.Trim();
+		user.Country = string.IsNullOrWhiteSpace(request.Country) ? null : request.Country.Trim();
+		user.City = string.IsNullOrWhiteSpace(request.City) ? null : request.City.Trim();
+		user.Bio = string.IsNullOrWhiteSpace(request.Bio) ? null : request.Bio.Trim();
+		user.PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+		user.UpdatedAt = DateTimeOffset.UtcNow;
+		user.UpdatedBy = userId;
+
+		if (!string.Equals(user.Email, normalizedEmail, StringComparison.OrdinalIgnoreCase))
+		{
+			var emailResult = await userManager.SetEmailAsync(user, normalizedEmail);
+			if (!emailResult.Succeeded)
+			{
+				return (null, emailResult.Errors.Select(e => e.Description).ToArray());
+			}
+		}
+
+		var updateResult = await userManager.UpdateAsync(user);
+		if (!updateResult.Succeeded)
+		{
+			return (null, updateResult.Errors.Select(e => e.Description).ToArray());
+		}
+
+		return (await BuildProfileResponseAsync(user, cancellationToken), Array.Empty<string>());
+	}
+
+	public async Task<(bool Ok, IReadOnlyList<string> Errors)> ChangePasswordAsync(
+		Guid userId,
+		ChangePasswordRequest request,
+		CancellationToken cancellationToken = default)
+	{
+		AppUser? user = await userManager.FindByIdAsync(userId.ToString());
+		if (user?.IsDeleted ?? true)
+		{
+			return (false, new[] { "User not found." });
+		}
+
+		if (!await userManager.CheckPasswordAsync(user, request.CurrentPassword))
+		{
+			return (false, new[] { "Current password is incorrect." });
+		}
+
+		var result = await userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+		if (!result.Succeeded)
+		{
+			return (false, result.Errors.Select(e => e.Description).ToArray());
+		}
+
+		user.UpdatedAt = DateTimeOffset.UtcNow;
+		user.UpdatedBy = userId;
+		await userManager.UpdateAsync(user);
+		return (true, Array.Empty<string>());
+	}
+
+	public async Task<(UserProfileResponse? Response, IReadOnlyList<string> Errors)> UpdateProfilePictureAsync(
+		Guid userId,
+		Stream fileStream,
+		string contentType,
+		CancellationToken cancellationToken = default)
+	{
+		AppUser? user = await userManager.FindByIdAsync(userId.ToString());
+		if (user?.IsDeleted ?? true)
+		{
+			return (null, new[] { "User not found." });
+		}
+
+		try
+		{
+			await profilePictures.DeleteIfExistsAsync(user.ProfilePictureUrl, cancellationToken);
+			var relativeUrl = await profilePictures.SaveAsync(userId, fileStream, contentType, cancellationToken);
+			user.ProfilePictureUrl = relativeUrl;
+			user.UpdatedAt = DateTimeOffset.UtcNow;
+			user.UpdatedBy = userId;
+			var updateResult = await userManager.UpdateAsync(user);
+			if (!updateResult.Succeeded)
+			{
+				return (null, updateResult.Errors.Select(e => e.Description).ToArray());
+			}
+
+			return (await BuildProfileResponseAsync(user, cancellationToken), Array.Empty<string>());
+		}
+		catch (InvalidOperationException ex)
+		{
+			return (null, new[] { ex.Message });
+		}
+	}
+
+	public async Task<(UserProfileResponse? Response, IReadOnlyList<string> Errors)> RemoveProfilePictureAsync(
+		Guid userId,
+		CancellationToken cancellationToken = default)
+	{
+		AppUser? user = await userManager.FindByIdAsync(userId.ToString());
+		if (user?.IsDeleted ?? true)
+		{
+			return (null, new[] { "User not found." });
+		}
+
+		await profilePictures.DeleteIfExistsAsync(user.ProfilePictureUrl, cancellationToken);
+		user.ProfilePictureUrl = null;
+		user.UpdatedAt = DateTimeOffset.UtcNow;
+		user.UpdatedBy = userId;
+		await userManager.UpdateAsync(user);
+		return (await BuildProfileResponseAsync(user, cancellationToken), Array.Empty<string>());
+	}
+
+	private async Task<UserProfileResponse> BuildProfileResponseAsync(AppUser user, CancellationToken cancellationToken)
+	{
 		DateTimeOffset now = DateTimeOffset.UtcNow;
 		bool locked = user.LockoutEnd.HasValue && user.LockoutEnd > now;
-		List<string> roles = (await userManager.GetRolesAsync(user)).OrderBy((string x) => x).ToList();
+		List<string> roles = (await userManager.GetRolesAsync(user)).OrderBy(x => x).ToList();
 		IReadOnlyList<string> permissions = await LoadPermissionsForRolesAsync(roles, cancellationToken);
-		var companyRecords = await companyAccessRepository.ListActiveByUserIdAsync(userId, cancellationToken);
+		var companyRecords = await companyAccessRepository.ListActiveByUserIdAsync(user.Id, cancellationToken);
 		List<UserCompanyAccessDto> companyDtos = companyRecords.Select(c => new UserCompanyAccessDto
 		{
 			Id = c.Id,
@@ -273,14 +403,18 @@ public sealed class IdentityAuthService(
 			IsDefaultCompany = c.IsDefaultCompany,
 		}).ToList();
 		var tenant = BuildTenantTokenContext(roles, companyRecords);
-		bool tf = await twoFactor.IsTwoFactorEnabledAsync(userId, cancellationToken);
-		return (Response: new UserProfileResponse
+		bool tf = await twoFactor.IsTwoFactorEnabledAsync(user.Id, cancellationToken);
+		return new UserProfileResponse
 		{
 			UserId = user.Id,
-			Username = (user.UserName ?? string.Empty),
-			Email = (user.Email ?? string.Empty),
+			Username = user.UserName ?? string.Empty,
+			Email = user.Email ?? string.Empty,
 			PhoneNumber = user.PhoneNumber,
 			FullName = user.FullName,
+			ProfilePictureUrl = user.ProfilePictureUrl,
+			Country = user.Country,
+			City = user.City,
+			Bio = user.Bio,
 			IsActive = user.IsActive,
 			Status = user.Status,
 			IsLocked = locked,
@@ -291,7 +425,7 @@ public sealed class IdentityAuthService(
 			CompanyAccess = companyDtos,
 			TenantScope = tenant.TenantScope,
 			DefaultCompanyId = tenant.DefaultCompanyGuid,
-		}, Errors: Array.Empty<string>());
+		};
 	}
 
 	public async Task<(EnableTwoFactorStartResponse? Response, IReadOnlyList<string> Errors)> BeginEnableTwoFactorAsync(Guid userId, CancellationToken cancellationToken = default(CancellationToken))

@@ -9,8 +9,7 @@ import { NativeSelect } from "@/components/ui/native-select"
 import { leaveService } from "@/lib/services/leave"
 import { mergeLeaveTypesWithPolicies } from "@/lib/services/leave-helpers"
 import { toast } from "sonner"
-import { useCompanyContext } from "@/components/providers/company-context"
-import { LeaveCompanyBar } from "@/components/leave/leave-company-bar"
+import { LeaveAdvancedFilter, type LeaveFilterParams } from "@/components/leave/leave-advanced-filter"
 import { LeavePermissionGate } from "@/components/leave/leave-permission-gate"
 import { LeaveBalanceTable } from "@/components/leave/leave-balance-table"
 import {
@@ -19,7 +18,7 @@ import {
 } from "@/components/leave/employee-leave-picker"
 
 export default function EarnLeavePage() {
-    const { activeCompanyId } = useCompanyContext()
+    const [selectedCompanyId, setSelectedCompanyId] = React.useState<string | undefined>()
     const [year, setYear] = React.useState(new Date().getFullYear())
     const [month, setMonth] = React.useState(new Date().getMonth() + 1)
     const [employee, setEmployee] = React.useState<EmployeeLeaveSelection | null>(null)
@@ -29,19 +28,19 @@ export default function EarnLeavePage() {
     const [isLoading, setIsLoading] = React.useState(false)
 
     React.useEffect(() => {
-        if (!activeCompanyId) return
+        if (!selectedCompanyId) return
         Promise.all([
-            leaveService.listLeaveTypes(activeCompanyId),
-            leaveService.listLeavePolicies(activeCompanyId),
+            leaveService.listLeaveTypes(selectedCompanyId),
+            leaveService.listLeavePolicies(selectedCompanyId),
         ]).then(([types, policies]) => {
             const merged = mergeLeaveTypesWithPolicies(types, policies)
             setLeaveTypes(merged.map((x) => ({ id: x.type.id, name: x.type.leaveName })))
             if (merged[0]) setLeaveTypeId(merged[0].type.id)
         })
-    }, [activeCompanyId])
+    }, [selectedCompanyId])
 
     const loadSummary = React.useCallback(async () => {
-        if (!activeCompanyId || !employee?.entityId) {
+        if (!selectedCompanyId || !employee?.entityId) {
             setSummary([])
             return
         }
@@ -49,7 +48,7 @@ export default function EarnLeavePage() {
         try {
             setSummary(
                 await leaveService.getEarnLeaveSummary(employee.entityId, {
-                    companyId: activeCompanyId,
+                    companyId: selectedCompanyId,
                     year,
                 })
             )
@@ -58,17 +57,17 @@ export default function EarnLeavePage() {
         } finally {
             setIsLoading(false)
         }
-    }, [activeCompanyId, employee, year])
+    }, [selectedCompanyId, employee, year])
 
     React.useEffect(() => {
         loadSummary()
     }, [loadSummary])
 
     const handleGenerate = async () => {
-        if (!activeCompanyId || !employee?.entityId || !leaveTypeId) return
+        if (!selectedCompanyId || !employee?.entityId || !leaveTypeId) return
         try {
             const result = await leaveService.generateEarnLeave({
-                companyId: activeCompanyId,
+                companyId: selectedCompanyId,
                 employeeId: employee.entityId,
                 leaveTypeId,
                 yearNo: year,
@@ -86,7 +85,15 @@ export default function EarnLeavePage() {
             <h1 className="text-2xl font-bold flex items-center gap-2">
                 <IconCoin className="size-7" /> Earn Leave
             </h1>
-            <LeaveCompanyBar year={year} onYearChange={setYear} onRefresh={loadSummary} isLoading={isLoading} />
+            <LeaveAdvancedFilter
+                showYear
+                onFilterChange={(filters: LeaveFilterParams) => {
+                    setSelectedCompanyId(filters.companyEntityId)
+                    if (filters.year) setYear(filters.year)
+                }}
+                isLoading={isLoading}
+                initialYear={year}
+            />
             <Card>
                 <CardContent className="pt-6">
                     <EmployeeLeavePicker value={employee} onChange={setEmployee} />

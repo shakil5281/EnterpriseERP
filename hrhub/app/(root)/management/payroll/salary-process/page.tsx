@@ -13,7 +13,7 @@ import { toast } from "sonner"
 import { payrollService } from "@/lib/services/payroll"
 import type { CompanyPayrollPolicySummaryDto } from "@/lib/services/payroll-types"
 import { payrollMonthKey } from "@/lib/payroll-utils"
-import { companyService, type Company } from "@/lib/services/company"
+import { ScopedCompanySelect } from "@/components/hr/scoped-company-select"
 import { useAuth } from "@/components/providers/auth-provider"
 import { getHttpErrorMessage } from "@/lib/api-response"
 
@@ -37,7 +37,6 @@ export default function SalaryProcessPage() {
     const [year, setYear] = React.useState(new Date().getFullYear())
     const [month, setMonth] = React.useState(new Date().getMonth() + 1)
     const [selectedCompanyEntityId, setSelectedCompanyEntityId] = React.useState("")
-    const [companies, setCompanies] = React.useState<Company[]>([])
     const [companyPolicy, setCompanyPolicy] = React.useState<CompanyPayrollPolicySummaryDto | null>(null)
     const [policyLoading, setPolicyLoading] = React.useState(false)
 
@@ -48,13 +47,6 @@ export default function SalaryProcessPage() {
     const [showReprocess, setShowReprocess] = React.useState(false)
     const [monthStatus, setMonthStatus] = React.useState<string | null>(null)
     const [statusLoading, setStatusLoading] = React.useState(false)
-
-    React.useEffect(() => {
-        companyService.getAll().then((list) => {
-            setCompanies(list)
-            setSelectedCompanyEntityId((current) => current || list[0]?.entityId || "")
-        })
-    }, [])
 
     React.useEffect(() => {
         if (!selectedCompanyEntityId) {
@@ -194,17 +186,11 @@ export default function SalaryProcessPage() {
                         </div>
                         <div className="space-y-2 md:col-span-2">
                             <Label>Company</Label>
-                            <NativeSelect
+                            <ScopedCompanySelect
                                 value={selectedCompanyEntityId}
-                                onChange={(e) => setSelectedCompanyEntityId(e.target.value)}
-                            >
-                                <option value="">Select company</option>
-                                {companies.map((c) => (
-                                    <option key={c.entityId} value={c.entityId}>
-                                        {c.companyNameEn}
-                                    </option>
-                                ))}
-                            </NativeSelect>
+                                onChange={(entityId) => setSelectedCompanyEntityId(entityId)}
+                                className="h-10"
+                            />
                         </div>
                     </div>
 

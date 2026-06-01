@@ -6,7 +6,7 @@ public sealed record ApiResponse<T>(bool Success, string? Message, T? Data, IRea
 }
 
 public sealed record StockItemDto(Guid Id, Guid CompanyId, string ItemCode, string ItemName, string UnitName, decimal BalanceQty);
-public sealed record StockTransactionDto(Guid Id, Guid CompanyId, Guid StockItemId, string TransactionType, decimal Quantity, string? ReferenceNo, DateTime TransactionDate);
+public sealed record StockTransactionDto(Guid Id, Guid CompanyId, Guid StockItemId, string ItemCode, string ItemName, string TransactionType, decimal Quantity, string? ReferenceNo, DateTime TransactionDate);
 
 public sealed record ReceiveStockRequest(Guid CompanyId, string ItemCode, string ItemName, string UnitName, decimal Quantity, string? ReferenceNo);
 public sealed record IssueStockRequest(Guid CompanyId, decimal Quantity, string? ReferenceNo);

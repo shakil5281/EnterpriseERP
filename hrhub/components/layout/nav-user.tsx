@@ -7,7 +7,7 @@ import {
   IconNotification,
   IconUserCircle,
 } from "@tabler/icons-react"
-import { useRouter } from "next/navigation"
+import { useAuth } from "@/components/providers/auth-provider"
 
 import {
   Avatar,
@@ -40,7 +40,7 @@ export function NavUser({
   }
 }) {
   const { isMobile, setOpenMobile } = useSidebar()
-  const router = useRouter()
+  const { logout } = useAuth()
 
   const handleMobileClose = () => {
     if (isMobile) {
@@ -108,7 +108,7 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => {
               handleMobileClose()
-              router.push('/login')
+              logout()
             }}>
               <IconLogout />
               Log out

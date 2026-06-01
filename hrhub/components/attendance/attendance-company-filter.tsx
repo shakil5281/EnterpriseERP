@@ -16,10 +16,9 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { companyService, type Company } from "@/lib/services/company";
 import { organogramService, type Department, type Section, type Designation } from "@/lib/services/organogram";
 import { type AttendanceQuery } from "@/lib/services/attendance-api";
-import { useAuth } from "@/components/providers/auth-provider";
+import { useCompanyFilterScope } from "@/hooks/use-company-filter-scope";
 import { cn } from "@/lib/utils";
 
 export interface AttendanceFilterPayload {
@@ -55,11 +54,11 @@ export function AttendanceCompanyFilter({
   showMonth = false,
   isLoading = false,
 }: AttendanceCompanyFilterProps) {
-  const { user, hasAnyRole } = useAuth();
-  const isAdmin = hasAnyRole(["SuperAdmin", "Admin"]);
+  const { companies, isCompanyLocked, defaultCompany, loading: companiesLoading } =
+    useCompanyFilterScope();
+  const isCompanyDisabled = isCompanyLocked;
 
   const [isExpanded, setIsExpanded] = React.useState(true);
-  const [companies, setCompanies] = React.useState<Company[]>([]);
   const [companyEntityId, setCompanyEntityId] = React.useState("");
   const [date, setDate] = React.useState(initialDate ?? format(new Date(), "yyyy-MM-dd"));
   const [startDate, setStartDate] = React.useState(initialStartDate ?? format(new Date(), "yyyy-MM-dd"));
@@ -74,22 +73,10 @@ export function AttendanceCompanyFilter({
   const [departments, setDepartments] = React.useState<Department[]>([]);
   const [sections, setSections] = React.useState<Section[]>([]);
   const [designations, setDesignations] = React.useState<Designation[]>([]);
-  const [isCompanyDisabled, setIsCompanyDisabled] = React.useState(false);
-
   React.useEffect(() => {
-    companyService.getAll().then((rows) => {
-      if (!isAdmin && user?.assignedCompanyIds?.length) {
-        const filtered = rows.filter((c) => user.assignedCompanyIds!.includes(c.entityId));
-        setCompanies(filtered);
-        if (filtered.length === 1) {
-          setCompanyEntityId(filtered[0].entityId);
-          setIsCompanyDisabled(true);
-        }
-      } else {
-        setCompanies(rows);
-      }
-    });
-  }, [user, isAdmin]);
+    if (companiesLoading || !defaultCompany) return;
+    setCompanyEntityId((current) => current || defaultCompany.entityId);
+  }, [companiesLoading, defaultCompany]);
 
   React.useEffect(() => {
     if (!companyEntityId) {

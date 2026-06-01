@@ -26,6 +26,8 @@ export interface ImportJobResult {
   totalRows?: number;
   successRows: number;
   failedRows: number;
+  createdRows?: number;
+  updatedRows?: number;
   errorFilePath?: string;
   createdAt: string;
 }
@@ -107,9 +109,11 @@ export const importExportService = {
   },
 
   confirmImport: async (module: string, sessionId: string): Promise<ImportJobResult> => {
+    const isEmployee = module.toLowerCase() === "employee" || module.toLowerCase() === "employees";
     const response = await api.post<unknown>(
       `${BASE}/import/${encodeURIComponent(module)}/confirm`,
       { sessionId },
+      isEmployee ? { timeout: 30 * 60 * 1000 } : undefined,
     );
     const data = unwrapApiData<ImportJobResult>(response.data);
     return data;
@@ -240,6 +244,29 @@ export const importExportService = {
     return unwrapApiData<ImportJobResult>(response.data);
   },
 
+  /** Poll until job leaves Pending/Processing (large imports). */
+  waitForImportJob: async (
+    id: string,
+    options?: {
+      intervalMs?: number;
+      maxAttempts?: number;
+      onProgress?: (job: ImportJobResult) => void;
+    },
+  ): Promise<ImportJobResult> => {
+    const intervalMs = options?.intervalMs ?? 800;
+    const maxAttempts = options?.maxAttempts ?? 900;
+    for (let i = 0; i < maxAttempts; i++) {
+      const job = await importExportService.getImportJob(id);
+      options?.onProgress?.(job);
+      const status = job.status?.toLowerCase() ?? "";
+      if (status !== "pending" && status !== "processing") {
+        return job;
+      }
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    throw new Error("Import is still processing. Check import jobs later.");
+  },
+
   downloadImportErrorFile: async (jobId: string) => {
     await downloadGet(
       `${BASE}/import-jobs/${jobId}/error-file`,
@@ -282,8 +309,8 @@ export function importJobToEmployeeResult(job: ImportJobResult): {
     successCount: job.successRows,
     errorCount: job.failedRows,
     warningCount: 0,
-    createdCount: job.successRows,
-    updatedCount: 0,
+    createdCount: job.createdRows ?? 0,
+    updatedCount: job.updatedRows ?? 0,
     errors: [],
     warnings: [],
     jobId: job.id,

@@ -84,9 +84,16 @@ export default function DailySummaryPage() {
     const handleExportExcel = async () => {
         setIsExportingExcel(true)
         try {
-            if (activeQuery) await attendanceApi.exportDailySummaryCsv(activeQuery)
+            if (activeQuery) {
+                await attendanceApi.exportReport(
+                    "daily-summary",
+                    activeQuery,
+                    "xlsx",
+                    `daily-summary-${activeQuery.fromDate}`,
+                )
+            }
             toast.success("Excel exported successfully")
-        } catch (error) {
+        } catch {
             toast.error("Failed to export Excel")
         } finally {
             setIsExportingExcel(false)
@@ -96,9 +103,16 @@ export default function DailySummaryPage() {
     const handleExportPdf = async () => {
         setIsExportingPdf(true)
         try {
-            if (activeQuery) await attendanceApi.exportDailySummaryCsv(activeQuery)
+            if (activeQuery) {
+                await attendanceApi.exportReport(
+                    "daily-summary",
+                    activeQuery,
+                    "pdf",
+                    `daily-summary-${activeQuery.fromDate}`,
+                )
+            }
             toast.success("PDF exported successfully")
-        } catch (error) {
+        } catch {
             toast.error("Failed to export PDF")
         } finally {
             setIsExportingPdf(false)
@@ -108,9 +122,16 @@ export default function DailySummaryPage() {
     const handleExportExcelAll = async () => {
         if (!date) return
         try {
-            if (activeQuery) await attendanceApi.exportDailySummaryCsv(activeQuery)
+            if (activeQuery) {
+                await attendanceApi.exportReport(
+                    "daily-summary",
+                    activeQuery,
+                    "xlsx",
+                    `daily-summary-all-${activeQuery.fromDate}`,
+                )
+            }
             toast.success("Full Excel exported successfully")
-        } catch (error) {
+        } catch {
             toast.error("Failed to export full Excel")
         }
     }

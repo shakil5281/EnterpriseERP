@@ -1,12 +1,15 @@
 "use client"
 
 import * as React from "react"
-import { IconPhoto, IconUpload } from "@tabler/icons-react"
+import { IconLoader, IconPhoto, IconTrash, IconUpload } from "@tabler/icons-react"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { employeeFormFieldsCn } from "@/components/hr/employee-form-fields"
 import { getImageUrl } from "@/lib/utils"
+import { employeeService } from "@/lib/services/employee"
+import { optimizeImageFile } from "@/lib/image-upload"
+import { toast } from "sonner"
 
 const MAX_URL_LENGTH = 500
 
@@ -16,6 +19,9 @@ type Props = {
   value: string
   onChange: (url: string) => void
   variant?: "profile" | "signature"
+  /** When set, enables server upload (edit mode). */
+  employeeEntityId?: string
+  companyId?: number
 }
 
 export function EmployeeImageField({
@@ -24,9 +30,14 @@ export function EmployeeImageField({
   value,
   onChange,
   variant = "profile",
+  employeeEntityId,
+  companyId,
 }: Props) {
   const fileRef = React.useRef<HTMLInputElement>(null)
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null)
+  const [isUploading, setIsUploading] = React.useState(false)
+
+  const canUpload = Boolean(employeeEntityId)
 
   React.useEffect(() => {
     return () => {
@@ -36,9 +47,71 @@ export function EmployeeImageField({
 
   const displayUrl = previewUrl || (value ? getImageUrl(value) : null)
 
-  const handleFile = (file: File | undefined) => {
+  const handleUpload = async (file: File) => {
+    if (!employeeEntityId) return
+    if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl)
+    setPreviewUrl(URL.createObjectURL(file))
+    setIsUploading(true)
+    try {
+      const optimized = await optimizeImageFile(
+        file,
+        variant === "profile" ? "avatar" : "signature",
+      )
+      const result =
+        variant === "profile"
+          ? await employeeService.uploadProfilePicture(employeeEntityId, optimized, companyId)
+          : await employeeService.uploadSignature(employeeEntityId, optimized, companyId)
+      if (result.success && result.imageUrl) {
+        onChange(result.imageUrl)
+        setPreviewUrl(null)
+        toast.success(variant === "profile" ? "Profile picture saved" : "Signature saved")
+      } else {
+        toast.error(result.message)
+      }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to process image.")
+      setPreviewUrl(null)
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const handleRemove = async () => {
+    if (!employeeEntityId) {
+      onChange("")
+      if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl)
+      setPreviewUrl(null)
+      return
+    }
+    setIsUploading(true)
+    try {
+      const result =
+        variant === "profile"
+          ? await employeeService.removeProfilePicture(employeeEntityId, companyId)
+          : await employeeService.removeSignature(employeeEntityId, companyId)
+      if (result.success) {
+        onChange("")
+        if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl)
+        setPreviewUrl(null)
+        toast.success(variant === "profile" ? "Profile picture removed" : "Signature removed")
+      } else {
+        toast.error(result.message)
+      }
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const handleFileInput = (file: File | undefined) => {
     if (!file) return
-    if (!file.type.startsWith("image/")) return
+    if (!file.type.startsWith("image/")) {
+      toast.error("Use JPG, PNG, or WebP")
+      return
+    }
+    if (canUpload) {
+      void handleUpload(file)
+      return
+    }
     if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl)
     setPreviewUrl(URL.createObjectURL(file))
   }
@@ -65,37 +138,66 @@ export function EmployeeImageField({
         )}
       </div>
 
-      <div className="grid gap-2 max-w-md">
-        <Label>Image URL</Label>
-        <Input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="https://example.com/photo.jpg"
-          maxLength={MAX_URL_LENGTH}
-        />
-        <p className="text-[10px] text-muted-foreground">
-          Paste a hosted image URL (max {MAX_URL_LENGTH} characters).
-        </p>
-      </div>
-
       <div className="flex flex-wrap gap-2">
         <input
           ref={fileRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           className="hidden"
-          onChange={(e) => handleFile(e.target.files?.[0])}
+          onChange={(e) => {
+            handleFileInput(e.target.files?.[0])
+            e.target.value = ""
+          }}
         />
-        <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => fileRef.current?.click()}>
-          <IconUpload className="size-4" />
-          Preview from file
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          disabled={isUploading}
+          onClick={() => fileRef.current?.click()}
+        >
+          {isUploading ? (
+            <IconLoader className="size-4 animate-spin" />
+          ) : (
+            <IconUpload className="size-4" />
+          )}
+          {canUpload ? "Upload image" : "Preview from file"}
         </Button>
-        {value ? (
-          <Button type="button" variant="ghost" size="sm" onClick={() => onChange("")}>
-            Clear URL
+        {(value || previewUrl) && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="gap-2"
+            disabled={isUploading}
+            onClick={() => void handleRemove()}
+          >
+            <IconTrash className="size-4" />
+            Remove
           </Button>
-        ) : null}
+        )}
       </div>
+
+      {!canUpload ? (
+        <div className="grid gap-2 max-w-md">
+          <Label>Image URL</Label>
+          <Input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="https://example.com/photo.jpg"
+            maxLength={MAX_URL_LENGTH}
+          />
+          <p className="text-[10px] text-muted-foreground">
+            Save the employee first to upload files, or paste a hosted URL (max {MAX_URL_LENGTH}{" "}
+            characters).
+          </p>
+        </div>
+      ) : (
+        <p className="text-[10px] text-muted-foreground max-w-md">
+          JPG, PNG, or WebP up to 5 MB. Images are resized and compressed before upload.
+        </p>
+      )}
     </div>
   )
 }

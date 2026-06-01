@@ -16,6 +16,8 @@ public sealed record UpdateLeaveTypeCommand(Guid Id, UpdateLeaveTypeRequest Requ
 
 public sealed record SetLeaveTypeActiveCommand(Guid Id, bool IsActive, Guid? UpdatedBy) : IRequest<LeaveTypeDto>;
 
+public sealed record DeleteLeaveTypeCommand(Guid Id, Guid? DeletedBy) : IRequest<Unit>;
+
 public sealed record GetLeaveTypesQuery(Guid CompanyId) : IRequest<IReadOnlyList<LeaveTypeDto>>;
 
 public sealed record GetLeaveTypeByIdQuery(Guid Id) : IRequest<LeaveTypeDto?>;
@@ -106,6 +108,51 @@ public sealed class SetLeaveTypeActiveCommandHandler(ILeaveUnitOfWork uow, IMapp
         await uow.SaveChangesAsync(cancellationToken);
         await cache.RemoveByPrefixAsync($"leaveTypes:{entity.CompanyId}", cancellationToken);
         return mapper.Map<LeaveTypeDto>(entity);
+    }
+}
+
+public sealed class DeleteLeaveTypeCommandHandler(ILeaveUnitOfWork uow, ILeaveAuditService audit, ILeaveCache cache)
+    : IRequestHandler<DeleteLeaveTypeCommand, Unit>
+{
+    public async Task<Unit> Handle(DeleteLeaveTypeCommand request, CancellationToken cancellationToken)
+    {
+        var entity = await uow.LeaveTypes.GetByIdAsync(request.Id, cancellationToken)
+                     ?? throw new LeaveBusinessException("Leave type not found.");
+
+        var usage = await uow.LeaveTypes.GetUsageCountsAsync(request.Id, cancellationToken);
+        if (usage.Applications > 0 || usage.Balances > 0 || usage.Encashments > 0 || usage.EarnPolicies > 0)
+        {
+            var parts = new List<string>();
+            if (usage.Applications > 0)
+            {
+                parts.Add($"{usage.Applications} application(s)");
+            }
+
+            if (usage.Balances > 0)
+            {
+                parts.Add($"{usage.Balances} balance row(s)");
+            }
+
+            if (usage.Encashments > 0)
+            {
+                parts.Add($"{usage.Encashments} encashment(s)");
+            }
+
+            if (usage.EarnPolicies > 0)
+            {
+                parts.Add($"{usage.EarnPolicies} earn-leave policy row(s)");
+            }
+
+            throw new LeaveBusinessException(
+                $"Cannot delete leave type: {string.Join(", ", parts)} exist. Deactivate instead.");
+        }
+
+        var companyId = entity.CompanyId;
+        uow.LeaveTypes.Remove(entity);
+        await audit.WriteAsync(companyId, request.DeletedBy, "LeaveTypeDeleted", nameof(LeaveType), entity.Id, null, cancellationToken);
+        await uow.SaveChangesAsync(cancellationToken);
+        await cache.RemoveByPrefixAsync($"leaveTypes:{companyId}", cancellationToken);
+        return Unit.Value;
     }
 }
 

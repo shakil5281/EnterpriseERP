@@ -11,6 +11,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="Templates\company-organogram-import-demo.xlsx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\BuildingBlocks\Erp.BuildingBlocks.Hosting\Erp.BuildingBlocks.Hosting.csproj" />
     <ProjectReference Include="..\BuildingBlocks\CommonSecurity\Erp.BuildingBlocks.CommonSecurity.csproj" />
   </ItemGroup>
@@ -22,6 +28,7 @@
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.3.1" />
+    <PackageReference Include="ClosedXML" Version="0.104.2" />
     <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
     <PackageReference Include="Asp.Versioning.Mvc" Version="8.1.0" />
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="8.1.0" />
@@ -35,7 +42,7 @@
     <ProjectReference Include="..\Services\LeaveService\LeaveService.Api\LeaveService.Api.csproj" />
     <ProjectReference Include="..\Services\ShiftService\ShiftService.Api\ShiftService.Api.csproj" />
     <ProjectReference Include="..\Services\PayrollService\PayrollService.Api\PayrollService.Api.csproj" />
-    <ProjectReference Include="..\Services\NotificationService\NotificationService.Api\NotificationService.Api.csproj" />
+
     <ProjectReference Include="..\Services\FinishingService\FinishingService.API\FinishingService.API.csproj" />
     <ProjectReference Include="..\Services\QualityService\QualityService.API\QualityService.API.csproj" />
     <ProjectReference Include="..\Services\SecurityService\SecurityService.API\SecurityService.API.csproj" />
@@ -48,7 +55,7 @@
     <ProjectReference Include="..\Services\PayrollService\PayrollService.Application\PayrollService.Application.csproj" />
     <ProjectReference Include="..\Services\PayrollService\PayrollService.Infrastructure\PayrollService.Infrastructure.csproj" />
     <ProjectReference Include="..\Services\PayrollService\PayrollService.Domain\PayrollService.Domain.csproj" />
-    <ProjectReference Include="..\Services\NotificationService\NotificationService.Infrastructure\NotificationService.Infrastructure.csproj" />
+
     <ProjectReference Include="..\Services\SecurityService\SecurityService.Infrastructure\SecurityService.Infrastructure.csproj" />
     <ProjectReference Include="..\Services\QualityService\QualityService.Infrastructure\QualityService.Infrastructure.csproj" />
     <ProjectReference Include="..\Services\FinishingService\FinishingService.Infrastructure\FinishingService.Infrastructure.csproj" />

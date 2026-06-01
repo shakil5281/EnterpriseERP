@@ -113,14 +113,14 @@ export interface UserCompanyAccess {
 export const companyService = {
   getPage: async (params: { Page?: number; PageSize?: number } = {}): Promise<PagedResultApi<CompanySummaryApi>> => {
     const response = await api.get<unknown>("companies", {
-      params: { Page: params.Page ?? 1, PageSize: params.PageSize ?? 20 },
+      params: { Page: params.Page ?? 1, PageSize: params.PageSize ?? 50 },
     });
     return unwrapApiData<PagedResultApi<CompanySummaryApi>>(response.data);
   },
 
   getAll: async (): Promise<Company[]> => {
     const response = await api.get<unknown>("companies", {
-      params: { Page: 1, PageSize: 200 },
+      params: { Page: 1, PageSize: 50 },
     });
     const page = unwrapApiData<PagedResultApi<CompanySummaryApi>>(response.data);
     return (page.items ?? []).map(mapSummaryToCompany);
@@ -128,7 +128,7 @@ export const companyService = {
 
   getMine: async (): Promise<Company[]> => {
     const response = await api.get<unknown>("companies/mine", {
-      params: { Page: 1, PageSize: 200 },
+      params: { Page: 1, PageSize: 50 },
     });
     const page = unwrapApiData<PagedResultApi<CompanySummaryApi>>(response.data);
     return (page.items ?? []).map(mapSummaryToCompany);

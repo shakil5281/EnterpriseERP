@@ -18,7 +18,7 @@ builder.Host.UseSerilog((_, cfg) => cfg.WriteTo.Console());
 
 builder.Services.AddShiftApplication();
 builder.Services.AddShiftInfrastructure(builder.Configuration);
-builder.Services.AddScoped<ShiftService.Application.Common.Interfaces.ILeaveCalendarProvider, ShiftService.Infrastructure.Services.NoOpLeaveCalendarProvider>();
+builder.Services.AddShiftLeaveCalendar(builder.Configuration);
 builder.Services.AddControllers().AddJsonOptions(o =>
 {
     o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -74,6 +74,18 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<ShiftDbContext>("shift-db");
 
 var app = builder.Build();
+
+var leaveCalendarLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("ShiftLeaveCalendar");
+if (string.IsNullOrWhiteSpace(app.Configuration.GetConnectionString("LeaveDb")))
+{
+    leaveCalendarLogger.LogWarning(
+        "ConnectionStrings:LeaveDb is not configured. Holidays and weekly offs from Leave will NOT apply during shift evaluation.");
+}
+else
+{
+    leaveCalendarLogger.LogInformation("Leave calendar enabled for shift evaluation (LeaveDb connected).");
+}
+
 app.UseMiddleware<ExceptionMiddleware>();
 app.UseSerilogRequestLogging();
 app.UseSwagger();

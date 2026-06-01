@@ -16,6 +16,8 @@ public sealed class DailyAttendanceProcessOrchestrator(
     IEmployeeDirectory employeeDirectory,
     IPunchCompanyIdResolver punchCompanyIdResolver) : IDailyAttendanceProcessOrchestrator
 {
+    private const int SqlParameterChunkSize = 1000;
+
     public async Task<ProcessDailyAttendanceResult> ProcessDayAsync(
         Guid companyId,
         DateTime date,
@@ -74,6 +76,36 @@ public sealed class DailyAttendanceProcessOrchestrator(
             .GroupBy(p => p.PunchNumber)
             .ToDictionary(g => g.Key, g => g.ToList());
 
+        var employeePlans = await BuildEmployeePlansAsync(
+            companyId,
+            processDate,
+            employees,
+            punchesByNumber,
+            cancellationToken);
+
+        var employeeIds = employeePlans
+            .Select(p => p.Employee.Id)
+            .ToList();
+
+        var existingAttendances = await GetCurrentAttendancesAsync(
+            companyId,
+            processDate,
+            employeeIds,
+            cancellationToken);
+
+        var claimedPunchIdsByEmployee = await GetClaimedPunchIdsByEmployeeAsync(
+            companyId,
+            processDate,
+            employeePlans,
+            cancellationToken);
+
+        var existingDeviceLogs = await GetExistingDeviceLogsAsync(
+            companyId,
+            employeeIds,
+            employeePlans.Min(p => p.Evaluation.PunchWindowStart),
+            employeePlans.Max(p => p.Evaluation.PunchWindowEnd),
+            cancellationToken);
+
         var createdCount = 0;
         var updatedCount = 0;
         var skippedLockedCount = 0;
@@ -81,33 +113,13 @@ public sealed class DailyAttendanceProcessOrchestrator(
         var absentCount = 0;
         var lateCount = 0;
 
-        foreach (var employee in employees)
+        foreach (var plan in employeePlans)
         {
-            punchesByNumber.TryGetValue(employee.PunchNumber, out var dayPunchRows);
-            dayPunchRows ??= [];
-
-            var evaluation = ShiftEvaluationNormalizer.Normalize(
-                await shiftClient.GetShiftEvaluationAsync(
-                        companyId,
-                        employee.Id,
-                        processDate,
-                        cancellationToken)
-                    ?? ShiftEvaluationFallback.Create(companyId, employee.Id, processDate));
-
-            dayPunchRows = await ExcludeNextDayTemporaryPunchesAsync(
-                companyId,
-                employee.Id,
-                processDate,
-                evaluation,
-                dayPunchRows,
-                cancellationToken);
-
-            var claimedPunchIds = await GetClaimedPunchIdsAsync(
-                companyId,
-                employee.Id,
-                processDate,
-                dayPunchRows,
-                cancellationToken);
+            var employee = plan.Employee;
+            var evaluation = plan.Evaluation;
+            var dayPunchRows = plan.PunchRows;
+            claimedPunchIdsByEmployee.TryGetValue(employee.Id, out var claimedPunchIds);
+            claimedPunchIds ??= [];
 
             dayPunchRows = dayPunchRows
                 .Where(p => p.PunchTime >= evaluation.PunchWindowStart && p.PunchTime < evaluation.PunchWindowEnd)
@@ -115,12 +127,7 @@ public sealed class DailyAttendanceProcessOrchestrator(
                 .OrderBy(p => p.PunchTime)
                 .ToList();
 
-            var attendance = await db.DailyAttendances
-                .FirstOrDefaultAsync(
-                    a => a.CompanyId == companyId
-                        && a.EmployeeId == employee.Id
-                        && a.AttendanceDate.Date == processDate,
-                    cancellationToken);
+            existingAttendances.TryGetValue(employee.Id, out var attendance);
 
             if (attendance is { IsPayrollLocked: true } or { IsApproved: true })
             {
@@ -133,6 +140,7 @@ public sealed class DailyAttendanceProcessOrchestrator(
                 .ToList();
 
             var isNew = false;
+            AttendanceSnapshot? before = null;
             if (attendance is null)
             {
                 isNew = true;
@@ -149,9 +157,9 @@ public sealed class DailyAttendanceProcessOrchestrator(
             }
             else
             {
+                before = AttendanceSnapshot.Create(attendance);
                 attendance.PunchNumber = employee.PunchNumber;
                 attendance.EmployeeID = employee.EmployeeID;
-                attendance.UpdatedAt = BusinessTime.NowOffset;
             }
 
             processingService.Process(attendance, punchInputs, evaluation, employee.IsOtEnabled);
@@ -161,18 +169,23 @@ public sealed class DailyAttendanceProcessOrchestrator(
                 db.DailyAttendances.Add(attendance);
                 createdCount++;
             }
-            else
+            else if (before is not null && before.HasChanged(attendance))
             {
+                attendance.UpdatedAt = BusinessTime.NowOffset;
                 updatedCount++;
             }
+            else
+            {
+                MarkUnchanged(attendance);
+            }
 
-            await SyncDeviceLogsInWindowAsync(
+            SyncDeviceLogsInWindow(
                 companyId,
                 employee,
                 evaluation.PunchWindowStart,
                 evaluation.PunchWindowEnd,
                 dayPunchRows,
-                cancellationToken);
+                existingDeviceLogs);
 
             switch (attendance.Status)
             {
@@ -204,13 +217,204 @@ public sealed class DailyAttendanceProcessOrchestrator(
             skippedLockedCount);
     }
 
-    private async Task<List<PunchRecordRow>> ExcludeNextDayTemporaryPunchesAsync(
+    private async Task<IReadOnlyList<EmployeeProcessPlan>> BuildEmployeePlansAsync(
         Guid companyId,
-        Guid employeeId,
+        DateTime processDate,
+        IReadOnlyList<EmployeeDirectoryEntry> employees,
+        IReadOnlyDictionary<int, List<PunchRecordRow>> punchesByNumber,
+        CancellationToken cancellationToken)
+    {
+        var plans = new EmployeeProcessPlan[employees.Count];
+
+        var employeeIds = employees.Select(e => e.Id).ToList();
+        var evaluations = await GetEvaluationsByEmployeeAsync(
+            companyId,
+            processDate,
+            employeeIds,
+            cancellationToken);
+
+        var nextDayCandidates = evaluations
+            .Where(kv => IsGeneralDutyDayShift(kv.Value)
+                && kv.Value.PunchWindowEnd.Date > processDate.Date
+                && !string.Equals(kv.Value.AssignmentSource, "Temporary", StringComparison.OrdinalIgnoreCase))
+            .Select(kv => kv.Key)
+            .ToList();
+
+        var nextDayEvaluations = nextDayCandidates.Count == 0
+            ? new Dictionary<Guid, ShiftEvaluationDto>()
+            : await GetEvaluationsByEmployeeAsync(
+                companyId,
+                processDate.AddDays(1),
+                nextDayCandidates,
+                cancellationToken);
+
+        for (var index = 0; index < employees.Count; index++)
+        {
+            var employee = employees[index];
+            punchesByNumber.TryGetValue(employee.PunchNumber, out var dayPunchRows);
+            dayPunchRows = dayPunchRows is null ? [] : [.. dayPunchRows];
+
+            if (!evaluations.TryGetValue(employee.Id, out var evaluation))
+            {
+                evaluation = ShiftEvaluationFallback.Create(companyId, employee.Id, processDate);
+            }
+
+            nextDayEvaluations.TryGetValue(employee.Id, out var nextEvaluation);
+            dayPunchRows = ExcludeNextDayTemporaryPunches(
+                processDate,
+                evaluation,
+                nextEvaluation,
+                dayPunchRows);
+
+            plans[index] = new EmployeeProcessPlan(employee, evaluation, dayPunchRows);
+        }
+
+        return plans;
+    }
+
+    private async Task<Dictionary<Guid, ShiftEvaluationDto>> GetEvaluationsByEmployeeAsync(
+        Guid companyId,
+        DateTime processDate,
+        IReadOnlyCollection<Guid> employeeIds,
+        CancellationToken cancellationToken)
+    {
+        var rows = await shiftClient.GetShiftEvaluationsAsync(
+            companyId,
+            employeeIds,
+            processDate,
+            cancellationToken);
+
+        if (rows.Count == 0)
+        {
+            return [];
+        }
+
+        return rows
+            .Select(ShiftEvaluationNormalizer.Normalize)
+            .GroupBy(e => e.EmployeeId)
+            .ToDictionary(g => g.Key, g => g.First());
+    }
+
+    private async Task<Dictionary<Guid, DailyAttendance>> GetCurrentAttendancesAsync(
+        Guid companyId,
+        DateTime processDate,
+        IReadOnlyList<Guid> employeeIds,
+        CancellationToken cancellationToken)
+    {
+        var attendances = new Dictionary<Guid, DailyAttendance>();
+        foreach (var chunk in employeeIds.Chunk(SqlParameterChunkSize))
+        {
+            var chunkAttendances = await db.DailyAttendances
+                .Where(a => a.CompanyId == companyId
+                    && a.AttendanceDate == processDate
+                    && chunk.Contains(a.EmployeeId))
+                .ToListAsync(cancellationToken);
+
+            foreach (var attendance in chunkAttendances)
+            {
+                attendances[attendance.EmployeeId] = attendance;
+            }
+        }
+
+        return attendances;
+    }
+
+    private async Task<Dictionary<Guid, HashSet<Guid>>> GetClaimedPunchIdsByEmployeeAsync(
+        Guid companyId,
+        DateTime processDate,
+        IReadOnlyList<EmployeeProcessPlan> employeePlans,
+        CancellationToken cancellationToken)
+    {
+        var candidateIds = employeePlans
+            .SelectMany(p => p.PunchRows)
+            .Select(p => p.Id)
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        if (candidateIds.Count == 0)
+        {
+            return [];
+        }
+
+        var claimsByEmployee = new Dictionary<Guid, HashSet<Guid>>();
+        foreach (var chunk in candidateIds.Chunk(SqlParameterChunkSize))
+        {
+            var existingClaims = await db.DailyAttendances
+                .AsNoTracking()
+                .Where(a => a.CompanyId == companyId
+                    && a.AttendanceDate != processDate
+                    && ((a.InPunchId.HasValue && chunk.Contains(a.InPunchId.Value))
+                        || (a.OutPunchId.HasValue && chunk.Contains(a.OutPunchId.Value))))
+                .Select(a => new { a.EmployeeId, a.InPunchId, a.OutPunchId })
+                .ToListAsync(cancellationToken);
+
+            foreach (var claim in existingClaims)
+            {
+                if (!claimsByEmployee.TryGetValue(claim.EmployeeId, out var claimedPunchIds))
+                {
+                    claimedPunchIds = [];
+                    claimsByEmployee[claim.EmployeeId] = claimedPunchIds;
+                }
+
+                if (claim.InPunchId.HasValue)
+                {
+                    claimedPunchIds.Add(claim.InPunchId.Value);
+                }
+
+                if (claim.OutPunchId.HasValue)
+                {
+                    claimedPunchIds.Add(claim.OutPunchId.Value);
+                }
+            }
+        }
+
+        return claimsByEmployee;
+    }
+
+    private async Task<Dictionary<Guid, List<DeviceLog>>> GetExistingDeviceLogsAsync(
+        Guid companyId,
+        IReadOnlyList<Guid> employeeIds,
+        DateTime windowStart,
+        DateTime windowEnd,
+        CancellationToken cancellationToken)
+    {
+        var logsByEmployee = new Dictionary<Guid, List<DeviceLog>>();
+        foreach (var chunk in employeeIds.Chunk(SqlParameterChunkSize))
+        {
+            var logs = await db.DeviceLogs
+                .Where(l => l.CompanyId == companyId
+                    && l.EmployeeId.HasValue
+                    && chunk.Contains(l.EmployeeId.Value)
+                    && l.PunchTime >= windowStart
+                    && l.PunchTime < windowEnd)
+                .ToListAsync(cancellationToken);
+
+            foreach (var log in logs)
+            {
+                if (!log.EmployeeId.HasValue)
+                {
+                    continue;
+                }
+
+                if (!logsByEmployee.TryGetValue(log.EmployeeId.Value, out var employeeLogs))
+                {
+                    employeeLogs = [];
+                    logsByEmployee[log.EmployeeId.Value] = employeeLogs;
+                }
+
+                employeeLogs.Add(log);
+            }
+        }
+
+        return logsByEmployee;
+    }
+
+    private static List<PunchRecordRow> ExcludeNextDayTemporaryPunches(
         DateTime processDate,
         ShiftEvaluationDto evaluation,
-        List<PunchRecordRow> punches,
-        CancellationToken cancellationToken)
+        ShiftEvaluationDto? nextEvaluation,
+        List<PunchRecordRow> punches)
     {
         if (!IsGeneralDutyDayShift(evaluation)
             || evaluation.PunchWindowEnd.Date <= processDate.Date
@@ -218,13 +422,6 @@ public sealed class DailyAttendanceProcessOrchestrator(
         {
             return punches;
         }
-
-        var nextDate = processDate.Date.AddDays(1);
-        var nextEvaluation = await shiftClient.GetShiftEvaluationAsync(
-            companyId,
-            employeeId,
-            nextDate,
-            cancellationToken);
 
         if (nextEvaluation is null)
         {
@@ -246,58 +443,30 @@ public sealed class DailyAttendanceProcessOrchestrator(
         !evaluation.IsCrossDay
         && string.Equals(evaluation.ShiftCategory, "GeneralDuty", StringComparison.OrdinalIgnoreCase);
 
-    private async Task<HashSet<Guid>> GetClaimedPunchIdsAsync(
-        Guid companyId,
-        Guid employeeId,
-        DateTime processDate,
-        List<PunchRecordRow> punches,
-        CancellationToken cancellationToken)
-    {
-        var candidateIds = punches
-            .Select(p => p.Id)
-            .Where(id => id != Guid.Empty)
-            .ToHashSet();
-
-        if (candidateIds.Count == 0)
-        {
-            return [];
-        }
-
-        var existingClaims = await db.DailyAttendances
-            .AsNoTracking()
-            .Where(a => a.CompanyId == companyId
-                && a.EmployeeId == employeeId
-                && a.AttendanceDate != processDate.Date
-                && ((a.InPunchId.HasValue && candidateIds.Contains(a.InPunchId.Value))
-                    || (a.OutPunchId.HasValue && candidateIds.Contains(a.OutPunchId.Value))))
-            .Select(a => new { a.InPunchId, a.OutPunchId })
-            .ToListAsync(cancellationToken);
-
-        return existingClaims
-            .SelectMany(a => new[] { a.InPunchId, a.OutPunchId })
-            .Where(id => id.HasValue)
-            .Select(id => id!.Value)
-            .ToHashSet();
-    }
-
-    private async Task SyncDeviceLogsInWindowAsync(
+    private void SyncDeviceLogsInWindow(
         Guid companyId,
         EmployeeDirectoryEntry employee,
         DateTime windowStart,
         DateTime windowEnd,
         List<PunchRecordRow> dayPunchRows,
-        CancellationToken cancellationToken)
+        IReadOnlyDictionary<Guid, List<DeviceLog>> existingDeviceLogs)
     {
-        var existing = await db.DeviceLogs
-            .Where(l => l.CompanyId == companyId
-                && l.EmployeeId == employee.Id
-                && l.PunchTime >= windowStart
-                && l.PunchTime < windowEnd)
-            .ToListAsync(cancellationToken);
-
-        if (existing.Count > 0)
+        var logsInWindow = new List<DeviceLog>();
+        if (existingDeviceLogs.TryGetValue(employee.Id, out var existing))
         {
-            db.DeviceLogs.RemoveRange(existing);
+            logsInWindow = existing
+                .Where(l => l.PunchTime >= windowStart && l.PunchTime < windowEnd)
+                .ToList();
+        }
+
+        if (AreDeviceLogsInSync(logsInWindow, dayPunchRows, employee))
+        {
+            return;
+        }
+
+        if (logsInWindow.Count > 0)
+        {
+            db.DeviceLogs.RemoveRange(logsInWindow);
         }
 
         foreach (var punch in dayPunchRows)
@@ -315,5 +484,105 @@ public sealed class DailyAttendanceProcessOrchestrator(
                 CreatedAt = BusinessTime.Now,
             });
         }
+    }
+
+    private static bool AreDeviceLogsInSync(
+        IReadOnlyList<DeviceLog> existingLogs,
+        IReadOnlyList<PunchRecordRow> punchRows,
+        EmployeeDirectoryEntry employee)
+    {
+        if (existingLogs.Count != punchRows.Count)
+        {
+            return false;
+        }
+
+        var expected = punchRows
+            .Select(p => new DeviceLogKey(employee.PunchNumber, employee.EmployeeID, p.PunchTime, p.DeviceId ?? string.Empty))
+            .OrderBy(p => p.PunchTime)
+            .ThenBy(p => p.DeviceSerial, StringComparer.Ordinal)
+            .ToList();
+
+        var actual = existingLogs
+            .Select(l => new DeviceLogKey(l.PunchNumber, l.EmployeeID, l.PunchTime, l.DeviceSerial ?? string.Empty))
+            .OrderBy(l => l.PunchTime)
+            .ThenBy(l => l.DeviceSerial, StringComparer.Ordinal)
+            .ToList();
+
+        return actual.SequenceEqual(expected);
+    }
+
+    private void MarkUnchanged(DailyAttendance attendance)
+    {
+        if (db is DbContext efDb)
+        {
+            efDb.Entry(attendance).State = EntityState.Unchanged;
+        }
+    }
+
+    private sealed record EmployeeProcessPlan(
+        EmployeeDirectoryEntry Employee,
+        ShiftEvaluationDto Evaluation,
+        List<PunchRecordRow> PunchRows);
+
+    private sealed record DeviceLogKey(
+        int PunchNumber,
+        string EmployeeID,
+        DateTime PunchTime,
+        string DeviceSerial);
+
+    private sealed record AttendanceSnapshot(
+        int PunchNumber,
+        string EmployeeID,
+        Guid? ShiftId,
+        string? ShiftName,
+        DateTime? InTime,
+        DateTime? OutTime,
+        Guid? InPunchId,
+        Guid? OutPunchId,
+        AttendanceStatus Status,
+        DayType DayType,
+        int LateMinutes,
+        int EarlyOutMinutes,
+        int WorkingMinutes,
+        int BreakMinutes,
+        int OvertimeMinutes,
+        string? Remarks)
+    {
+        public static AttendanceSnapshot Create(DailyAttendance attendance) =>
+            new(
+                attendance.PunchNumber,
+                attendance.EmployeeID,
+                attendance.ShiftId,
+                attendance.ShiftName,
+                attendance.InTime,
+                attendance.OutTime,
+                attendance.InPunchId,
+                attendance.OutPunchId,
+                attendance.Status,
+                attendance.DayType,
+                attendance.LateMinutes,
+                attendance.EarlyOutMinutes,
+                attendance.WorkingMinutes,
+                attendance.BreakMinutes,
+                attendance.OvertimeMinutes,
+                attendance.Remarks);
+
+        public bool HasChanged(DailyAttendance attendance) =>
+            PunchNumber != attendance.PunchNumber
+            || !string.Equals(EmployeeID, attendance.EmployeeID, StringComparison.Ordinal)
+            || ShiftId != attendance.ShiftId
+            || !string.Equals(ShiftName, attendance.ShiftName, StringComparison.Ordinal)
+            || InTime != attendance.InTime
+            || OutTime != attendance.OutTime
+            || InPunchId != attendance.InPunchId
+            || OutPunchId != attendance.OutPunchId
+            || Status != attendance.Status
+            || DayType != attendance.DayType
+            || LateMinutes != attendance.LateMinutes
+            || EarlyOutMinutes != attendance.EarlyOutMinutes
+            || WorkingMinutes != attendance.WorkingMinutes
+            || BreakMinutes != attendance.BreakMinutes
+            || OvertimeMinutes != attendance.OvertimeMinutes
+            || !string.Equals(Remarks, attendance.Remarks, StringComparison.Ordinal);
     }
 }

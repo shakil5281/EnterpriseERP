@@ -1,84 +1,178 @@
-"use client"
+"use client";
 
-import * as React from "react"
+import * as React from "react";
 import {
-    IconFileText,
-    IconSearch,
-    IconDownload,
-    IconCloudUpload,
-    IconCheckbox,
-    IconPrinter
-} from "@tabler/icons-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
-
-const docs = [
-    { id: "EXP-DOC-001", type: "Commercial Invoice", invoice: "INV-2601", buyer: "H&M", date: "2026-04-12", status: "Verified" },
-    { id: "EXP-DOC-002", type: "Packing List", invoice: "INV-2601", buyer: "H&M", date: "2026-04-12", status: "Verified" },
-    { id: "EXP-DOC-003", type: "Bill of Lading", invoice: "INV-2601", buyer: "H&M", date: "2026-04-16", status: "Pending" },
-    { id: "EXP-DOC-004", type: "Certificate of Origin", invoice: "INV-2601", buyer: "H&M", date: "2026-04-10", status: "Verified" },
-]
+  IconFileText,
+  IconRefresh,
+  IconExternalLink,
+} from "@tabler/icons-react";
+import Link from "next/link";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { NativeSelect } from "@/components/ui/native-select";
+import {
+  MerchCompanyGate,
+  MerchPageShell,
+  MerchPageHeader,
+  MerchTableCard,
+  MerchComingSoonPage,
+  MerchEmptyState,
+} from "@/components/merchandising";
+import { merchandisingService } from "@/lib/services/merchandising";
+import type { Order, OrderDocument } from "@/lib/types/merchandising";
 
 export default function ExportDocsPage() {
+  return (
+    <MerchCompanyGate>
+      {(companyId) => <ExportDocsPageContent companyId={companyId} />}
+    </MerchCompanyGate>
+  );
+}
+
+function ExportDocsPageContent({ companyId }: { companyId: string }) {
+  const [orders, setOrders] = React.useState<Order[]>([]);
+  const [selectedOrderId, setSelectedOrderId] = React.useState("");
+  const [documents, setDocuments] = React.useState<OrderDocument[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [docsLoading, setDocsLoading] = React.useState(false);
+  const [apiUnavailable, setApiUnavailable] = React.useState(false);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        const orderRows = await merchandisingService.getOrders(companyId);
+        setOrders(orderRows);
+        if (orderRows.length > 0) {
+          setSelectedOrderId(orderRows[0].id);
+        }
+      } catch (error) {
+        console.error(error);
+        setApiUnavailable(true);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [companyId]);
+
+  const loadDocuments = React.useCallback(async () => {
+    if (!selectedOrderId) return;
+    try {
+      setDocsLoading(true);
+      const docs = await merchandisingService.getOrderDocuments(selectedOrderId, companyId);
+      setDocuments(docs);
+      setApiUnavailable(false);
+    } catch (error) {
+      console.error(error);
+      setApiUnavailable(true);
+      toast.error("Could not load order documents");
+    } finally {
+      setDocsLoading(false);
+    }
+  }, [companyId, selectedOrderId]);
+
+  React.useEffect(() => {
+    if (selectedOrderId) loadDocuments();
+  }, [selectedOrderId, loadDocuments]);
+
+  if (apiUnavailable && !loading && orders.length === 0) {
     return (
-        <div className="flex flex-col gap-6 py-6 px-4 lg:px-6 bg-muted/5 min-h-screen">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/20">
-                        <IconFileText className="size-7 text-primary-foreground" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight">Export Documentation</h1>
-                        <p className="text-sm text-muted-foreground">Manage invoices, packing lists, and certificates.</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm">
-                        <IconCloudUpload className="mr-2 size-4" /> Upload Doc
-                    </Button>
-                    <Button size="sm">Generate Invoice</Button>
-                </div>
-            </div>
+      <MerchComingSoonPage
+        icon={<IconFileText className="size-6" />}
+        title="Export documentation"
+        description="Order document API is not available. This module will link export docs when the service is ready."
+      />
+    );
+  }
 
-            {/* Do Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {docs.map((doc) => (
-                    <Card key={doc.id} className="border-none shadow-sm hover:shadow-md transition-all group">
-                        <CardContent className="p-4 flex gap-4">
-                            <div className="h-12 w-12 rounded-lg bg-red-500/10 flex items-center justify-center text-red-600 shrink-0">
-                                <IconFileText className="size-6" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between mb-1">
-                                    <p className="font-bold text-sm truncate pr-2">{doc.type}</p>
-                                    <Badge variant="outline" className={`text-[10px] h-5 border-none ${doc.status === 'Verified' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'
-                                        }`}>
-                                        {doc.status}
-                                    </Badge>
-                                </div>
-                                <p className="text-xs text-muted-foreground mb-0.5">Ref: <span className="font-medium text-foreground">{doc.invoice}</span></p>
-                                <p className="text-xs text-muted-foreground">Buyer: {doc.buyer}</p>
+  const selectedOrder = orders.find((o) => o.id === selectedOrderId);
 
-                                <div className="flex items-center gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Button variant="secondary" size="sm" className="h-7 text-xs flex-1">View</Button>
-                                    <Button variant="outline" size="icon" className="h-7 w-7"><IconDownload className="size-3" /></Button>
-                                    <Button variant="outline" size="icon" className="h-7 w-7"><IconPrinter className="size-3" /></Button>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))}
+  return (
+    <MerchPageShell>
+      <MerchPageHeader
+        icon={<IconFileText className="size-6" />}
+        title="Export documentation"
+        description="Order-linked shipping and commercial documents"
+        actions={
+          <>
+            <NativeSelect
+              className="h-9 w-52"
+              value={selectedOrderId}
+              onChange={(e) => setSelectedOrderId(e.target.value)}
+            >
+              {orders.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.orderNo}
+                </option>
+              ))}
+            </NativeSelect>
+            <Button variant="outline" size="icon" onClick={loadDocuments} disabled={docsLoading}>
+              <IconRefresh className={docsLoading ? "size-4 animate-spin" : "size-4"} />
+            </Button>
+            {selectedOrderId && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/merchandising/orders/details/${selectedOrderId}`}>
+                  Order details
+                  <IconExternalLink className="size-4 ml-1" />
+                </Link>
+              </Button>
+            )}
+          </>
+        }
+      />
 
-                {/* Upload Placeholder */}
-                <div className="border-2 border-dashed border-muted/50 rounded-xl flex flex-col items-center justify-center p-4 min-h-[140px] text-muted-foreground hover:bg-muted/10 cursor-pointer transition-colors">
-                    <IconCloudUpload className="size-8 mb-2 opacity-50" />
-                    <p className="text-sm font-bold">Upload Document</p>
-                    <p className="text-xs">Drag & drop or click to browse</p>
+      <MerchTableCard isLoading={loading || docsLoading}>
+        {documents.length === 0 && !docsLoading ? (
+          <MerchEmptyState
+            title="No documents"
+            description={
+              selectedOrder
+                ? `No documents registered for ${selectedOrder.orderNo}. Add documents from order details or document archive.`
+                : "Select an order to view documents."
+            }
+            action={
+              selectedOrderId ? (
+                <Button size="sm" asChild>
+                  <Link href={`/merchandising/documents`}>Open document archive</Link>
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+            {documents.map((doc) => (
+              <div
+                key={doc.id}
+                className="rounded-xl border bg-card p-4 flex gap-3 hover:border-primary/30 transition-colors"
+              >
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <IconFileText className="size-5" />
                 </div>
-            </div>
-        </div>
-    )
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-semibold text-sm truncate">{doc.documentType}</p>
+                    <Badge variant="outline" className="text-[9px] shrink-0">
+                      v{doc.version ?? "1"}
+                    </Badge>
+                  </div>
+                  <a
+                    href={doc.fileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-primary underline truncate block mt-1"
+                  >
+                    {doc.fileName}
+                  </a>
+                  <p className="text-[10px] text-muted-foreground mt-2">
+                    Order: {selectedOrder?.orderNo}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </MerchTableCard>
+    </MerchPageShell>
+  );
 }

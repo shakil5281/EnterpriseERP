@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { companyService, type Company } from "@/lib/services/company";
+import { isCompanyFilterLocked, pickDefaultCompany } from "@/lib/company-filter-scope";
 
 import {
   ACTIVE_KEY,
@@ -18,6 +19,9 @@ type CompanyContextValue = {
   setActiveCompanyId: (id: string) => void;
   loading: boolean;
   isSuperAdmin: boolean;
+  isCompanyLocked: boolean;
+  lockedCompany: Company | null;
+  resolveDefaultCompany: () => Company | undefined;
 };
 
 const CompanyContext = React.createContext<CompanyContextValue | undefined>(undefined);
@@ -29,6 +33,23 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = React.useState(true);
 
   const isSuperAdmin = !!user?.roles?.includes("SuperAdmin");
+
+  const isCompanyLocked = React.useMemo(
+    () => isCompanyFilterLocked(companies, isSuperAdmin),
+    [companies, isSuperAdmin],
+  );
+
+  const lockedCompany = React.useMemo(
+    () => (isCompanyLocked ? (companies[0] ?? null) : null),
+    [isCompanyLocked, companies],
+  );
+
+  const resolveDefaultCompany = React.useCallback(() => {
+    return pickDefaultCompany(companies, {
+      defaultCompanyId: user?.defaultCompanyId,
+      activeCompanyId,
+    });
+  }, [companies, user?.defaultCompanyId, activeCompanyId]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -81,14 +102,27 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     };
   }, [user, isSuperAdmin]);
 
-  const setActiveCompanyId = React.useCallback((id: string) => {
-    setActiveCompanyIdState(id);
-    persistActiveCompanyId(id);
-  }, []);
+  const setActiveCompanyId = React.useCallback(
+    (id: string) => {
+      if (isCompanyLocked) return;
+      setActiveCompanyIdState(id);
+      persistActiveCompanyId(id);
+    },
+    [isCompanyLocked],
+  );
 
   return (
     <CompanyContext.Provider
-      value={{ companies, activeCompanyId, setActiveCompanyId, loading, isSuperAdmin }}
+      value={{
+        companies,
+        activeCompanyId,
+        setActiveCompanyId,
+        loading,
+        isSuperAdmin,
+        isCompanyLocked,
+        lockedCompany,
+        resolveDefaultCompany,
+      }}
     >
       {children}
     </CompanyContext.Provider>

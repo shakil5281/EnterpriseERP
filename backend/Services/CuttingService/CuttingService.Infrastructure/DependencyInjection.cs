@@ -30,7 +30,7 @@ public static class DependencyInjection
         services.AddSingleton<IRedisCacheService, RedisCacheService>();
         services.AddScoped<IIntegrationEventPublisher, RabbitMqIntegrationEventPublisher>();
         services.AddHttpClient<IMerchandisingServiceClient, MerchandisingServiceClient>(c => c.BaseAddress = new Uri(configuration["Services:MerchandisingService"] ?? "http://localhost:5288"));
-        services.AddHttpClient<IInventoryServiceClient, InventoryServiceClient>(c => c.BaseAddress = new Uri(configuration["Services:InventoryService"] ?? "http://localhost:5110"));
+        services.AddHttpClient<IInventoryServiceClient, InventoryServiceClient>(c => c.BaseAddress = new Uri(configuration["Services:InventoryService"] ?? "http://127.0.0.1:5041"));
         services.AddHttpClient<IProductionServiceClient, ProductionServiceClient>(c => c.BaseAddress = new Uri(configuration["Services:ProductionService"] ?? "http://localhost:5130"));
         services.AddHttpClient<IReportExportClient, ReportExportClient>(c => c.BaseAddress = new Uri(configuration["Services:ImportExportService"] ?? "http://localhost:8060"));
         services.AddHostedService<RabbitMqConsumerHostedService>();

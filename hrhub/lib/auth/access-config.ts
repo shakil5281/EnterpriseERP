@@ -16,10 +16,15 @@ export const routeRules: RouteRule[] = [
   { path: "/management/data-process", permissions: ["dataprocess.read"], roles: ["IT Officer", "HR", "Management"] },
   { path: "/management", roles: ["HR", "Management", "HR Officer", "IT Officer"] },
   { path: "/accounts", permissions: ["accounts.module.access"], roles: ["Accounts", "Accountant", "Account Officer"] },
-  { path: "/production", permissions: ["production.read"], roles: ["Production", "ProductionManager"] },
-  { path: "/store", permissions: ["store.read"], roles: ["Store", "StoreKeeper"] },
+  { path: "/production", permissions: ["production.read"], roles: ["Admin", "Production", "ProductionManager"] },
+  { path: "/store", permissions: ["store.read"], roles: ["Admin", "Store", "StoreKeeper"] },
   { path: "/merchandising", permissions: ["merchandising.read"], roles: ["Admin", "Merchandising", "Merchandiser"] },
-  { path: "/cutting", permissions: ["cutting.read"], roles: ["Cutting"] },
+  { path: "/cutting", permissions: ["cutting.read"], roles: ["Admin", "Cutting"] },
+  {
+    path: "/security",
+    permissions: ["security.read"],
+    roles: ["SuperAdmin", "Admin", "SecurityManager", "SecurityOfficer", "GateOfficer"],
+  },
 ];
 
 export function findMatchingRouteRule(pathname: string): RouteRule | undefined {
@@ -45,17 +50,14 @@ export function canAccessRoute(
     return false;
   }
 
-  if (rule.permissions?.length) {
-    if (rule.permissions.some((p) => permissions.includes(p))) {
-      return true;
-    }
+  if (rule.permissions?.length && rule.permissions.some((p) => permissions.includes(p))) {
+    return true;
   }
 
-  if (rule.roles?.length) {
-    if (rule.roles.some((r) => roles.includes(r))) {
-      return true;
-    }
+  if (rule.roles?.length && rule.roles.some((r) => roles.includes(r))) {
+    return true;
   }
 
-  return !rule.permissions?.length && !rule.roles?.length;
+  // Logged-in user without matching permission/role on this module
+  return false;
 }

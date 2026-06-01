@@ -3,10 +3,13 @@
 import * as React from "react"
 import { authService, User, LoginResponse } from "@/lib/services/auth"
 import { syncActiveCompanyStorage } from "@/lib/active-company-storage"
-import { refreshAccessToken } from "@/lib/auth-session"
+import { syncSessionCookieFromLocalStorage } from "@/lib/auth-cookie-sync"
+import { establishAuthenticatedSession } from "@/lib/auth/establish-session"
+import { isAccessTokenValid } from "@/lib/auth/jwt-claims"
 import { useRouter, usePathname } from "next/navigation"
 import { FullScreenLoading } from "@/components/loading-state"
-import { getRedirectUrlForUser } from "@/lib/role-redirect"
+import { beginLogout, performLogout } from "@/lib/logout"
+import { getRedirectUrlForUser, resolveReturnUrl } from "@/lib/role-redirect"
 
 interface LoginCredentials {
     username: string;
@@ -17,6 +20,8 @@ interface LoginCredentials {
 interface AuthContextType {
     user: User | null
     loading: boolean
+    /** True when a valid token and user with roles are present. */
+    isAuthenticated: boolean
     login: (credentials: LoginCredentials) => Promise<LoginResponse>
     completeTwoFactorLogin: (pendingTwoFactorToken: string, code: string) => Promise<LoginResponse>
     logout: () => void
@@ -31,75 +36,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = React.useState<User | null>(null)
     const [loading, setLoading] = React.useState(true)
     const [initializing, setInitializing] = React.useState(true)
+    const [loggingOut, setLoggingOut] = React.useState(false)
     const router = useRouter()
     const pathname = usePathname()
 
     React.useEffect(() => {
         const initAuth = async () => {
-            if (typeof window === 'undefined') {
+            if (typeof window === "undefined") {
                 setLoading(false);
                 setInitializing(false);
                 return;
             }
 
-            if (authService.isAuthenticated()) {
-                try {
-                    const profile = await authService.getProfile();
-                    if (profile && profile.roles && profile.roles.length > 0) {
-                        setUser(profile);
-                        syncActiveCompanyStorage({
-                            allowedCompanyIds: profile.assignedCompanyIds ?? [],
-                            defaultCompanyId: profile.defaultCompanyId ?? null,
-                            isSuperAdmin: profile.roles.includes("SuperAdmin"),
-                            accessToken: localStorage.getItem("token") ?? undefined,
-                        });
-                        localStorage.setItem('user', JSON.stringify({
-                            username: profile.username,
-                            fullName: profile.fullName,
-                            email: profile.email,
-                            roles: profile.roles
-                        }));
-                    } else {
-                        authService.logout();
-                    }
-                } catch (error) {
-                    console.error("Failed to fetch profile", error);
-                    if ((error as { response?: { status?: number } })?.response?.status === 401) {
-                        const newToken = await refreshAccessToken();
-                        if (newToken) {
-                            try {
-                                const profile = await authService.getProfile();
-                                if (profile?.roles?.length) {
-                                    setUser(profile);
-                                    syncActiveCompanyStorage({
-                                        allowedCompanyIds: profile.assignedCompanyIds ?? [],
-                                        defaultCompanyId: profile.defaultCompanyId ?? null,
-                                        isSuperAdmin: profile.roles.includes("SuperAdmin"),
-                                        accessToken: newToken,
-                                    });
-                                    localStorage.setItem('user', JSON.stringify({
-                                        username: profile.username,
-                                        fullName: profile.fullName,
-                                        email: profile.email,
-                                        roles: profile.roles
-                                    }));
-                                    setLoading(false);
-                                    setInitializing(false);
-                                    return;
-                                }
-                            } catch {
-                                /* fall through */
-                            }
-                        }
-                        authService.logout();
-                    }
-                }
-            }
+            const sessionUser = await establishAuthenticatedSession();
+            setUser(sessionUser);
 
-            setLoading(false)
-            setInitializing(false)
-        }
-        initAuth()
+            setLoading(false);
+            setInitializing(false);
+        };
+        void initAuth();
 
         const handleProfileUpdate = () => {
             const storedUser = localStorage.getItem('user');
@@ -113,60 +68,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => window.removeEventListener('profile-updated', handleProfileUpdate);
     }, [])
 
+    // Already signed in: leave /login (cookie + profile, or token restored from storage)
+    React.useEffect(() => {
+        if (loading || !user?.roles?.length) return
+        if (pathname !== "/login" && !pathname?.startsWith("/login")) return
+        const params = new URLSearchParams(window.location.search)
+        router.replace(resolveReturnUrl(params.get("returnUrl"), user.roles))
+    }, [user, loading, pathname, router])
+
     const finishSuccessfulLogin = async (response: LoginResponse) => {
         if (!response.success) return
 
+        syncSessionCookieFromLocalStorage()
         setLoading(true)
-        let roles = response.roles ?? []
-        try {
-            const profile = await authService.getProfile()
-            if (profile?.roles?.length) {
-                setUser(profile)
-                roles = profile.roles
-                syncActiveCompanyStorage({
-                    allowedCompanyIds: profile.assignedCompanyIds ?? [],
-                    defaultCompanyId: profile.defaultCompanyId ?? null,
-                    isSuperAdmin: profile.roles.includes("SuperAdmin"),
-                    accessToken: localStorage.getItem("token") ?? undefined,
-                })
-                localStorage.setItem(
-                    "user",
-                    JSON.stringify({
-                        username: profile.username,
-                        fullName: profile.fullName,
-                        email: profile.email,
-                        roles: profile.roles,
-                    }),
-                )
-            } else {
-                setUser({
-                    username: response.username,
-                    fullName: response.fullName,
-                    roles: response.roles || [],
-                } as User)
-            }
-        } catch (e) {
-            console.error("Failed to fetch profile after login", e)
+
+        const sessionUser = await establishAuthenticatedSession()
+        const roles = sessionUser?.roles?.length
+            ? sessionUser.roles
+            : (response.roles ?? [])
+
+        if (sessionUser) {
+            setUser(sessionUser)
+        } else if (response.roles?.length) {
             setUser({
                 username: response.username,
                 fullName: response.fullName,
-                roles: response.roles || [],
+                roles: response.roles,
+                permissions: response.permissions ?? [],
             } as User)
+        } else {
+            setUser(null)
+            setLoading(false)
+            return
         }
 
         setLoading(false)
 
         if (pathname === "/login" || pathname?.startsWith("/login")) {
             const params = new URLSearchParams(window.location.search)
-            const returnUrl = params.get("returnUrl")
-            const target =
-                returnUrl &&
-                returnUrl.startsWith("/") &&
-                !returnUrl.startsWith("//") &&
-                !returnUrl.startsWith("/login")
-                    ? returnUrl
-                    : getRedirectUrlForUser(roles)
-            router.replace(target)
+            router.replace(resolveReturnUrl(params.get("returnUrl"), roles))
         }
     }
 
@@ -182,10 +122,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return response
     }
 
-    const logout = () => {
-        authService.logout()
+    const logout = React.useCallback(() => {
+        beginLogout()
+        setLoggingOut(true)
         setUser(null)
-    }
+        void performLogout()
+    }, [])
 
     const isSuperAdmin = () => !!user?.roles?.includes("SuperAdmin")
 
@@ -207,12 +149,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return !!user.permissions?.includes(permission)
     }
 
+    const isAuthenticated = React.useMemo(() => {
+        if (!user?.roles?.length) return false
+        const token =
+            typeof window !== "undefined" ? localStorage.getItem("token") : null
+        return isAccessTokenValid(token)
+    }, [user])
+
     if (initializing) {
         return <FullScreenLoading message="Initializing your workspace..." />
     }
 
+    if (loggingOut) {
+        return <FullScreenLoading message="Signing out..." />
+    }
+
     return (
-        <AuthContext.Provider value={{ user, loading, login, completeTwoFactorLogin, logout, hasRole, hasPermission, hasAnyRole }}>
+        <AuthContext.Provider value={{ user, loading, isAuthenticated, login, completeTwoFactorLogin, logout, hasRole, hasPermission, hasAnyRole }}>
             {children}
         </AuthContext.Provider>
     )

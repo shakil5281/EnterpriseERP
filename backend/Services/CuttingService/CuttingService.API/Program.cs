@@ -5,6 +5,7 @@ using CuttingService.Application;
 using CuttingService.Domain;
 using CuttingService.Infrastructure;
 using CuttingService.Infrastructure.Persistence;
+using Erp.BuildingBlocks.CommonSecurity;
 using Erp.BuildingBlocks.Hosting;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -49,17 +50,25 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy(CuttingPermissions.PlanCreate, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, CuttingRoles.CuttingManager, CuttingRoles.CuttingOfficer));
-    options.AddPolicy(CuttingPermissions.PlanApprove, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, CuttingRoles.CuttingManager));
-    options.AddPolicy(CuttingPermissions.PlanUpdate, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, CuttingRoles.CuttingManager, CuttingRoles.CuttingOfficer));
-    options.AddPolicy(CuttingPermissions.OutputCreate, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, CuttingRoles.CuttingManager, CuttingRoles.CuttingOfficer));
-    options.AddPolicy(CuttingPermissions.WastageCreate, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, CuttingRoles.CuttingManager, CuttingRoles.CuttingOfficer));
-    options.AddPolicy(CuttingPermissions.TransferCreate, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, CuttingRoles.CuttingManager, CuttingRoles.CuttingOfficer));
-    options.AddPolicy(CuttingPermissions.TransferConfirm, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, CuttingRoles.CuttingManager, CuttingRoles.ProductionManager));
-    options.AddPolicy(CuttingPermissions.BalanceView, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, CuttingRoles.CuttingManager, CuttingRoles.CuttingOfficer, CuttingRoles.Auditor, CuttingRoles.Viewer));
-    options.AddPolicy(CuttingPermissions.ReportView, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, CuttingRoles.CuttingManager, CuttingRoles.Auditor, CuttingRoles.Viewer));
+    const string Admin = "Admin";
+    const string Cutting = "Cutting";
+    const string Production = "Production";
+    const string ProductionManager = "ProductionManager";
+
+    options.AddPolicy(CuttingPermissions.PlanCreate, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, Admin, CuttingRoles.CuttingManager, CuttingRoles.CuttingOfficer, Cutting));
+    options.AddPolicy(CuttingPermissions.PlanApprove, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, Admin, CuttingRoles.CuttingManager, Cutting));
+    options.AddPolicy(CuttingPermissions.PlanUpdate, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, Admin, CuttingRoles.CuttingManager, CuttingRoles.CuttingOfficer, Cutting));
+    options.AddPolicy(CuttingPermissions.OutputCreate, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, Admin, CuttingRoles.CuttingManager, CuttingRoles.CuttingOfficer, Cutting));
+    options.AddPolicy(CuttingPermissions.WastageCreate, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, Admin, CuttingRoles.CuttingManager, CuttingRoles.CuttingOfficer, Cutting));
+    options.AddPolicy(CuttingPermissions.TransferCreate, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, Admin, CuttingRoles.CuttingManager, CuttingRoles.CuttingOfficer, Cutting));
+    options.AddPolicy(CuttingPermissions.TransferConfirm, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, Admin, CuttingRoles.CuttingManager, CuttingRoles.ProductionManager, Production, ProductionManager));
+    options.AddPolicy(CuttingPermissions.BalanceView, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, Admin, CuttingRoles.CuttingManager, CuttingRoles.CuttingOfficer, Cutting, CuttingRoles.Auditor, CuttingRoles.Viewer));
+    options.AddPolicy(CuttingPermissions.ReportView, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, Admin, CuttingRoles.CuttingManager, Cutting, CuttingRoles.Auditor, CuttingRoles.Viewer));
+    options.AddPolicy(CuttingPermissions.BundleManage, p => p.RequireRole(CuttingRoles.SuperAdmin, CuttingRoles.CompanyAdmin, Admin, CuttingRoles.CuttingManager, CuttingRoles.CuttingOfficer, Cutting));
 });
 
+builder.Services.AddEnterpriseTenantSecurity(builder.Configuration);
+builder.Services.AddScoped<ITenantCompanyAccessResolver, AuthDbTenantCompanyAccessResolver>();
 builder.Services.AddCors(options => options.AddPolicy("default", policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 builder.Services.AddHealthChecks().AddDbContextCheck<CuttingDbContext>("cutting-db");
 
@@ -70,11 +79,13 @@ app.UseSwagger();
 app.UseSwaggerUI(o => o.SwaggerEndpoint("/swagger/v1/swagger.json", "Cutting v1"));
 app.UseCors("default");
 app.UseAuthentication();
+app.UseEnterpriseTenantSecurity();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health");
 
-if (app.Environment.IsDevelopment() && app.Configuration.GetValue("Database:AutoMigrate", false))
+if ((app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Docker"))
+    && app.Configuration.GetValue("Database:AutoMigrate", false))
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<CuttingDbContext>().Database.MigrateAsync();

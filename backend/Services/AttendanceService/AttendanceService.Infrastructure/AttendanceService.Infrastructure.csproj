@@ -16,6 +16,7 @@
     <ProjectReference Include="..\AttendanceService.Application\AttendanceService.Application.csproj" />
     <ProjectReference Include="..\AttendanceService.Domain\AttendanceService.Domain.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.Contracts\Erp.BuildingBlocks.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Erp.BuildingBlocks.ReportExport\Erp.BuildingBlocks.ReportExport.csproj" />
   </ItemGroup>
 
   <ItemGroup>

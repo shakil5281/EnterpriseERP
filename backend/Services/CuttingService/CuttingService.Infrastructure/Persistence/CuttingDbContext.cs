@@ -19,6 +19,7 @@ public sealed class CuttingDbContext(DbContextOptions<CuttingDbContext> options)
     public DbSet<CuttingPanelTransfer> CuttingPanelTransfers => Set<CuttingPanelTransfer>();
     public DbSet<CuttingPanelTransferItem> CuttingPanelTransferItems => Set<CuttingPanelTransferItem>();
     public DbSet<CuttingAuditLog> AuditLogs => Set<CuttingAuditLog>();
+    public DbSet<CuttingBundle> CuttingBundles => Set<CuttingBundle>();
 
     IQueryable<CuttingPlan> ICuttingDbContext.CuttingPlans => CuttingPlans;
     IQueryable<CuttingPlanSizeBreakdown> ICuttingDbContext.CuttingPlanSizeBreakdowns => CuttingPlanSizeBreakdowns;
@@ -31,6 +32,7 @@ public sealed class CuttingDbContext(DbContextOptions<CuttingDbContext> options)
     IQueryable<CuttingPanelTransfer> ICuttingDbContext.CuttingPanelTransfers => CuttingPanelTransfers;
     IQueryable<CuttingPanelTransferItem> ICuttingDbContext.CuttingPanelTransferItems => CuttingPanelTransferItems;
     IQueryable<CuttingAuditLog> ICuttingDbContext.AuditLogs => AuditLogs;
+    IQueryable<CuttingBundle> ICuttingDbContext.CuttingBundles => CuttingBundles;
 
     void ICuttingDbContext.Add<TEntity>(TEntity entity) => Set<TEntity>().Add(entity);
     void ICuttingDbContext.Remove<TEntity>(TEntity entity) => Set<TEntity>().Remove(entity);
@@ -57,6 +59,7 @@ public sealed class CuttingDbContext(DbContextOptions<CuttingDbContext> options)
         ConfigureAuditable<CuttingWastage>(modelBuilder);
         ConfigureAuditable<CuttingPanelTransfer>(modelBuilder);
         ConfigureAuditable<CuttingPanelTransferItem>(modelBuilder);
+        ConfigureAuditable<CuttingBundle>(modelBuilder);
 
         modelBuilder.Entity<CuttingPlan>(e =>
         {
@@ -147,6 +150,22 @@ public sealed class CuttingDbContext(DbContextOptions<CuttingDbContext> options)
             e.Property(x => x.EntityName).HasMaxLength(120).IsRequired();
             e.Property(x => x.Action).HasMaxLength(50).IsRequired();
             e.Property(x => x.Remarks).HasMaxLength(500);
+        });
+        modelBuilder.Entity<CuttingBundle>(e =>
+        {
+            e.ToTable("CuttingBundles");
+            e.Property(x => x.BundleTag).HasMaxLength(100).IsRequired();
+            e.Property(x => x.PlanNo).HasMaxLength(100);
+            e.Property(x => x.StyleName).HasMaxLength(200);
+            e.Property(x => x.SizeName).HasMaxLength(50).IsRequired();
+            e.Property(x => x.SerialRange).HasMaxLength(100);
+            e.Property(x => x.CurrentLocation).HasMaxLength(200);
+            e.Property(x => x.Status).HasMaxLength(50).HasDefaultValue(BundleStatuses.Ready);
+            e.Property(x => x.WeightKg).HasPrecision(18, 4);
+            e.HasIndex(x => new { x.CompanyId, x.BundleTag }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.OrderId });
+            e.HasIndex(x => new { x.CompanyId, x.Status, x.CreatedAt });
+            e.HasOne(x => x.CuttingPlan).WithMany().HasForeignKey(x => x.CuttingPlanId).OnDelete(DeleteBehavior.Restrict);
         });
         Seed(modelBuilder);
     }

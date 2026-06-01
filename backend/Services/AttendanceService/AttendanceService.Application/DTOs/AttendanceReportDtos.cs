@@ -7,6 +7,9 @@ public sealed record AttendanceFilterDto(
     Guid? DepartmentId = null,
     Guid? SectionId = null,
     Guid? DesignationId = null,
+    Guid? GroupId = null,
+    string? LineName = null,
+    string? AttendanceStatus = null,
     string? EmployeeID = null,
     string? SearchTerm = null,
     DateTime? Date = null);
@@ -20,6 +23,7 @@ public sealed record DailyReportRowDto(
     string Department,
     string Section,
     string Designation,
+    string Line,
     string Shift,
     string Date,
     string? InTime,

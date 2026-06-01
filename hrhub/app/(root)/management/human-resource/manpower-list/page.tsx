@@ -11,10 +11,13 @@ import {
     IconCircleCheckFilled,
     IconClock,
     IconUserCircle,
-    IconFileSpreadsheet
 } from "@tabler/icons-react"
 import { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/data-table"
+import { HrFilterCard, HrFilterField } from "@/components/hr/hr-filter-card"
+import { HrPageHeader } from "@/components/hr/hr-page-header"
+import { HrPageShell } from "@/components/hr/hr-page-shell"
+import { HrTableCard } from "@/components/hr/hr-table-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,12 +26,16 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { employeeService, type Employee } from "@/lib/services/employee"
 import { organogramService, type Floor } from "@/lib/services/organogram"
-import { companyService, type Company } from "@/lib/services/company"
+import { ManagementLegacyCompanySelect } from "@/components/hr/management-legacy-company-select"
+import { useCompanyFilterScope } from "@/hooks/use-company-filter-scope"
 import { toast } from "sonner"
 import { cn, getImageUrl } from "@/lib/utils"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { format } from "date-fns"
 import { type DateRange } from "react-day-picker"
+import { useServerDataTable } from "@/hooks/use-server-data-table"
+import { HrReportExportButtons } from "@/components/reports/hr-report-export-buttons"
+import type { HrReportExportParams } from "@/lib/services/hr-report-export"
 
 export default function ManpowerListPage() {
     const router = useRouter()
@@ -36,7 +43,7 @@ export default function ManpowerListPage() {
     // Data states
     const [manpower, setManpower] = React.useState<Employee[]>([])
     const [isLoading, setIsLoading] = React.useState(true)
-    const [isExporting, setIsExporting] = React.useState(false)
+    const serverTable = useServerDataTable()
 
     // Filter states
     const [searchTerm, setSearchTerm] = React.useState("")
@@ -56,24 +63,19 @@ export default function ManpowerListPage() {
     const [sections, setSections] = React.useState<any[]>([])
     const [designations, setDesignations] = React.useState<any[]>([])
     const [floors, setFloors] = React.useState<Floor[]>([])
-    const [companies, setCompanies] = React.useState<Company[]>([])
+    const { companies, isCompanyLocked, defaultCompany } = useCompanyFilterScope()
+    const lockedInitRef = React.useRef(false)
 
-    // Fetch initial data
     React.useEffect(() => {
-        const fetchInitialData = async () => {
-            try {
-                const [flrs, comps] = await Promise.all([
-                    organogramService.getFloors(),
-                    companyService.getAll()
-                ])
-                setFloors(flrs)
-                setCompanies(comps)
-            } catch (error) {
-                console.error("Failed to load initial data", error)
-            }
-        }
-        fetchInitialData()
+        organogramService.getFloors().then(setFloors).catch(console.error)
     }, [])
+
+    React.useEffect(() => {
+        if (!isCompanyLocked || !defaultCompany || lockedInitRef.current) return
+        lockedInitRef.current = true
+        setSelectedCompanyId(String(defaultCompany.id))
+        setCompanyName(defaultCompany.companyNameEn)
+    }, [isCompanyLocked, defaultCompany])
 
     // Fetch departments when company changes
     React.useEffect(() => {
@@ -111,6 +113,10 @@ export default function ManpowerListPage() {
         }
     }, [sectionId])
 
+    const serverPagingKey = serverTable.getAll
+        ? "all"
+        : `${serverTable.pageIndex}-${serverTable.pageSize}`
+
     const fetchManpower = React.useCallback(async () => {
         setIsLoading(true)
         try {
@@ -127,46 +133,96 @@ export default function ManpowerListPage() {
             if (status !== "all") params.status = status
             if (searchTerm.trim()) params.searchTerm = searchTerm
 
-            const data = await employeeService.getManpower(params)
-            setManpower(data)
+            const page = await employeeService.getManpowerPage({
+                ...params,
+                page: serverTable.getAll ? 1 : serverTable.pageIndex + 1,
+                pageSize: serverTable.pageSize,
+                getAll: serverTable.getAll,
+                sortBy: serverTable.sortBy,
+                sortOrder: serverTable.sortOrder,
+            })
+            setManpower(page.items)
+            serverTable.applyPaginationMeta({
+                page: page.page,
+                pageSize: page.pageSize,
+                totalCount: page.totalCount,
+                totalPages: page.totalPages,
+                hasNextPage: page.hasNextPage ?? page.page < page.totalPages,
+                hasPreviousPage: page.hasPreviousPage ?? page.page > 1,
+                getAll: page.getAll ?? serverTable.getAll,
+            })
         } catch (error) {
             toast.error("Failed to load manpower data")
             console.error(error)
         } finally {
             setIsLoading(false)
         }
-    }, [departmentId, sectionId, designationId, floorId, companyName, gender, religion, dateRange, status, searchTerm])
+    }, [
+        departmentId,
+        sectionId,
+        designationId,
+        floorId,
+        selectedCompanyId,
+        companyName,
+        gender,
+        religion,
+        dateRange,
+        status,
+        searchTerm,
+        serverTable.getAll,
+        serverTable.sortBy,
+        serverTable.sortOrder,
+        serverPagingKey,
+    ])
 
-    const handleExport = async () => {
-        setIsExporting(true)
-        try {
-            const params: any = {}
-            if (departmentId !== "all") params.departmentId = parseInt(departmentId)
-            if (sectionId !== "all") params.sectionId = parseInt(sectionId)
-            if (designationId !== "all") params.designationId = parseInt(designationId)
-            if (floorId !== "all") params.floorId = parseInt(floorId)
-            if (selectedCompanyId !== "all") params.companyId = parseInt(selectedCompanyId)
-            if (companyName !== "all") params.companyName = companyName
-            if (gender !== "all") params.gender = gender
-            if (dateRange?.from) params.joinDateFrom = dateRange.from.toISOString()
-            if (dateRange?.to) params.joinDateTo = dateRange.to.toISOString()
-            if (status !== "all") params.status = status
-            if (searchTerm.trim()) params.searchTerm = searchTerm
-            params.isActive = true // Manpower list is typically active employees
-
-            await employeeService.exportEmployees(params)
-            toast.success("Excel exported successfully")
-        } catch (error) {
-            toast.error("Failed to export Excel data")
-            console.error(error)
-        } finally {
-            setIsExporting(false)
+    const exportParams = React.useMemo((): HrReportExportParams => {
+        const params: HrReportExportParams = {}
+        if (selectedCompanyId !== "all") {
+            const company = companies.find((c) => c.id === parseInt(selectedCompanyId, 10))
+            if (company) params.companyId = company.entityId
         }
-    }
+        if (departmentId !== "all") {
+            const dept = departments.find((d) => d.id === parseInt(departmentId, 10))
+            if (dept) params.departmentId = dept.entityId
+        }
+        if (sectionId !== "all") {
+            const section = sections.find((s) => s.id === parseInt(sectionId, 10))
+            if (section) params.sectionId = section.entityId
+        }
+        if (designationId !== "all") {
+            const designation = designations.find((d) => d.id === parseInt(designationId, 10))
+            if (designation) params.designationId = designation.entityId
+        }
+        if (status !== "all") params.status = status
+        if (gender !== "all") params.gender = gender
+        if (religion !== "all") params.religion = religion
+        if (dateRange?.from) params.joinDateFrom = dateRange.from.toISOString().slice(0, 10)
+        if (dateRange?.to) params.joinDateTo = dateRange.to.toISOString().slice(0, 10)
+        if (searchTerm.trim()) params.search = searchTerm.trim()
+        return params
+    }, [
+        selectedCompanyId,
+        departmentId,
+        sectionId,
+        designationId,
+        status,
+        gender,
+        religion,
+        dateRange,
+        searchTerm,
+        companies,
+        departments,
+        sections,
+        designations,
+    ])
 
     React.useEffect(() => {
         fetchManpower()
-    }, []) // Initial load only
+    }, [fetchManpower])
+
+    React.useEffect(() => {
+        serverTable.resetToFirstPage()
+    }, [departmentId, sectionId, designationId, floorId, selectedCompanyId, companyName, gender, religion, dateRange?.from, dateRange?.to, status, searchTerm])
 
     const handleDelete = async (employee: Employee) => {
         try {
@@ -195,7 +251,7 @@ export default function ManpowerListPage() {
             cell: ({ row }) => (
                 <button
                     onClick={() => router.push(`/management/human-resource/employee-info/${row.original.employeeId}?companyId=${row.original.companyId}`)}
-                    className="font-mono text-xs font-semibold text-primary hover:underline text-left"
+                    className="font-mono text-xs font-semibold text-foreground hover:text-erp-accent hover:underline text-left"
                 >
                     {row.original.employeeId}
                 </button>
@@ -216,7 +272,7 @@ export default function ManpowerListPage() {
                     <div className="flex flex-col">
                         <button
                             onClick={() => router.push(`/management/human-resource/employee-info/${row.original.employeeId}?companyId=${row.original.companyId}`)}
-                            className="font-medium text-sm text-primary hover:underline text-left"
+                            className="font-medium text-sm text-foreground hover:text-erp-accent hover:underline text-left"
                         >
                             {row.original.fullNameEn}
                         </button>
@@ -278,103 +334,60 @@ export default function ManpowerListPage() {
         },
     ]
 
+    const displayRecordCount =
+        serverTable.rowCount > 0 ? serverTable.rowCount : manpower.length
+
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 bg-muted/20 min-h-screen">
-            {/* Header Section */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 lg:px-8">
-                <div className="flex items-center gap-3">
-                    <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
-                        <IconUsers className="size-7" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight">Manpower List</h1>
-                        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                            <span className="size-1.5 rounded-full bg-[#108545]" />
-                            Total {manpower.length} Employees Active
-                        </p>
-                    </div>
-                </div>
+        <HrPageShell>
+            <HrPageHeader
+                icon={<IconUsers className="size-7" />}
+                title="Manpower List"
+                description={`Workforce listing — ${displayRecordCount} records`}
+                actions={
+                    <>
+                        <HrReportExportButtons
+                            exportUrl="/api/v1/hr/reports/manpower-list"
+                            params={exportParams}
+                            filePrefix="manpower-list"
+                            disabled={isLoading || manpower.length === 0}
+                        />
+                        <Button
+                            size="sm"
+                            className="h-9 px-4"
+                            onClick={() =>
+                                router.push("/management/human-resource/employee-info/create")
+                            }
+                        >
+                            New Employee
+                        </Button>
+                    </>
+                }
+            />
 
-                <div className="flex items-center gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-9 px-4 border-dashed border-primary/50 hover:border-primary hover:bg-primary/5 text-primary transition-all"
-                        onClick={handleExport}
-                        disabled={isExporting || manpower.length === 0}
-                    >
-                        {isExporting ? (
-                            <IconLoader className="size-4 mr-2 animate-spin" />
-                        ) : (
-                            <IconFileSpreadsheet className="size-4 mr-2" />
-                        )}
-                        Export Excel
-                    </Button>
-                    <Button
-                        size="sm"
-                        className="h-9 px-4 shadow-lg hover:shadow-primary/20 transition-all font-medium"
-                        onClick={() => router.push("/management/human-resource/employee-info/create")}
-                    >
-                        New Employee
-                    </Button>
-                </div>
-            </div>
-
-            {/* Filter Section */}
-            <div className="px-4 lg:px-8">
-                <Card className="border-none shadow-none bg-background/60 backdrop-blur-sm overflow-hidden">
-                    <div className="h-1 bg-primary/20 w-full" />
-                    <CardHeader className="pb-3 border-b bg-muted/20">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center gap-2">
-                                    <IconFilter className="size-4 text-primary" />
-                                    <CardTitle className="text-sm font-medium uppercase tracking-wider">Dynamic Filters</CardTitle>
-                                </div>
-                                <Badge variant="secondary" className="h-5 px-1.5 font-mono text-[10px] bg-primary/10 text-primary border-primary/20">
-                                    {manpower.length} Records Found
-                                </Badge>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    variant="default"
-                                    size="sm"
-                                    className="h-8 text-xs gap-1.5 px-4 shadow-sm shadow-primary/20"
-                                    onClick={fetchManpower}
-                                    disabled={isLoading}
-                                >
-                                    {isLoading ? (
-                                        <IconLoader className="size-3.5 animate-spin" />
-                                    ) : (
-                                        <IconFilter className="size-3.5" />
-                                    )}
-                                    Apply Filters
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                    onClick={() => {
-                                        setSearchTerm("")
-                                        setDepartmentId("all")
-                                        setSectionId("all")
-                                        setDesignationId("all")
-                                        setFloorId("all")
-                                        setCompanyName("all")
-                                        setSelectedCompanyId("all")
-                                        setGender("all")
-                                        setReligion("all")
-                                        setDateRange(undefined)
-                                        setStatus("all")
-                                    }}
-                                >
-                                    Reset All
-                                </Button>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <HrFilterCard
+                recordCount={displayRecordCount}
+                isLoading={isLoading}
+                onApply={fetchManpower}
+                onReset={() => {
+                    setSearchTerm("")
+                    setDepartmentId("all")
+                    setSectionId("all")
+                    setDesignationId("all")
+                    setFloorId("all")
+                    if (isCompanyLocked && defaultCompany) {
+                        setSelectedCompanyId(String(defaultCompany.id))
+                        setCompanyName(defaultCompany.companyNameEn)
+                    } else {
+                        setCompanyName("all")
+                        setSelectedCompanyId("all")
+                    }
+                    setGender("all")
+                    setReligion("all")
+                    setDateRange(undefined)
+                    setStatus("all")
+                }}
+                className="bg-background/60 backdrop-blur-sm"
+            >
                             {/* Search */}
                             <div className="flex flex-col gap-1.5">
                                 <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Search Employee</Label>
@@ -455,30 +468,23 @@ export default function ManpowerListPage() {
                             {/* Company */}
                             <div className="flex flex-col gap-1.5 focus-within:z-20">
                                 <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Company</Label>
-                                <NativeSelect
-                                    className="h-10 bg-muted/30 border-none"
+                                <ManagementLegacyCompanySelect
+                                    className="bg-muted/30 border-none"
                                     value={selectedCompanyId}
-                                    onChange={(e) => {
-                                        const val = e.target.value
+                                    allValue="all"
+                                    onChange={(val) => {
                                         setSelectedCompanyId(val)
                                         if (val === "all") {
                                             setCompanyName("all")
                                         } else {
-                                            const comp = companies.find(c => c.id === parseInt(val))
+                                            const comp = companies.find((c) => c.id === parseInt(val, 10))
                                             setCompanyName(comp ? comp.companyNameEn : "all")
                                         }
-
-                                        // Reset children
                                         setDepartmentId("all")
                                         setSectionId("all")
                                         setDesignationId("all")
                                     }}
-                                >
-                                    <option value="all">All Companies</option>
-                                    {companies.map((c) => (
-                                        <option key={c.id} value={c.id}>{c.companyNameEn}</option>
-                                    ))}
-                                </NativeSelect>
+                                />
                             </div>
 
                             {/* Floor */}
@@ -535,52 +541,43 @@ export default function ManpowerListPage() {
                                     setDate={setDateRange}
                                 />
                             </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
+            </HrFilterCard>
 
-            {/* Data Table Section */}
-            <div className="px-4 lg:px-8 pb-8">
-                <Card className="border-none shadow-none overflow-hidden rounded-2xl bg-background">
-                    <CardContent className="p-0">
-                        {isLoading ? (
-                            <div className="flex flex-col items-center justify-center py-24 gap-4">
-                                <div className="relative">
-                                    <div className="size-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-                                    <IconUsers className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-5 text-primary" />
-                                </div>
-                                <p className="text-sm font-medium text-muted-foreground animate-pulse">Refining manpower list...</p>
-                            </div>
-                        ) : (
-                            <DataTable
-                                data={manpower}
-                                columns={columns}
-                                onEditClick={(emp) => router.push(`/management/human-resource/employee-info/edit/${emp.employeeId}?companyId=${emp.companyId}`)}
-                                onDelete={handleDelete}
-                                onDeleteSelected={async (employees) => {
-                                    try {
-                                        await Promise.all(employees.map(emp => {
-                                            if (emp.companyId) {
-                                                return employeeService.deleteEmployee(emp.employeeId, emp.companyId)
-                                            }
-                                            return Promise.resolve();
-                                        }))
-                                        toast.success(`Successfully deleted ${employees.length} employees`)
-                                        fetchManpower()
-                                    } catch (error) {
-                                        toast.error("Failed to delete some employees")
-                                    }
-                                }}
-                                showTabs={false}
-                                showActions={true}
-                                enableSelection={true}
-                                searchKey="fullNameEn"
-                            />
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
-        </div >
+            <HrTableCard>
+                        <DataTable
+                            data={manpower}
+                            columns={columns}
+                            isLoading={isLoading}
+                            paginationMode="server"
+                            pageIndex={serverTable.pageIndex}
+                            pageSize={serverTable.pageSize}
+                            getAll={serverTable.getAll}
+                            pageCount={serverTable.pageCount}
+                            rowCount={serverTable.rowCount}
+                            onPaginationChange={serverTable.handlePaginationChange}
+                            onSortingChange={serverTable.onSortParamsChange}
+                            onEditClick={(emp) => router.push(`/management/human-resource/employee-info/edit/${emp.employeeId}?companyId=${emp.companyId}`)}
+                            onDelete={handleDelete}
+                            onDeleteSelected={async (employees) => {
+                                try {
+                                    await Promise.all(employees.map(emp => {
+                                        if (emp.companyId) {
+                                            return employeeService.deleteEmployee(emp.employeeId, emp.companyId)
+                                        }
+                                        return Promise.resolve();
+                                    }))
+                                    toast.success(`Successfully deleted ${employees.length} employees`)
+                                    fetchManpower()
+                                } catch (error) {
+                                    toast.error("Failed to delete some employees")
+                                }
+                            }}
+                            showTabs={false}
+                            showActions={true}
+                            enableSelection={true}
+                            searchKey="fullNameEn"
+                        />
+            </HrTableCard>
+        </HrPageShell>
     )
 }

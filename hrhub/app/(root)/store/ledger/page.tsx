@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { IconFileSpreadsheet, IconDownload, IconFilter } from "@tabler/icons-react"
+import { IconFileSpreadsheet, IconDownload, IconFilter, IconLoader2 } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
@@ -19,22 +19,58 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { StoreItem, StockLedgerEntry } from "@/lib/types/store"
+import { toast } from "sonner"
 
-export default function StockLedgerPage() {
-    const [selectedItem, setSelectedItem] = React.useState("RM-001")
+function StockLedgerContent({ companyId }: { companyId: string }) {
+    const [items, setItems] = React.useState<StoreItem[]>([]);
+    const [selectedItemId, setSelectedItemId] = React.useState("");
+    const [ledgerData, setLedgerData] = React.useState<StockLedgerEntry[]>([]);
+    const [loadingItems, setLoadingItems] = React.useState(true);
+    const [loadingLedger, setLoadingLedger] = React.useState(false);
 
-    // Mock ledger data
-    const ledgerData = [
-        { date: "Jan 01, 2026", ref: "OB", type: "OPENING", in: 0, out: 0, balance: 4500 },
-        { date: "Jan 05, 2026", ref: "GRN-2026-001", type: "IN", in: 500, out: 0, balance: 5000 },
-        { date: "Jan 12, 2026", ref: "ISS-2026-012", type: "OUT", in: 0, out: 200, balance: 4800 },
-        { date: "Jan 18, 2026", ref: "ISS-2026-033", type: "OUT", in: 0, out: 150, balance: 4650 },
-        { date: "Jan 30, 2026", ref: "GRN-2026-022", type: "IN", in: 350, out: 0, balance: 5000 },
-    ]
+    React.useEffect(() => {
+        const fetchItems = async () => {
+            try {
+                const data = await storeService.getItems(companyId);
+                setItems(data);
+                if (data.length > 0) {
+                    setSelectedItemId(data[0].id);
+                }
+            } catch {
+                toast.error("Failed to load items");
+            } finally {
+                setLoadingItems(false);
+            }
+        };
+        fetchItems();
+    }, [companyId]);
+
+    React.useEffect(() => {
+        if (!selectedItemId) return;
+
+        const fetchLedger = async () => {
+            setLoadingLedger(true);
+            try {
+                const data = await storeService.getLedger(companyId, selectedItemId);
+                setLedgerData(data);
+            } catch {
+                toast.error("Failed to load ledger");
+                setLedgerData([]);
+            } finally {
+                setLoadingLedger(false);
+            }
+        };
+        fetchLedger();
+    }, [companyId, selectedItemId]);
+
+    const selectedItem = items.find(i => i.id === selectedItemId);
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-            <div className="flex items-center justify-between px-4 lg:px-6">
+        <>
+            <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                         <IconFileSpreadsheet className="size-6 text-primary" />
@@ -52,67 +88,103 @@ export default function StockLedgerPage() {
                 </Button>
             </div>
 
-            <div className="px-4 lg:px-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Ledger Report</CardTitle>
-                        <CardDescription>Select an item to view its stock movement history.</CardDescription>
-                        <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                            <div className="w-[300px]">
-                                <Select value={selectedItem} onValueChange={setSelectedItem}>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Ledger Report</CardTitle>
+                    <CardDescription>Select an item to view its stock movement history.</CardDescription>
+                    <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                        <div className="w-[300px]">
+                            {loadingItems ? (
+                                <IconLoader2 className="animate-spin size-5 text-muted-foreground" />
+                            ) : (
+                                <Select value={selectedItemId} onValueChange={setSelectedItemId}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select Item" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="RM-001">Cotton Yarn 80/1</SelectItem>
-                                        <SelectItem value="RM-002">Polyester Fabric</SelectItem>
-                                        <SelectItem value="ACC-001">Plastic Buttons</SelectItem>
+                                        {items.map(item => (
+                                            <SelectItem key={item.id} value={item.id}>
+                                                {item.itemName} ({item.itemCode})
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
-                            </div>
-                            <Button variant="secondary">
-                                <IconFilter className="mr-2 size-4" />
-                                Filter Date
-                            </Button>
+                            )}
                         </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="rounded-md border">
-                            <Table>
-                                <TableHeader>
+                        <Button variant="secondary">
+                            <IconFilter className="mr-2 size-4" />
+                            Filter Date
+                        </Button>
+                    </div>
+                    {selectedItem && (
+                        <p className="text-sm text-muted-foreground pt-2">
+                            Current balance: <span className="font-bold">{selectedItem.currentStock} {selectedItem.unitName}</span>
+                        </p>
+                    )}
+                </CardHeader>
+                <CardContent>
+                    <div className="rounded-md border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Reference</TableHead>
+                                    <TableHead>Type</TableHead>
+                                    <TableHead className="text-right">In Qty</TableHead>
+                                    <TableHead className="text-right">Out Qty</TableHead>
+                                    <TableHead className="text-right font-bold">Balance</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {loadingLedger ? (
                                     <TableRow>
-                                        <TableHead>Date</TableHead>
-                                        <TableHead>Reference</TableHead>
-                                        <TableHead>Type</TableHead>
-                                        <TableHead className="text-right">In Qty</TableHead>
-                                        <TableHead className="text-right">Out Qty</TableHead>
-                                        <TableHead className="text-right font-bold">Balance</TableHead>
+                                        <TableCell colSpan={6} className="h-24 text-center">
+                                            <IconLoader2 className="animate-spin size-6 mx-auto text-primary" />
+                                        </TableCell>
                                     </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {ledgerData.map((row, i) => (
-                                        <TableRow key={i}>
-                                            <TableCell>{row.date}</TableCell>
-                                            <TableCell className="font-mono text-xs text-muted-foreground">{row.ref}</TableCell>
-                                            <TableCell>
-                                                <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${row.type === 'IN' || row.type === 'OPENING'
+                                ) : ledgerData.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                            No ledger entries for this item.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    ledgerData.map((row) => {
+                                        const isIn = row.transactionType === "In";
+                                        return (
+                                            <TableRow key={row.transactionId}>
+                                                <TableCell>{new Date(row.transactionDate).toLocaleDateString()}</TableCell>
+                                                <TableCell className="font-mono text-xs text-muted-foreground">{row.referenceNumber || row.transactionNumber}</TableCell>
+                                                <TableCell>
+                                                    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${isIn
                                                         ? 'bg-green-50 text-green-700 ring-green-600/20'
                                                         : 'bg-red-50 text-red-700 ring-red-600/20'
-                                                    }`}>
-                                                    {row.type}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell className="text-right text-green-600 font-medium">{row.in > 0 ? `+${row.in}` : '-'}</TableCell>
-                                            <TableCell className="text-right text-red-600 font-medium">{row.out > 0 ? `-${row.out}` : '-'}</TableCell>
-                                            <TableCell className="text-right font-bold">{row.balance}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-        </div>
-    )
+                                                        }`}>
+                                                        {row.transactionType}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell className="text-right text-green-600 font-medium">{row.quantityIn > 0 ? `+${row.quantityIn}` : '-'}</TableCell>
+                                                <TableCell className="text-right text-red-600 font-medium">{row.quantityOut > 0 ? `-${row.quantityOut}` : '-'}</TableCell>
+                                                <TableCell className="text-right font-bold">{row.runningBalance}</TableCell>
+                                            </TableRow>
+                                        );
+                                    })
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+            </Card>
+        </>
+    );
+}
+
+export default function StockLedgerPage() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <StockLedgerContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
+    );
 }

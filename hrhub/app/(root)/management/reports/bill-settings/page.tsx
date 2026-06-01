@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { billConfigService, NightBillConfig } from "@/lib/services/bill-config"
-import { companyService, Company } from "@/lib/services/company"
+import { ManagementLegacyCompanySelect } from "@/components/hr/management-legacy-company-select"
+import { useCompanyFilterScope } from "@/hooks/use-company-filter-scope"
 import { toast } from "sonner"
 import {
     Dialog,
@@ -22,7 +23,8 @@ import { NativeSelect } from "@/components/ui/native-select"
 
 export default function BillSettingsPage() {
     const [configs, setConfigs] = React.useState<NightBillConfig[]>([])
-    const [companies, setCompanies] = React.useState<Company[]>([])
+    const { defaultCompany } = useCompanyFilterScope()
+    const [formCompanyId, setFormCompanyId] = React.useState("")
     const [isLoading, setIsLoading] = React.useState(true)
     const [isModalOpen, setIsModalOpen] = React.useState(false)
     const [editingConfig, setEditingConfig] = React.useState<NightBillConfig | null>(null)
@@ -31,12 +33,8 @@ export default function BillSettingsPage() {
     const fetchData = React.useCallback(async () => {
         setIsLoading(true)
         try {
-            const [configsData, companiesData] = await Promise.all([
-                billConfigService.getNightConfigs(),
-                companyService.getAll()
-            ])
+            const configsData = await billConfigService.getNightConfigs()
             setConfigs(configsData)
-            setCompanies(companiesData)
         } catch (error) {
             toast.error("Failed to load configuration data")
         } finally {
@@ -48,6 +46,17 @@ export default function BillSettingsPage() {
         fetchData()
     }, [fetchData])
 
+    React.useEffect(() => {
+        if (!isModalOpen) return
+        if (editingConfig?.companyId) {
+            setFormCompanyId(String(editingConfig.companyId))
+        } else if (defaultCompany) {
+            setFormCompanyId(String(defaultCompany.id))
+        } else {
+            setFormCompanyId("")
+        }
+    }, [isModalOpen, editingConfig, defaultCompany])
+
     const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         setIsSaving(true)
@@ -55,7 +64,7 @@ export default function BillSettingsPage() {
         
         const configData: NightBillConfig = {
             id: editingConfig?.id || 0,
-            companyId: parseInt(formData.get("companyId") as string),
+            companyId: parseInt(formCompanyId, 10),
             eligibleTimeThreshold: formData.get("eligibleTimeThreshold") as string,
             defaultAmount: parseFloat(formData.get("defaultAmount") as string)
         }
@@ -134,10 +143,12 @@ export default function BillSettingsPage() {
                         <div className="py-4 space-y-4">
                             <div className="grid gap-2">
                                 <Label>Company</Label>
-                                <NativeSelect name="companyId" defaultValue={editingConfig?.companyId} required>
-                                    <option value="">Select Company</option>
-                                    {companies.map(c => <option key={c.id} value={c.id.toString()}>{c.companyNameEn}</option>)}
-                                </NativeSelect>
+                                <ManagementLegacyCompanySelect
+                                    value={formCompanyId || "all"}
+                                    onChange={(v) => setFormCompanyId(v === "all" ? "" : v)}
+                                    allValue="all"
+                                    allOptionLabel="Select company"
+                                />
                             </div>
                             <div className="grid gap-2">
                                 <Label>Eligible Time Threshold (HH:mm)</Label>

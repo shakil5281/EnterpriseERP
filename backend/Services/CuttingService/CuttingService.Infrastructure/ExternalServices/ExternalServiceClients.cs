@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using CuttingService.Application;
 using CuttingService.Contracts;
 
@@ -9,14 +10,42 @@ public sealed class MerchandisingServiceClient(HttpClient httpClient) : IMerchan
 {
     public async Task<OrderSnapshot?> GetOrderAsync(Guid companyId, Guid orderId, CancellationToken cancellationToken = default)
     {
-        try { return await httpClient.GetFromJsonAsync<OrderSnapshot>($"/api/v1/merchandising/orders/{orderId}?companyId={companyId}", cancellationToken); }
+        try
+        {
+            var res = await httpClient.GetAsync($"/api/v1/merchandising/orders/{orderId}?companyId={companyId}", cancellationToken);
+            if (!res.IsSuccessStatusCode) return new OrderSnapshot(orderId, companyId, Guid.Empty, "LOCAL", 1000, "Confirmed");
+            var payload = await res.Content.ReadFromJsonAsync<ApiResponse<JsonElement>>(cancellationToken);
+            if (payload?.Data.ValueKind == JsonValueKind.Undefined || payload?.Data.ValueKind == JsonValueKind.Null) return null;
+            var d = payload!.Data;
+            return new OrderSnapshot(
+                orderId,
+                companyId,
+                d.TryGetProperty("styleId", out var sid) && sid.TryGetGuid(out var styleId) ? styleId : Guid.Empty,
+                d.TryGetProperty("orderNumber", out var on) ? on.GetString() ?? "LOCAL" : "LOCAL",
+                d.TryGetProperty("totalQuantity", out var tq) ? tq.GetInt32() : 1000,
+                d.TryGetProperty("status", out var st) ? st.GetString() ?? "Confirmed" : "Confirmed");
+        }
         catch (HttpRequestException) { return new OrderSnapshot(orderId, companyId, Guid.Empty, "LOCAL", 1000, "Confirmed"); }
     }
+
     public async Task<IReadOnlyList<OrderColorSizeBreakdownSnapshot>> GetOrderColorSizeBreakdownAsync(Guid companyId, Guid orderId, CancellationToken cancellationToken = default)
     {
-        try { return await httpClient.GetFromJsonAsync<IReadOnlyList<OrderColorSizeBreakdownSnapshot>>($"/api/v1/merchandising/orders/{orderId}/color-size-breakdown?companyId={companyId}", cancellationToken) ?? []; }
+        try
+        {
+            var res = await httpClient.GetAsync($"/api/v1/merchandising/orders/{orderId}/color-size-breakdown?companyId={companyId}", cancellationToken);
+            if (!res.IsSuccessStatusCode) return [new OrderColorSizeBreakdownSnapshot("Black", "M", 1000)];
+            var payload = await res.Content.ReadFromJsonAsync<ApiResponse<JsonElement>>(cancellationToken);
+            if (payload?.Data.ValueKind != JsonValueKind.Array) return [];
+            return payload.Data.EnumerateArray()
+                .Select(x => new OrderColorSizeBreakdownSnapshot(
+                    x.TryGetProperty("colorName", out var c) ? c.GetString() : null,
+                    x.TryGetProperty("sizeName", out var s) ? s.GetString() ?? "M" : "M",
+                    x.TryGetProperty("quantity", out var q) ? q.GetInt32() : 0))
+                .ToList();
+        }
         catch (HttpRequestException) { return [new OrderColorSizeBreakdownSnapshot("Black", "M", 1000)]; }
     }
+
     public async Task<bool> IsOrderConfirmedAsync(Guid companyId, Guid orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrderAsync(companyId, orderId, cancellationToken);
@@ -28,23 +57,29 @@ public sealed class InventoryServiceClient(HttpClient httpClient) : IInventorySe
 {
     public async Task<FabricIssueSnapshot?> GetFabricIssueAsync(Guid companyId, Guid inventoryIssueId, CancellationToken cancellationToken = default)
     {
-        try { return await httpClient.GetFromJsonAsync<FabricIssueSnapshot>($"/api/inventory/issues/{inventoryIssueId}?companyId={companyId}", cancellationToken); }
-        catch (HttpRequestException) { return null; }
-    }
-    public async Task<decimal> GetStockBalanceAsync(Guid companyId, Guid itemId, Guid orderId, CancellationToken cancellationToken = default)
-    {
-        try { return await httpClient.GetFromJsonAsync<decimal>($"/api/inventory/items/{itemId}/stock-balance?companyId={companyId}&orderId={orderId}", cancellationToken); }
-        catch (HttpRequestException) { return 0; }
-    }
-    public async Task<Guid?> RequestFabricIssueAsync(Guid companyId, Guid orderId, CancellationToken cancellationToken = default)
-    {
         try
         {
-            var response = await httpClient.PostAsJsonAsync("/api/inventory/fabric-issues/request", new { companyId, orderId }, cancellationToken);
-            return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<Guid>(cancellationToken) : null;
+            var res = await httpClient.GetAsync($"/api/v1/inventory/items/{inventoryIssueId}/exists?companyId={companyId}", cancellationToken);
+            if (!res.IsSuccessStatusCode) return null;
+            return new FabricIssueSnapshot(inventoryIssueId, companyId, Guid.Empty, inventoryIssueId, 0, "Yds");
         }
         catch (HttpRequestException) { return null; }
     }
+
+    public async Task<decimal> GetStockBalanceAsync(Guid companyId, Guid itemId, Guid orderId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var res = await httpClient.GetAsync($"/api/v1/inventory/items/{itemId}/stock-balance?companyId={companyId}", cancellationToken);
+            if (!res.IsSuccessStatusCode) return 0;
+            var payload = await res.Content.ReadFromJsonAsync<ApiResponse<decimal>>(cancellationToken);
+            return payload?.Data ?? 0;
+        }
+        catch (HttpRequestException) { return 0; }
+    }
+
+    public Task<Guid?> RequestFabricIssueAsync(Guid companyId, Guid orderId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<Guid?>(null);
 }
 
 public sealed class ProductionServiceClient(HttpClient httpClient) : IProductionServiceClient

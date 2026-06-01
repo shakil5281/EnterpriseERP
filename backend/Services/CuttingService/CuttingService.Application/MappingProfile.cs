@@ -18,5 +18,6 @@ public sealed class MappingProfile : Profile
         CreateMap<CuttingBalance, CuttingBalanceDto>();
         CreateMap<CuttingPanelTransferItem, CuttingPanelTransferItemDto>();
         CreateMap<CuttingPanelTransfer, CuttingPanelTransferDto>();
+        CreateMap<CuttingBundle, CuttingBundleDto>();
     }
 }

@@ -1,4 +1,5 @@
 import api from "../api";
+import { isValidCompanyGuid } from "@/lib/company-id";
 import { unwrapApiData } from "@/lib/api-response";
 
 const ORG = "Organogram";
@@ -28,7 +29,7 @@ interface CompanySummaryRow {
 
 async function listCompanySummaries(): Promise<CompanySummaryRow[]> {
   const response = await api.get<unknown>("companies", {
-    params: { Page: 1, PageSize: 500 },
+    params: { Page: 1, PageSize: 50 },
   });
   const page = unwrapApiData<{ items: CompanySummaryRow[] }>(response.data);
   return page.items ?? [];
@@ -41,11 +42,14 @@ async function companyGuidFromLegacyCompanyId(companyId: number): Promise<string
 
 async function resolveCompanyGuidParam(companyId: number | string): Promise<string | undefined> {
   const text = String(companyId).trim();
-  if (text.includes("-")) {
+  if (!text || text.toLowerCase() === "all") {
+    return undefined;
+  }
+  if (isValidCompanyGuid(text)) {
     return text;
   }
   const numeric = Number(text);
-  if (!Number.isFinite(numeric)) {
+  if (!Number.isFinite(numeric) || numeric === 0) {
     return undefined;
   }
   return companyGuidFromLegacyCompanyId(numeric);
@@ -464,13 +468,7 @@ export const organogramService = {
     if (filters?.companyId === undefined) {
       return allDepartmentsCached();
     }
-    const raw = filters.companyId;
-    let guid: string | undefined;
-    if (typeof raw === "string") {
-      guid = raw;
-    } else {
-      guid = await companyGuidFromLegacyCompanyId(raw);
-    }
+    const guid = await resolveCompanyGuidParam(filters.companyId);
     if (!guid) return [];
     const row = (await listCompanySummaries()).find((c) => c.id === guid);
     return fetchDepartmentsForCompany(guid, row?.companyNameEn);

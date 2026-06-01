@@ -198,6 +198,23 @@ async function downloadExport(path: string, params: Record<string, unknown>, fil
   downloadBlob(response.data, fileName, "text/csv");
 }
 
+async function downloadFormattedExport(
+  path: string,
+  params: Record<string, unknown>,
+  fileName: string,
+  format: "xlsx" | "pdf",
+) {
+  const response = await api.get(platformApiUrl(`${path}/export.${format}`), {
+    params,
+    responseType: "blob",
+  });
+  downloadBlob(
+    response.data,
+    `${fileName}.${format}`,
+    format === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  );
+}
+
 export const payrollService = {
   // Structures
   createSalaryStructure: (data: Record<string, unknown>) =>
@@ -615,12 +632,25 @@ export const payrollService = {
 
   exportPaySlips: async (params: { year: number; month: number; companyId?: number; companyGuid?: string; departmentId?: number; sectionId?: number; designationId?: number; lineId?: number; searchTerm?: string; exportType?: string; status?: string }) => {
     const p = await resolvePeriodExportParams(params);
-    await downloadExport("/api/v1/payroll/export/salary-sheet", p, `salary-sheet-${params.month}-${params.year}.csv`);
+    await downloadFormattedExport(
+      "/api/v1/payroll/export/monthly-sheet",
+      {
+        ...p,
+        departmentId: params.departmentId,
+        sectionId: params.sectionId,
+        designationId: params.designationId,
+        lineId: params.lineId,
+        searchTerm: params.searchTerm,
+        status: params.status,
+      },
+      `monthly-sheet-${params.month}-${params.year}`,
+      "xlsx",
+    );
   },
 
   exportIndividualPayslipsExcel: async (params: { year: number; month: number; companyId?: number; companyGuid?: string; departmentId?: number; sectionId?: number; designationId?: number; lineId?: number; searchTerm?: string; status?: string }) => {
     const p = await resolvePeriodExportParams(params);
-    await downloadExport("/api/v1/payroll/export/salary-sheet", p, `payslips-${params.month}-${params.year}.csv`);
+    await downloadFormattedExport("/api/v1/payroll/export/pay-slips", p, `payslips-${params.month}-${params.year}`, "xlsx");
   },
 
   exportBankSheet: async (params: { year: number; month: number; companyId?: number; companyGuid?: string; departmentId?: number; searchTerm?: string }) => {
@@ -655,12 +685,170 @@ export const payrollService = {
 
   exportSummaryExcel: async (params: { year: number; month: number; companyId?: number; companyGuid?: string }) => {
     const p = await resolvePeriodExportParams(params);
-    await downloadExport("/api/v1/payroll/export/summary", p, `summary-${params.month}-${params.year}.csv`);
+    await downloadFormattedExport("/api/v1/payroll/export/summary", p, `summary-${params.month}-${params.year}`, "xlsx");
   },
 
   exportSummaryPdf: async (params: { year: number; month: number; companyId?: number; companyGuid?: string }) => {
     const p = await resolvePeriodExportParams(params);
-    await downloadExport("/api/v1/payroll/export/summary", { ...p, format: "pdf" }, `summary-${params.month}-${params.year}.csv`);
+    await downloadFormattedExport("/api/v1/payroll/export/summary", p, `summary-${params.month}-${params.year}`, "pdf");
+  },
+
+  exportSalarySheetExcel: async (params: {
+    year: number;
+    month: number;
+    companyId?: number;
+    companyGuid?: string;
+    departmentId?: number;
+    sectionId?: number;
+    designationId?: number;
+    lineId?: number;
+    searchTerm?: string;
+    status?: string;
+  }) => {
+    const p = await resolvePeriodExportParams(params);
+    await downloadFormattedExport(
+      "/api/v1/payroll/export/salary-sheet",
+      {
+        ...p,
+        departmentId: params.departmentId,
+        sectionId: params.sectionId,
+        designationId: params.designationId,
+        lineId: params.lineId,
+        searchTerm: params.searchTerm,
+        status: params.status,
+      },
+      `salary-sheet-${params.month}-${params.year}`,
+      "xlsx",
+    );
+  },
+
+  exportSalarySheetPdf: async (params: {
+    year: number;
+    month: number;
+    companyId?: number;
+    companyGuid?: string;
+    departmentId?: number;
+    sectionId?: number;
+    designationId?: number;
+    lineId?: number;
+    searchTerm?: string;
+    status?: string;
+  }) => {
+    const p = await resolvePeriodExportParams(params);
+    await downloadFormattedExport(
+      "/api/v1/payroll/export/salary-sheet",
+      {
+        ...p,
+        departmentId: params.departmentId,
+        sectionId: params.sectionId,
+        designationId: params.designationId,
+        lineId: params.lineId,
+        searchTerm: params.searchTerm,
+        status: params.status,
+      },
+      `salary-sheet-${params.month}-${params.year}`,
+      "pdf",
+    );
+  },
+
+  exportBankSheetExcel: async (params: { year: number; month: number; companyId?: number; companyGuid?: string }) => {
+    const p = await resolvePeriodExportParams(params);
+    await downloadFormattedExport("/api/v1/payroll/export/bank-sheet", p, `bank-sheet-${params.month}-${params.year}`, "xlsx");
+  },
+
+  exportBankSheetPdf: async (params: { year: number; month: number; companyId?: number; companyGuid?: string }) => {
+    const p = await resolvePeriodExportParams(params);
+    await downloadFormattedExport("/api/v1/payroll/export/bank-sheet", p, `bank-sheet-${params.month}-${params.year}`, "pdf");
+  },
+
+  exportPaySlipsExcel: async (params: { year: number; month: number; companyId?: number; companyGuid?: string }) => {
+    const p = await resolvePeriodExportParams(params);
+    await downloadFormattedExport("/api/v1/payroll/export/pay-slips", p, `payslips-${params.month}-${params.year}`, "xlsx");
+  },
+
+  exportPaySlipsPdf: async (params: { year: number; month: number; companyId?: number; companyGuid?: string }) => {
+    const p = await resolvePeriodExportParams(params);
+    await downloadFormattedExport("/api/v1/payroll/export/pay-slips", p, `payslips-${params.month}-${params.year}`, "pdf");
+  },
+
+  exportMonthlySheetExcel: async (params: {
+    year: number;
+    month: number;
+    companyId?: number;
+    companyGuid?: string;
+    departmentId?: number;
+    sectionId?: number;
+    designationId?: number;
+    lineId?: number;
+    searchTerm?: string;
+    status?: string;
+  }) => {
+    const p = await resolvePeriodExportParams(params);
+    await downloadFormattedExport(
+      "/api/v1/payroll/export/monthly-sheet",
+      {
+        ...p,
+        departmentId: params.departmentId,
+        sectionId: params.sectionId,
+        designationId: params.designationId,
+        lineId: params.lineId,
+        searchTerm: params.searchTerm,
+        status: params.status,
+      },
+      `monthly-sheet-${params.month}-${params.year}`,
+      "xlsx",
+    );
+  },
+
+  exportDailySheetExcel: async (params: {
+    date: string;
+    companyId?: number;
+    companyGuid?: string;
+    departmentId?: number;
+    searchTerm?: string;
+  }) => {
+    const companyId = params.companyGuid ?? (params.companyId ? await resolveCompanyGuid(params.companyId) : undefined);
+    await downloadFormattedExport(
+      "/api/v1/payroll/export/daily-sheet",
+      { companyId, date: params.date.slice(0, 10), departmentId: params.departmentId, searchTerm: params.searchTerm },
+      `daily-sheet-${params.date.slice(0, 10)}`,
+      "xlsx",
+    );
+  },
+
+  exportAdvanceSheetExcel: async (params: { year: number; month: number; companyId?: number; companyGuid?: string }) => {
+    const p = await resolveCompanyExportParamsAsync(params);
+    await downloadFormattedExport("/api/v1/payroll/export/advance-sheet", p, `advance-sheet-${params.month}-${params.year}`, "xlsx");
+  },
+
+  exportAdvanceSummaryExcel: async (params: { year: number; month: number; companyId?: number; companyGuid?: string }) => {
+    const p = await resolveCompanyExportParamsAsync(params);
+    await downloadFormattedExport("/api/v1/payroll/export/advance-summary", p, `advance-summary-${params.month}-${params.year}`, "xlsx");
+  },
+
+  exportFestivalBonusExcel: async (params: { year?: number; month?: number; companyId?: number; companyGuid?: string; bonusType?: string }) => {
+    const p = await resolveCompanyExportParamsAsync({
+      year: params.year ?? new Date().getFullYear(),
+      month: params.month,
+      companyId: params.companyId,
+      companyGuid: params.companyGuid,
+    });
+    await downloadFormattedExport(
+      "/api/v1/payroll/export/bonuses",
+      { ...p, bonusType: params.bonusType },
+      `bonuses-${params.month ?? "all"}-${params.year ?? new Date().getFullYear()}`,
+      "xlsx",
+    );
+  },
+
+  exportFestivalBonusBankExcel: async (params: { year: number; month: number; companyId?: number; companyGuid?: string }) => {
+    const p = await resolvePeriodExportParams(params);
+    await downloadFormattedExport(
+      "/api/v1/payroll/export/festival-bonus-bank",
+      p,
+      `festival-bonus-bank-${params.month}-${params.year}`,
+      "xlsx",
+    );
   },
 };
 

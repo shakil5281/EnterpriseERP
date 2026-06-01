@@ -34,7 +34,8 @@ public sealed class AttendanceEmployeeQuery(HrReadDbContext db) : IAttendanceEmp
                 j.EmployeeId,
                 j.DepartmentId,
                 j.SectionId,
-                j.DesignationId
+                j.DesignationId,
+                j.WorkLocation
             })
             .ToListAsync(cancellationToken);
 
@@ -91,6 +92,8 @@ public sealed class AttendanceEmployeeQuery(HrReadDbContext db) : IAttendanceEmp
                 }
             }
 
+            var lineName = string.IsNullOrWhiteSpace(job?.WorkLocation) ? null : job!.WorkLocation!.Trim();
+
             result[row.Id] = new AttendanceEmployeeProfile(
                 row.Id,
                 row.PunchNumber,
@@ -101,7 +104,8 @@ public sealed class AttendanceEmployeeQuery(HrReadDbContext db) : IAttendanceEmp
                 sectionId,
                 sectionName,
                 desigId,
-                desigName);
+                desigName,
+                lineName);
         }
 
         return result;
@@ -237,7 +241,8 @@ public sealed class AttendanceEmployeeQuery(HrReadDbContext db) : IAttendanceEmp
                 || e.PunchNumber.ToString().Contains(term));
         }
 
-        if (filter.DepartmentId.HasValue || filter.SectionId.HasValue || filter.DesignationId.HasValue)
+        if (filter.DepartmentId.HasValue || filter.SectionId.HasValue || filter.DesignationId.HasValue
+            || filter.GroupId.HasValue || !string.IsNullOrWhiteSpace(filter.LineName))
         {
             var jobQuery = db.EmployeeJobInfos.AsNoTracking()
                 .Where(j => j.CompanyId == filter.CompanyId && j.IsCurrent);
@@ -255,6 +260,18 @@ public sealed class AttendanceEmployeeQuery(HrReadDbContext db) : IAttendanceEmp
             if (filter.DesignationId.HasValue)
             {
                 jobQuery = jobQuery.Where(j => j.DesignationId == filter.DesignationId);
+            }
+
+            if (filter.GroupId.HasValue)
+            {
+                jobQuery = jobQuery.Where(j => j.GroupId == filter.GroupId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.LineName))
+            {
+                var lineName = filter.LineName.Trim().ToLower();
+                jobQuery = jobQuery.Where(j =>
+                    j.WorkLocation != null && j.WorkLocation.ToLower() == lineName);
             }
 
             var employeeIds = jobQuery.Select(j => j.EmployeeId);

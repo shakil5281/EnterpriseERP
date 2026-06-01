@@ -1,9 +1,10 @@
 "use client"
 
+import * as React from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm, useFieldArray } from "react-hook-form"
 import { z } from "zod"
-import { IconTrash, IconPlus, IconCalendar } from "@tabler/icons-react"
+import { IconTrash, IconPlus, IconCalendar, IconLoader2 } from "@tabler/icons-react"
 import { format } from "date-fns"
 
 import { Button } from "@/components/ui/button"
@@ -34,6 +35,9 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { cn } from "@/lib/utils"
+import { storeService } from "@/lib/services/store"
+import type { StoreItem } from "@/lib/types/store"
+import { toast } from "sonner"
 
 const itemSchema = z.object({
     itemId: z.string().min(1, "Item is required"),
@@ -52,29 +56,24 @@ const formSchema = z.object({
     notes: z.string().optional(),
 })
 
-const itemsList = [
-    { id: "1", name: "Cotton Yarn 80/1", unit: "kg" },
-    { id: "2", name: "Polyester Fabric", unit: "yds" },
-    { id: "3", name: "Plastic Buttons 14L", unit: "pcs" },
-    { id: "4", name: "YKK Zipper 5 inch", unit: "pcs" },
-    { id: "5", name: "Reactive Red Dye", unit: "kg" },
-]
-
 interface GrnFormProps {
-    onSubmit: (values: z.infer<typeof formSchema>) => void
+    companyId: string
+    onSubmit: () => void
     onCancel: () => void
 }
 
-export function GrnForm({ onSubmit, onCancel }: GrnFormProps) {
+export function GrnForm({ companyId, onSubmit, onCancel }: GrnFormProps) {
+    const [itemsList, setItemsList] = React.useState<StoreItem[]>([])
+    const [loadingItems, setLoadingItems] = React.useState(true)
+    const [submitting, setSubmitting] = React.useState(false)
+
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
             supplier: "",
             poReference: "",
             date: new Date(),
-            items: [
-                { itemId: "", unit: "", quantity: 0, rate: 0, amount: 0 }
-            ],
+            items: [{ itemId: "", unit: "", quantity: 0, rate: 0, amount: 0 }],
             totalAmount: 0,
             notes: "",
         },
@@ -87,13 +86,62 @@ export function GrnForm({ onSubmit, onCancel }: GrnFormProps) {
 
     const watchItems = form.watch("items")
 
+    React.useEffect(() => {
+        const fetchItems = async () => {
+            try {
+                const data = await storeService.getItems(companyId)
+                setItemsList(data)
+            } catch {
+                toast.error("Failed to load items")
+            } finally {
+                setLoadingItems(false)
+            }
+        }
+        fetchItems()
+    }, [companyId])
+
     const calculateTotal = () => {
         return (watchItems || []).reduce((sum, item) => sum + ((item.quantity || 0) * (item.rate || 0)), 0)
     }
 
+    const handleSubmit = async (values: z.infer<typeof formSchema>) => {
+        setSubmitting(true)
+        try {
+            await storeService.addGrn({
+                companyId,
+                grnNo: `GRN-${Date.now().toString().slice(-8)}`,
+                grnDate: values.date.toISOString().split("T")[0],
+                supplier: values.supplier,
+                poReference: values.poReference,
+                lines: values.items.map(row => {
+                    const item = itemsList.find(i => i.id === row.itemId)
+                    return {
+                        itemId: row.itemId,
+                        itemName: item?.itemName ?? "Unknown",
+                        quantity: row.quantity,
+                        rate: row.rate,
+                    }
+                }),
+            })
+            onSubmit()
+        } catch {
+            toast.error("Failed to create GRN")
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
+    if (loadingItems) {
+        return (
+            <div className="flex h-40 items-center justify-center">
+                <IconLoader2 className="animate-spin size-6 text-primary" />
+            </div>
+        )
+    }
+
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <FormField
                         control={form.control}
@@ -137,11 +185,7 @@ export function GrnForm({ onSubmit, onCancel }: GrnFormProps) {
                                                     !field.value && "text-muted-foreground"
                                                 )}
                                             >
-                                                {field.value ? (
-                                                    format(field.value, "PPP")
-                                                ) : (
-                                                    <span>Pick a date</span>
-                                                )}
+                                                {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
                                                 <IconCalendar className="ml-auto h-4 w-4 opacity-50" />
                                             </Button>
                                         </FormControl>
@@ -151,9 +195,7 @@ export function GrnForm({ onSubmit, onCancel }: GrnFormProps) {
                                             mode="single"
                                             selected={field.value}
                                             onSelect={field.onChange}
-                                            disabled={(date) =>
-                                                date > new Date() || date < new Date("1900-01-01")
-                                            }
+                                            disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
                                             initialFocus
                                         />
                                     </PopoverContent>
@@ -187,21 +229,22 @@ export function GrnForm({ onSubmit, onCancel }: GrnFormProps) {
                                                 <FormItem>
                                                     <FormControl>
                                                         <Select
+                                                            value={itemField.value}
                                                             onValueChange={(val) => {
                                                                 itemField.onChange(val)
                                                                 const selectedItem = itemsList.find(i => i.id === val)
                                                                 if (selectedItem) {
-                                                                    form.setValue(`items.${index}.unit`, selectedItem.unit)
+                                                                    form.setValue(`items.${index}.unit`, selectedItem.unitName ?? "")
+                                                                    form.setValue(`items.${index}.rate`, selectedItem.unitPrice)
                                                                 }
                                                             }}
-                                                            defaultValue={itemField.value}
                                                         >
                                                             <SelectTrigger>
                                                                 <SelectValue placeholder="Select Item" />
                                                             </SelectTrigger>
                                                             <SelectContent>
                                                                 {itemsList.map(i => (
-                                                                    <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>
+                                                                    <SelectItem key={i.id} value={i.id}>{i.itemName} ({i.itemCode})</SelectItem>
                                                                 ))}
                                                             </SelectContent>
                                                         </Select>
@@ -230,11 +273,7 @@ export function GrnForm({ onSubmit, onCancel }: GrnFormProps) {
                                             render={({ field }) => (
                                                 <FormItem>
                                                     <FormControl>
-                                                        <Input
-                                                            type="number"
-                                                            {...field}
-                                                            onChange={e => field.onChange(+e.target.value)}
-                                                        />
+                                                        <Input type="number" {...field} onChange={e => field.onChange(+e.target.value)} />
                                                     </FormControl>
                                                 </FormItem>
                                             )}
@@ -247,11 +286,7 @@ export function GrnForm({ onSubmit, onCancel }: GrnFormProps) {
                                             render={({ field }) => (
                                                 <FormItem>
                                                     <FormControl>
-                                                        <Input
-                                                            type="number"
-                                                            {...field}
-                                                            onChange={e => field.onChange(+e.target.value)}
-                                                        />
+                                                        <Input type="number" {...field} onChange={e => field.onChange(+e.target.value)} />
                                                     </FormControl>
                                                 </FormItem>
                                             )}
@@ -263,13 +298,7 @@ export function GrnForm({ onSubmit, onCancel }: GrnFormProps) {
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            type="button"
-                                            onClick={() => remove(index)}
-                                            className="text-destructive hover:text-destructive/90"
-                                        >
+                                        <Button variant="ghost" size="icon" type="button" onClick={() => remove(index)} className="text-destructive hover:text-destructive/90">
                                             <IconTrash className="size-4" />
                                         </Button>
                                     </TableCell>
@@ -278,12 +307,7 @@ export function GrnForm({ onSubmit, onCancel }: GrnFormProps) {
                         </TableBody>
                     </Table>
                     <div className="p-4 border-t bg-muted/20 flex justify-between items-center">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            type="button"
-                            onClick={() => append({ itemId: "", unit: "", quantity: 0, rate: 0, amount: 0 })}
-                        >
+                        <Button variant="outline" size="sm" type="button" onClick={() => append({ itemId: "", unit: "", quantity: 0, rate: 0, amount: 0 })}>
                             <IconPlus className="mr-2 size-4" />
                             Add Item
                         </Button>
@@ -310,11 +334,12 @@ export function GrnForm({ onSubmit, onCancel }: GrnFormProps) {
 
                 <div className="flex justify-end gap-2">
                     <Button variant="outline" type="button" onClick={onCancel}>Cancel</Button>
-                    <Button type="submit" size="lg">
+                    <Button type="submit" size="lg" disabled={submitting}>
+                        {submitting && <IconLoader2 className="animate-spin size-4 mr-2" />}
                         Save GRN
                     </Button>
                 </div>
             </form>
-        </Form >
+        </Form>
     )
 }

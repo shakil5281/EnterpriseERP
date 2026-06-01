@@ -19,7 +19,6 @@ import { leaveService } from "@/lib/services/leave"
 import { enrichApplication, type LeaveApplicationView } from "@/lib/services/leave-helpers"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { useCompanyContext } from "@/components/providers/company-context"
 import { useAuth } from "@/components/providers/auth-provider"
 import { LeaveStatusBadge } from "@/components/leave/leave-status-badge"
 import { LeaveApprovalSteps } from "@/components/leave/leave-approval-steps"
@@ -29,7 +28,6 @@ export default function LeaveApplicationDetailsPage() {
     const params = useParams()
     const router = useRouter()
     const id = params.id as string
-    const { activeCompanyId } = useCompanyContext()
     const { user } = useAuth()
 
     const [application, setApplication] = React.useState<LeaveApplicationView | null>(null)
@@ -37,18 +35,17 @@ export default function LeaveApplicationDetailsPage() {
     const [isActionLoading, setIsActionLoading] = React.useState(false)
 
     const loadApplication = React.useCallback(async () => {
-        if (!activeCompanyId) return
         setIsLoading(true)
         try {
             const app = await leaveService.getLeaveApplicationById(id)
-            setApplication(await enrichApplication(app, activeCompanyId))
+            setApplication(await enrichApplication(app, app.companyId))
         } catch {
             toast.error("Failed to load leave application")
             router.push("/management/leave")
         } finally {
             setIsLoading(false)
         }
-    }, [id, activeCompanyId, router])
+    }, [id, router])
 
     React.useEffect(() => {
         loadApplication()

@@ -1,6 +1,8 @@
 package router
 
 import (
+	"net/http"
+
 	"github.com/enterprise-erp/importexport/internal/handlers"
 	"github.com/enterprise-erp/importexport/internal/middleware"
 	"github.com/gin-contrib/cors"
@@ -77,6 +79,32 @@ func New(opts Options) *gin.Engine {
 		api.GET("/export-jobs", opts.Jobs.ListExportJobs)
 		api.GET("/export-jobs/:id/download", opts.Jobs.DownloadExportJob)
 	}
+
+	return r
+}
+
+// NewSwaggerOnly exposes health and Swagger docs when the database is unavailable in local Docker.
+func NewSwaggerOnly(allowedOrigins []string) *gin.Engine {
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(middleware.TraceID())
+	r.Use(corsMiddleware(allowedOrigins))
+
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status":  "unhealthy",
+			"service": "ImportExportService",
+			"reason":  "database unavailable; Swagger docs are still available",
+		})
+	})
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	r.GET("/", func(c *gin.Context) { c.Redirect(http.StatusFound, "/swagger/index.html") })
+
+	gatewaySwagger := ginSwagger.WrapHandler(
+		swaggerFiles.Handler,
+		ginSwagger.URL("/api/v1/import-export/swagger/doc.json"),
+	)
+	r.GET("/api/v1/import-export/swagger/*any", gatewaySwagger)
 
 	return r
 }

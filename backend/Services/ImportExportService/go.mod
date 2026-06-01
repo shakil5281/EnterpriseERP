@@ -1,6 +1,6 @@
 module github.com/enterprise-erp/importexport
 
-go 1.23.0
+go 1.25.0
 
 require (
 	github.com/gin-contrib/cors v1.7.2
@@ -8,6 +8,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
 	github.com/hibiken/asynq v0.24.1
+	github.com/jung-kurt/gofpdf v1.16.2
 	github.com/microsoft/go-mssqldb v1.7.2
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0

@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Erp.BuildingBlocks.Contracts.Pagination;
 using ShiftService.Application.Common.Interfaces;
 using ShiftService.Application.DTOs;
 
@@ -14,7 +15,9 @@ public record ListTemporaryShiftsQuery(
     Guid CompanyId,
     DateTime? FromDate,
     DateTime? ToDate,
-    Guid? EmployeeId = null) : IRequest<IEnumerable<TemporaryShiftAssignmentDto>>;
+    Guid? EmployeeId = null,
+    int Page = 1,
+    int PageSize = 20) : IRequest<PagedResult<TemporaryShiftAssignmentDto>>;
 public record GetShiftCalendarQuery(Guid CompanyId, DateTime FromDate, DateTime ToDate) : IRequest<IEnumerable<ShiftCalendarDto>>;
 
 public class ShiftQueryHandlers(IShiftDbContext db) :
@@ -23,7 +26,7 @@ public class ShiftQueryHandlers(IShiftDbContext db) :
     IRequestHandler<GetEmployeeShiftHistoryQuery, IEnumerable<EmployeeShiftAssignmentDto>>,
     IRequestHandler<GetTemporaryShiftByDateQuery, TemporaryShiftAssignmentDto?>,
     IRequestHandler<GetTemporaryShiftByIdQuery, TemporaryShiftAssignmentDto?>,
-    IRequestHandler<ListTemporaryShiftsQuery, IEnumerable<TemporaryShiftAssignmentDto>>,
+    IRequestHandler<ListTemporaryShiftsQuery, PagedResult<TemporaryShiftAssignmentDto>>,
     IRequestHandler<GetShiftCalendarQuery, IEnumerable<ShiftCalendarDto>>
 {
     public async Task<ShiftDto?> Handle(GetShiftByIdQuery request, CancellationToken cancellationToken)
@@ -75,7 +78,7 @@ public class ShiftQueryHandlers(IShiftDbContext db) :
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    public async Task<IEnumerable<TemporaryShiftAssignmentDto>> Handle(ListTemporaryShiftsQuery request, CancellationToken cancellationToken)
+    public async Task<PagedResult<TemporaryShiftAssignmentDto>> Handle(ListTemporaryShiftsQuery request, CancellationToken cancellationToken)
     {
         var query = db.TemporaryShiftAssignments
             .AsNoTracking()
@@ -99,11 +102,36 @@ public class ShiftQueryHandlers(IShiftDbContext db) :
             query = query.Where(a => a.ShiftDate <= to);
         }
 
-        return await query
+        var total = await query.CountAsync(cancellationToken);
+
+        var ordered = query
             .OrderBy(a => a.ShiftDate)
-            .ThenBy(a => a.EmployeeId)
+            .ThenBy(a => a.EmployeeId);
+
+        var page = request.Page < 1 ? 1 : request.Page;
+        var pageSize = request.PageSize switch
+        {
+            0 => 0, // All
+            < 1 => 20,
+            > 200 => 200,
+            _ => request.PageSize
+        };
+
+        var paged = pageSize == 0
+            ? ordered
+            : ordered.Skip((page - 1) * pageSize).Take(pageSize);
+
+        var items = await paged
             .Select(a => new TemporaryShiftAssignmentDto(a.Id, a.EmployeeId, a.ShiftId, a.Shift!.ShiftName, a.ShiftDate, a.Reason, a.CompanyId))
             .ToListAsync(cancellationToken);
+
+        return new PagedResult<TemporaryShiftAssignmentDto>
+        {
+            Items = items,
+            TotalCount = total,
+            Page = pageSize == 0 ? 1 : page,
+            PageSize = pageSize == 0 ? total : pageSize
+        };
     }
 
     public async Task<IEnumerable<ShiftCalendarDto>> Handle(GetShiftCalendarQuery request, CancellationToken cancellationToken)

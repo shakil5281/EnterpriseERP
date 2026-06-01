@@ -1,10 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { IconTruckDelivery, IconPlus, IconFileInvoice, IconPrinter } from "@tabler/icons-react"
+import Link from "next/link"
+import { IconTruckDelivery, IconPlus, IconPrinter, IconLoader2, IconExternalLink } from "@tabler/icons-react"
 import { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/data-table"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import {
@@ -15,27 +15,24 @@ import {
     SheetDescription,
 } from "@/components/ui/sheet"
 import { GrnForm } from "@/components/store/grn-form"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { Grn } from "@/lib/types/store"
 
-type GrnRecord = {
-    id: string
-    grnNo: string
-    date: string
-    supplier: string
-    poReference: string
-    itemsCount: number
-    totalAmount: number
-    status: string
-}
-
-const columns: ColumnDef<GrnRecord>[] = [
+const columns: ColumnDef<Grn>[] = [
     {
         accessorKey: "grnNo",
         header: "GRN No",
-        cell: ({ row }) => <div className="font-mono font-bold">{row.getValue("grnNo")}</div>,
+        cell: ({ row }) => (
+            <Link href={`/store/grns/${row.original.id}`} className="font-mono font-bold text-primary hover:underline">
+                {row.getValue("grnNo")}
+            </Link>
+        ),
     },
     {
-        accessorKey: "date",
+        accessorKey: "grnDate",
         header: "Date",
+        cell: ({ row }) => new Date(row.getValue("grnDate") as string).toLocaleDateString(),
     },
     {
         accessorKey: "supplier",
@@ -44,17 +41,18 @@ const columns: ColumnDef<GrnRecord>[] = [
     {
         accessorKey: "poReference",
         header: "Ref PO/Invoice",
+        cell: ({ row }) => row.getValue("poReference") || "—",
     },
     {
-        accessorKey: "itemsCount",
+        id: "itemsCount",
         header: "Items",
-        cell: ({ row }) => <div className="text-center">{row.getValue("itemsCount")}</div>,
+        cell: ({ row }) => <div className="text-center">{row.original.lines.length}</div>,
     },
     {
         accessorKey: "totalAmount",
         header: "Amount (৳)",
         cell: ({ row }) => {
-            const amount = parseFloat(row.getValue("totalAmount"))
+            const amount = parseFloat(String(row.getValue("totalAmount")))
             const formatted = new Intl.NumberFormat("en-BD", {
                 style: "currency",
                 currency: "BDT",
@@ -67,46 +65,56 @@ const columns: ColumnDef<GrnRecord>[] = [
         id: "actions",
         cell: ({ row }) => (
             <div className="flex justify-end gap-2">
+                <Button variant="ghost" size="icon" title="View GRN" asChild>
+                    <Link href={`/store/grns/${row.original.id}`}>
+                        <IconExternalLink className="size-4 text-muted-foreground" />
+                    </Link>
+                </Button>
                 <Button variant="ghost" size="icon" title="Print GRN">
                     <IconPrinter className="size-4 text-muted-foreground" />
                 </Button>
             </div>
-        )
-    }
+        ),
+    },
 ]
 
-const initialData: GrnRecord[] = [
-    { id: "1", grnNo: "GRN-2026-001", date: "Jan 30, 2026", supplier: "TexFab Suppliers Ltd", poReference: "PO-098", itemsCount: 3, totalAmount: 145000, status: "Received" },
-    { id: "2", grnNo: "GRN-2026-002", date: "Jan 28, 2026", supplier: "Global Chemicals", poReference: "INV-5542", itemsCount: 1, totalAmount: 25000, status: "Received" },
-]
+function GrnPageContent({ companyId }: { companyId: string }) {
+    const [data, setData] = React.useState<Grn[]>([]);
+    const [loading, setLoading] = React.useState(true);
+    const [isSheetOpen, setIsSheetOpen] = React.useState(false);
 
-export default function GrnPage() {
-    const [data, setData] = React.useState<GrnRecord[]>(initialData)
-    const [isSheetOpen, setIsSheetOpen] = React.useState(false)
-
-    const handleAddClick = () => {
-        setIsSheetOpen(true)
-    }
-
-    const handleFormSubmit = (values: any) => {
-        const newRecord: GrnRecord = {
-            id: Math.random().toString(),
-            grnNo: `GRN-2026-${Math.floor(Math.random() * 1000)}`,
-            date: "Jan 30, 2026", // Mock date format
-            supplier: values.supplier,
-            poReference: values.poReference || "-",
-            itemsCount: values.items.length,
-            totalAmount: values.items.reduce((sum: number, i: any) => sum + (i.quantity * i.rate), 0),
-            status: "Received"
+    const fetchGrns = async () => {
+        try {
+            const grns = await storeService.getGrns(companyId);
+            setData(grns);
+        } catch {
+            toast.error("Failed to load GRN records");
+        } finally {
+            setLoading(false);
         }
-        setData(prev => [newRecord, ...prev])
-        toast.success("GRN created successfully")
-        setIsSheetOpen(false)
+    };
+
+    React.useEffect(() => {
+        fetchGrns();
+    }, [companyId]);
+
+    const handleFormSubmit = async () => {
+        await fetchGrns();
+        setIsSheetOpen(false);
+        toast.success("GRN created successfully");
+    };
+
+    if (loading) {
+        return (
+            <div className="flex h-[400px] items-center justify-center">
+                <IconLoader2 className="animate-spin size-8 text-primary" />
+            </div>
+        );
     }
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-            <div className="flex items-center justify-between px-4 lg:px-6">
+        <>
+            <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                         <IconTruckDelivery className="size-6 text-primary" />
@@ -118,7 +126,7 @@ export default function GrnPage() {
                         </p>
                     </div>
                 </div>
-                <Button onClick={handleAddClick}>
+                <Button onClick={() => setIsSheetOpen(true)}>
                     <IconPlus className="mr-2 size-4" />
                     Create GRN
                 </Button>
@@ -128,7 +136,7 @@ export default function GrnPage() {
                 data={data}
                 columns={columns}
                 addLabel="Create GRN"
-                onAddClick={handleAddClick}
+                onAddClick={() => setIsSheetOpen(true)}
                 searchKey="supplier"
             />
 
@@ -142,12 +150,23 @@ export default function GrnPage() {
                     </SheetHeader>
                     <div className="mt-6">
                         <GrnForm
+                            companyId={companyId}
                             onSubmit={handleFormSubmit}
                             onCancel={() => setIsSheetOpen(false)}
                         />
                     </div>
                 </SheetContent>
             </Sheet>
-        </div>
-    )
+        </>
+    );
+}
+
+export default function GrnPage() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <GrnPageContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
+    );
 }

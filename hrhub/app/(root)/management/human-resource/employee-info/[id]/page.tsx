@@ -29,6 +29,7 @@ import { TransferSheet } from "@/components/hr/transfer-sheet"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { EmployeeDocumentsPanel } from "@/components/hr/employee-documents-panel"
+import { EmployeeProfileImageLightbox } from "@/components/hr/employee-profile-image-lightbox"
 
 export default function EmployeeDetailsPage() {
     const params = useParams()
@@ -111,11 +112,15 @@ export default function EmployeeDetailsPage() {
             <Card className="overflow-hidden border-none shadow-xl bg-linear-to-br from-white to-gray-50">
                 <div className="h-32 bg-primary/10 relative">
                     <div className="absolute -bottom-16 left-8 flex items-end gap-6">
-                        <div className="h-32 w-32 rounded-2xl bg-white p-1.5 shadow-lg relative overflow-hidden ring-4 ring-white">
-                            <div className="h-full w-full bg-muted flex items-center justify-center rounded-xl">
-                                <IconUser className="h-16 w-16 text-muted-foreground/30" />
-                            </div>
-                        </div>
+                        <EmployeeProfileImageLightbox
+                            imageUrl={employee.profileImageUrl}
+                            name={employee.fullNameEn}
+                            subtitle={
+                                [employee.designationName, employee.departmentName]
+                                    .filter(Boolean)
+                                    .join(" · ") || undefined
+                            }
+                        />
                         <div className="pb-2">
                             <div className="flex items-center gap-3">
                                 <h1 className="text-3xl font-bold tracking-tight text-gray-900">{employee.fullNameEn}</h1>
@@ -126,7 +131,9 @@ export default function EmployeeDetailsPage() {
                             </div>
                             <p className="text-lg font-medium text-muted-foreground mt-1 flex items-center gap-2">
                                 <IconBriefcase className="h-4 w-4" />
-                                {employee.designationName} â€¢ {employee.departmentName}
+                                {employee.designationName}
+                                {employee.designationName && employee.departmentName ? " · " : null}
+                                {employee.departmentName}
                             </p>
                         </div>
                     </div>
@@ -190,6 +197,7 @@ export default function EmployeeDetailsPage() {
                                 <DetailItem label="Department" value={employee.departmentName} />
                                 <DetailItem label="Section" value={employee.sectionName} />
                                 <DetailItem label="Designation" value={employee.designationName} />
+                                <DetailItem label="Shift" value={employee.shiftName} />
                                 <DetailItem label="Status" value={employee.status} />
                             </div>
                         </CardContent>
@@ -318,7 +326,9 @@ function DetailItem({ label, value }: { label: string, value: string | number | 
     return (
         <div className="space-y-1">
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
-            <p className="text-sm font-medium text-gray-800">{value || "â€”"}</p>
+            <p className="text-sm font-medium text-gray-800">
+                {value !== undefined && value !== null && String(value).trim() !== "" ? value : "—"}
+            </p>
         </div>
     )
 }

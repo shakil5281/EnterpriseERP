@@ -107,6 +107,107 @@ namespace CuttingService.Infrastructure.Persistence.Migrations
                     b.ToTable("CuttingBalances", (string)null);
                 });
 
+            modelBuilder.Entity("CuttingService.Domain.CuttingBundle", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BundleTag")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CurrentLocation")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid?>("CuttingLayId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CuttingOutputId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CuttingPlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("PieceCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PlanNo")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("SerialFrom")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SerialRange")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("SerialTo")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SizeName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("Ready");
+
+                    b.Property<string>("StyleName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("WeightKg")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("CuttingPlanId");
+
+                    b.HasIndex("CompanyId", "BundleTag")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "OrderId");
+
+                    b.HasIndex("CompanyId", "Status", "CreatedAt");
+
+                    b.ToTable("CuttingBundles", (string)null);
+                });
+
             modelBuilder.Entity("CuttingService.Domain.CuttingLay", b =>
                 {
                     b.Property<Guid>("Id")
@@ -712,6 +813,17 @@ namespace CuttingService.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("FabricIssuesToCutting", (string)null);
+                });
+
+            modelBuilder.Entity("CuttingService.Domain.CuttingBundle", b =>
+                {
+                    b.HasOne("CuttingService.Domain.CuttingPlan", "CuttingPlan")
+                        .WithMany()
+                        .HasForeignKey("CuttingPlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CuttingPlan");
                 });
 
             modelBuilder.Entity("CuttingService.Domain.CuttingLay", b =>

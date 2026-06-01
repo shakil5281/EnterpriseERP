@@ -471,6 +471,9 @@ public sealed class ExtendedCommandHandlers(
 
 public sealed class ExtendedQueryHandlers(IUnitOfWork uow, IMerchandisingDbContext db, IMapper mapper) :
     IRequestHandler<GetBuyerContactsQuery, IReadOnlyList<BuyerContactDto>>,
+    IRequestHandler<GetBuyerPaymentTermsQuery, IReadOnlyList<BuyerPaymentTermDto>>,
+    IRequestHandler<GetBuyerComplianceRulesQuery, IReadOnlyList<BuyerComplianceRuleDto>>,
+    IRequestHandler<GetQuotationNegotiationsQuery, IReadOnlyList<QuotationNegotiationDto>>,
     IRequestHandler<GetStyleVersionsQuery, IReadOnlyList<StyleVersionDto>>,
     IRequestHandler<GetStyleBomItemsQuery, IReadOnlyList<StyleBomItemDto>>,
     IRequestHandler<GetQuotationsQuery, IReadOnlyList<QuotationDto>>,
@@ -484,6 +487,27 @@ public sealed class ExtendedQueryHandlers(IUnitOfWork uow, IMerchandisingDbConte
     {
         var rows = await db.BuyerContacts.Where(x => x.BuyerId == query.BuyerId).ToListAsync(cancellationToken);
         return mapper.Map<IReadOnlyList<BuyerContactDto>>(rows);
+    }
+
+    public async Task<IReadOnlyList<BuyerPaymentTermDto>> Handle(GetBuyerPaymentTermsQuery query, CancellationToken cancellationToken)
+    {
+        var rows = await db.BuyerPaymentTerms.Where(x => x.BuyerId == query.BuyerId).OrderBy(x => x.TermName).ToListAsync(cancellationToken);
+        return mapper.Map<IReadOnlyList<BuyerPaymentTermDto>>(rows);
+    }
+
+    public async Task<IReadOnlyList<BuyerComplianceRuleDto>> Handle(GetBuyerComplianceRulesQuery query, CancellationToken cancellationToken)
+    {
+        var rows = await db.BuyerComplianceRules.Where(x => x.BuyerId == query.BuyerId).OrderBy(x => x.RuleName).ToListAsync(cancellationToken);
+        return mapper.Map<IReadOnlyList<BuyerComplianceRuleDto>>(rows);
+    }
+
+    public async Task<IReadOnlyList<QuotationNegotiationDto>> Handle(GetQuotationNegotiationsQuery query, CancellationToken cancellationToken)
+    {
+        var rows = await db.QuotationNegotiations
+            .Where(x => x.QuotationId == query.QuotationId && x.CompanyId == query.CompanyId)
+            .OrderBy(x => x.RoundNo)
+            .ToListAsync(cancellationToken);
+        return mapper.Map<IReadOnlyList<QuotationNegotiationDto>>(rows);
     }
 
     public async Task<IReadOnlyList<StyleVersionDto>> Handle(GetStyleVersionsQuery query, CancellationToken cancellationToken)

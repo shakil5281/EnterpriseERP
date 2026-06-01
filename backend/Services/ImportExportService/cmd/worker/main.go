@@ -40,8 +40,10 @@ func main() {
 	store := storage.LocalStorage{Root: dataRoot}
 	svc := &importsvc.Service{
 		DB: gdb, CompanyDB: companyDB, Store: store, ExportDir: cfg.Storage.ExportDir,
-		LargeThreshold: cfg.Asynq.ImportLargeRowThreshold,
-		HR:             hrclient.New(cfg.Services.HrBaseUrl),
+		LargeThreshold:                cfg.Asynq.ImportLargeRowThreshold,
+		EmployeeImportBatchSize:       cfg.EmployeeImport.BatchSize,
+		EmployeeImportParallelBatches: cfg.EmployeeImport.ParallelBatches,
+		HR:                            hrclient.New(cfg.Services.HrBaseUrl),
 	}
 	h := worker.NewHandler(svc, logger)
 	srv := asynq.NewServer(

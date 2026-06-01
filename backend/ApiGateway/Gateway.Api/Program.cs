@@ -41,7 +41,7 @@ builder.Services.AddCors(options =>
                     return configuredCorsOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase);
                 }
 
-                if (!builder.Environment.IsDevelopment())
+                if (!builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("Docker"))
                 {
                     return false;
                 }
@@ -147,6 +147,106 @@ app.Use(async (ctx, next) =>
 });
 
 app.MapHealthChecks("/health");
-app.MapReverseProxy().RequireRateLimiting("per-ip");
+
+app.MapGet("/api/v1/notification/swagger/v1/swagger.json", () => Results.Json(new
+{
+    openapi = "3.0.1",
+    info = new
+    {
+        title = "Notification Service API",
+        version = "v1",
+        description = "Gateway-local OpenAPI document for NotificationService when the standalone service is not running.",
+    },
+    paths = new Dictionary<string, object>
+    {
+        ["/api/v1/notification/send"] = new
+        {
+            post = new
+            {
+                tags = new[] { "Notification" },
+                summary = "Send a notification",
+                responses = new Dictionary<string, object>
+                {
+                    ["200"] = new { description = "OK" },
+                    ["401"] = new { description = "Unauthorized" },
+                },
+            },
+        },
+        ["/api/v1/notification/recipient/{recipientId}"] = new
+        {
+            get = new
+            {
+                tags = new[] { "Notification" },
+                summary = "List notifications by recipient",
+                parameters = new[]
+                {
+                    new
+                    {
+                        name = "recipientId",
+                        @in = "path",
+                        required = true,
+                        schema = new { type = "string" },
+                    },
+                },
+                responses = new Dictionary<string, object>
+                {
+                    ["200"] = new { description = "OK" },
+                    ["401"] = new { description = "Unauthorized" },
+                },
+            },
+        },
+        ["/api/v1/notification/unread-count/{recipientId}"] = new
+        {
+            get = new
+            {
+                tags = new[] { "Notification" },
+                summary = "Get unread notification count",
+                parameters = new[]
+                {
+                    new
+                    {
+                        name = "recipientId",
+                        @in = "path",
+                        required = true,
+                        schema = new { type = "string" },
+                    },
+                },
+                responses = new Dictionary<string, object>
+                {
+                    ["200"] = new { description = "OK" },
+                    ["401"] = new { description = "Unauthorized" },
+                },
+            },
+        },
+    },
+}));
+
+// YARP legacy `{**catch-all}` also matches `/swagger/*` and proxies → 502 for Swagger UI assets.
+// Only non-local paths should hit reverse proxy; /swagger is served by UseSwaggerUI above.
+app.MapWhen(
+    ctx => ShouldReverseProxy(ctx.Request.Path),
+    branch =>
+    {
+        branch.UseRouting();
+        branch.UseCors("gateway");
+        branch.UseEndpoints(endpoints =>
+        {
+            endpoints.MapReverseProxy().RequireRateLimiting("per-ip");
+        });
+    });
 
 await app.RunAsync();
+
+static bool ShouldReverseProxy(PathString path)
+{
+    if (path.StartsWithSegments("/swagger", StringComparison.OrdinalIgnoreCase))
+        return false;
+
+    if (path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase))
+        return false;
+
+    if (path.StartsWithSegments("/api/v1/notification/swagger", StringComparison.OrdinalIgnoreCase))
+        return false;
+
+    return true;
+}

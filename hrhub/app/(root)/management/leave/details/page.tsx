@@ -5,12 +5,11 @@ import { IconCalendar, IconUser } from "@tabler/icons-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { leaveService } from "@/lib/services/leave"
 import {
-    enrichApplications,
+    mapLeaveApplicationListItems,
     mapBalanceSummary,
     type LeaveApplicationView,
 } from "@/lib/services/leave-helpers"
-import { useCompanyContext } from "@/components/providers/company-context"
-import { LeaveCompanyBar } from "@/components/leave/leave-company-bar"
+import { LeaveAdvancedFilter, type LeaveFilterParams } from "@/components/leave/leave-advanced-filter"
 import { LeaveBalanceTable } from "@/components/leave/leave-balance-table"
 import { LeaveStatusBadge } from "@/components/leave/leave-status-badge"
 import {
@@ -21,7 +20,7 @@ import { toast } from "sonner"
 import { format } from "date-fns"
 
 export default function LeaveDetailsPage() {
-    const { activeCompanyId } = useCompanyContext()
+    const [selectedCompanyId, setSelectedCompanyId] = React.useState<string | undefined>()
     const [year, setYear] = React.useState(new Date().getFullYear())
     const [employee, setEmployee] = React.useState<EmployeeLeaveSelection | null>(null)
     const [balances, setBalances] = React.useState<Awaited<ReturnType<typeof leaveService.getEmployeeBalances>>>([])
@@ -29,22 +28,20 @@ export default function LeaveDetailsPage() {
     const [isLoading, setIsLoading] = React.useState(false)
 
     const loadEmployeeData = React.useCallback(async () => {
-        if (!activeCompanyId || !employee?.entityId) {
+        if (!selectedCompanyId || !employee?.entityId) {
             setBalances([])
             setHistory([])
             return
         }
         setIsLoading(true)
         try {
-            const [bal, apps, types] = await Promise.all([
-                leaveService.getEmployeeBalances(employee.entityId, { companyId: activeCompanyId, year }),
-                leaveService.listLeaveApplications(activeCompanyId),
-                leaveService.listLeaveTypes(activeCompanyId),
+            const [bal, apps] = await Promise.all([
+                leaveService.getEmployeeBalances(employee.entityId, { companyId: selectedCompanyId, year }),
+                leaveService.listLeaveApplications(selectedCompanyId),
             ])
             setBalances(bal)
-            const enriched = await enrichApplications(apps, activeCompanyId, types)
             setHistory(
-                enriched
+                mapLeaveApplicationListItems(apps)
                     .filter((a) => a.employeeEntityId === employee.entityId)
                     .sort((a, b) => new Date(b.appliedDate).getTime() - new Date(a.appliedDate).getTime())
             )
@@ -53,7 +50,12 @@ export default function LeaveDetailsPage() {
         } finally {
             setIsLoading(false)
         }
-    }, [activeCompanyId, employee, year])
+    }, [selectedCompanyId, employee, year])
+
+    const handleFilterChange = React.useCallback((filters: LeaveFilterParams) => {
+        setSelectedCompanyId(filters.companyEntityId)
+        if (filters.year) setYear(filters.year)
+    }, [])
 
     React.useEffect(() => {
         loadEmployeeData()
@@ -67,7 +69,12 @@ export default function LeaveDetailsPage() {
                 <h1 className="text-2xl font-bold tracking-tight">Leave Details</h1>
                 <p className="text-muted-foreground text-sm">Employee leave balance and history</p>
             </div>
-            <LeaveCompanyBar year={year} onYearChange={setYear} onRefresh={loadEmployeeData} isLoading={isLoading} />
+            <LeaveAdvancedFilter
+                showYear
+                onFilterChange={handleFilterChange}
+                isLoading={isLoading}
+                initialYear={year}
+            />
             <Card>
                 <CardContent className="pt-6">
                     <EmployeeLeavePicker value={employee} onChange={setEmployee} />

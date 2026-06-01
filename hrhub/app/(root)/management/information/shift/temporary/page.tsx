@@ -23,7 +23,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { companyService, Company } from "@/lib/services/company";
+import { ScopedCompanySelect } from "@/components/hr/scoped-company-select";
+import { useCompanyFilterScope } from "@/hooks/use-company-filter-scope";
 import { employeeService, type Employee, type EmployeeSimple } from "@/lib/services/employee";
 import {
   organogramService,
@@ -37,6 +38,26 @@ import { shiftService, Shift, TemporaryShiftAssignment } from "@/lib/services/sh
 
 type EmployeeRow = Omit<EmployeeSimple, "id"> & { id: string };
 type OrganogramFilter = "All" | number;
+
+type AppliedEmployeeFilters = {
+  searchTerm: string;
+  employeeIdFilter: string;
+  deptFilter: OrganogramFilter;
+  sectionFilter: OrganogramFilter;
+  designationFilter: OrganogramFilter;
+  lineFilter: OrganogramFilter;
+  groupFilter: OrganogramFilter;
+};
+
+const defaultAppliedEmployeeFilters = (): AppliedEmployeeFilters => ({
+  searchTerm: "",
+  employeeIdFilter: "",
+  deptFilter: "All",
+  sectionFilter: "All",
+  designationFilter: "All",
+  lineFilter: "All",
+  groupFilter: "All",
+});
 
 function employeeToRow(e: Employee): EmployeeRow | null {
   if (!e.entityId) return null;
@@ -75,8 +96,8 @@ function toDateInput(value?: string) {
 }
 
 export default function TemporaryShiftPage() {
-  const { user, hasRole, loading: authLoading } = useAuth();
-  const [companies, setCompanies] = React.useState<Company[]>([]);
+  const { loading: authLoading } = useAuth();
+  const { companies } = useCompanyFilterScope();
   const [selectedCompany, setSelectedCompany] = React.useState("");
   const [shifts, setShifts] = React.useState<Shift[]>([]);
   const [filterRange, setFilterRange] = React.useState<DateRange | undefined>(defaultRange);
@@ -99,13 +120,22 @@ export default function TemporaryShiftPage() {
   const [employees, setEmployees] = React.useState<EmployeeRow[]>([]);
   const [selectedEmployees, setSelectedEmployees] = React.useState<EmployeeRow[]>([]);
   const [assignments, setAssignments] = React.useState<TemporaryShiftAssignment[]>([]);
+  const [assignmentPageIndex, setAssignmentPageIndex] = React.useState(0);
+  const [assignmentPageSize, setAssignmentPageSize] = React.useState(10);
+  const [assignmentTotalCount, setAssignmentTotalCount] = React.useState(0);
+  const [assignmentTotalPages, setAssignmentTotalPages] = React.useState(1);
+
+  const [employeePageIndex, setEmployeePageIndex] = React.useState(0);
+  const [employeePageSize, setEmployeePageSize] = React.useState(10);
+  const [employeeTotalCount, setEmployeeTotalCount] = React.useState(0);
+  const [employeeTotalPages, setEmployeeTotalPages] = React.useState(1);
+  const [appliedEmployeeFilters, setAppliedEmployeeFilters] =
+    React.useState<AppliedEmployeeFilters>(defaultAppliedEmployeeFilters);
 
   const [loadingEmployees, setLoadingEmployees] = React.useState(false);
   const [loadingAssignments, setLoadingAssignments] = React.useState(false);
   const [applying, setApplying] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
-
-  const canSeeAllCompanies = hasRole("SuperAdmin") || hasRole("Admin");
 
   const selectedCompanyRow = React.useMemo(
     () => companies.find((c) => c.entityId === selectedCompany),
@@ -113,17 +143,6 @@ export default function TemporaryShiftPage() {
   );
 
   const { from: fromDate, to: toDate } = rangeToIso(filterRange);
-
-  React.useEffect(() => {
-    if (authLoading || !user) return;
-    companyService.getAll().then((list) => {
-      const allowed = canSeeAllCompanies
-        ? list
-        : list.filter((c) => user.assignedCompanyIds?.includes(c.entityId));
-      setCompanies(allowed);
-      setSelectedCompany((current) => current || allowed[0]?.entityId || "");
-    });
-  }, [authLoading, canSeeAllCompanies, user]);
 
   const loadShifts = React.useCallback(async () => {
     if (!selectedCompany) {
@@ -203,74 +222,108 @@ export default function TemporaryShiftPage() {
     }
     try {
       setLoadingAssignments(true);
-      const list = await shiftService.listTemporaryShifts({
+      const page = await shiftService.listTemporaryShiftsPage({
         companyId: selectedCompany,
         fromDate,
         toDate,
+        page: assignmentPageIndex + 1,
+        pageSize: assignmentPageSize,
       });
-      setAssignments(list);
+      setAssignments(page?.items ?? []);
+      setAssignmentTotalCount(page?.totalCount ?? 0);
+      setAssignmentTotalPages((page as any)?.totalPages ?? 1);
     } catch {
       toast.error("Failed to load temporary shift records");
     } finally {
       setLoadingAssignments(false);
     }
+  }, [selectedCompany, fromDate, toDate, assignmentPageIndex, assignmentPageSize]);
+
+  React.useEffect(() => {
+    setAssignmentPageIndex(0);
   }, [selectedCompany, fromDate, toDate]);
 
-  const applyFilter = React.useCallback(
-    async (opts?: { silent?: boolean }) => {
-      if (!selectedCompany) {
-        if (!opts?.silent) toast.error("Select a company");
+  React.useEffect(() => {
+    void loadAssignments();
+  }, [loadAssignments]);
+
+  const fetchEmployees = React.useCallback(
+    async (opts?: { silent?: boolean; pageIndex?: number }) => {
+      if (!selectedCompany || !selectedCompanyRow?.id) {
+        setEmployees([]);
+        setEmployeeTotalCount(0);
+        setEmployeeTotalPages(1);
         return;
       }
-      const combinedSearch = [employeeIdFilter.trim(), searchTerm.trim()]
+
+      const pageIndex = opts?.pageIndex ?? employeePageIndex;
+      const pageSize = employeePageSize;
+      const filters = appliedEmployeeFilters;
+
+      const combinedSearch = [filters.employeeIdFilter.trim(), filters.searchTerm.trim()]
         .filter(Boolean)
         .join(" ")
         .trim();
 
+      const needsLineGroupFilter =
+        filters.lineFilter !== "All" || filters.groupFilter !== "All";
+
       try {
         setLoadingEmployees(true);
-        const list = await employeeService.getEmployees({
+        const page = await employeeService.getEmployeesPage({
           searchTerm: combinedSearch || undefined,
-          companyId: selectedCompanyRow?.id,
+          companyId: selectedCompanyRow.id,
           status: "Active",
-          departmentId: deptFilter === "All" ? undefined : deptFilter,
-          sectionId: sectionFilter === "All" ? undefined : sectionFilter,
-          designationId: designationFilter === "All" ? undefined : designationFilter,
+          departmentId: filters.deptFilter === "All" ? undefined : filters.deptFilter,
+          sectionId: filters.sectionFilter === "All" ? undefined : filters.sectionFilter,
+          designationId:
+            filters.designationFilter === "All" ? undefined : filters.designationFilter,
+          page: needsLineGroupFilter ? 1 : pageIndex + 1,
+          pageSize: needsLineGroupFilter ? 0 : pageSize,
         });
 
-        let rows = list.map(employeeToRow).filter((r): r is EmployeeRow => r !== null);
+        let items = page.items ?? [];
 
-        if (lineFilter !== "All") {
-          rows = rows.filter((e) => {
-            const emp = list.find((x) => x.entityId === e.entityId);
-            return emp?.lineId === lineFilter;
-          });
+        if (filters.lineFilter !== "All") {
+          items = items.filter((e) => e.lineId === filters.lineFilter);
         }
-        if (groupFilter !== "All") {
-          rows = rows.filter((e) => {
-            const emp = list.find((x) => x.entityId === e.entityId);
-            return emp?.groupId === groupFilter;
-          });
+        if (filters.groupFilter !== "All") {
+          items = items.filter((e) => e.groupId === filters.groupFilter);
         }
 
-        if (employeeIdFilter.trim()) {
-          const needle = employeeIdFilter.trim().toLowerCase();
-          const narrowed = rows.filter(
-            (e) =>
-              e.employeeId.toLowerCase().includes(needle) ||
-              String(e.punchNumber ?? "").includes(needle),
-          );
-          setEmployees(narrowed.length > 0 ? narrowed : rows);
+        const serverTotal = (page as { totalCount?: number }).totalCount ?? items.length;
+        let displayTotal = serverTotal;
+
+        if (needsLineGroupFilter) {
+          displayTotal = items.length;
+          if (pageSize === 0) {
+            setEmployees(
+              items.map(employeeToRow).filter((r): r is EmployeeRow => r !== null),
+            );
+            setEmployeeTotalCount(displayTotal);
+            setEmployeeTotalPages(1);
+          } else {
+            const start = pageIndex * pageSize;
+            const slice = items.slice(start, start + pageSize);
+            setEmployees(
+              slice.map(employeeToRow).filter((r): r is EmployeeRow => r !== null),
+            );
+            setEmployeeTotalCount(displayTotal);
+            setEmployeeTotalPages(Math.max(1, Math.ceil(displayTotal / pageSize)));
+          }
         } else {
-          setEmployees(rows);
+          setEmployees(
+            items.map(employeeToRow).filter((r): r is EmployeeRow => r !== null),
+          );
+          setEmployeeTotalCount(serverTotal);
+          setEmployeeTotalPages((page as { totalPages?: number }).totalPages ?? 1);
         }
 
-        await loadAssignments();
         if (!opts?.silent) {
           toast.success(
             combinedSearch
-              ? `Found ${rows.length} employee(s)`
-              : `Showing ${rows.length} active employee(s)`,
+              ? `Found ${displayTotal} employee(s)`
+              : `Showing ${displayTotal} active employee(s)`,
           );
         }
       } catch {
@@ -280,24 +333,45 @@ export default function TemporaryShiftPage() {
       }
     },
     [
-      deptFilter,
-      designationFilter,
-      employeeIdFilter,
-      groupFilter,
-      lineFilter,
-      loadAssignments,
-      searchTerm,
-      sectionFilter,
+      appliedEmployeeFilters,
+      employeePageIndex,
+      employeePageSize,
       selectedCompany,
       selectedCompanyRow?.id,
     ],
   );
 
+  const applyFilter = React.useCallback(() => {
+    setAppliedEmployeeFilters({
+      searchTerm,
+      employeeIdFilter,
+      deptFilter,
+      sectionFilter,
+      designationFilter,
+      lineFilter,
+      groupFilter,
+    });
+    setEmployeePageIndex(0);
+    void loadAssignments();
+  }, [
+    deptFilter,
+    designationFilter,
+    employeeIdFilter,
+    groupFilter,
+    lineFilter,
+    loadAssignments,
+    searchTerm,
+    sectionFilter,
+  ]);
+
+  React.useEffect(() => {
+    void fetchEmployees({ silent: true });
+  }, [fetchEmployees]);
+
   React.useEffect(() => {
     if (!selectedCompany || authLoading) return;
-    void applyFilter({ silent: true });
-    // Only reload employee list when company changes, not when filter fields change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+    setAppliedEmployeeFilters(defaultAppliedEmployeeFilters());
+    setEmployeePageIndex(0);
   }, [selectedCompany, authLoading]);
 
   const applyShiftToSelected = async () => {
@@ -395,7 +469,9 @@ export default function TemporaryShiftPage() {
       id: "sl",
       header: "SL",
       cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground">{row.index + 1}</span>
+        <span className="text-xs text-muted-foreground">
+          {employeePageIndex * employeePageSize + row.index + 1}
+        </span>
       ),
     },
     {
@@ -544,21 +620,14 @@ export default function TemporaryShiftPage() {
               <Label className="text-[10px] font-bold uppercase text-muted-foreground">
                 Company
               </Label>
-              <NativeSelect
+              <ScopedCompanySelect
                 value={selectedCompany}
-                onChange={(e) => {
-                  setSelectedCompany(e.target.value);
+                onChange={(entityId) => {
+                  setSelectedCompany(entityId);
                   resetOrganogramFilters();
                 }}
                 className="h-10 bg-background"
-              >
-                <option value="">Select company</option>
-                {companies.map((c) => (
-                  <option key={c.entityId} value={c.entityId}>
-                    {c.companyNameEn}
-                  </option>
-                ))}
-              </NativeSelect>
+              />
             </div>
 
             <div className="space-y-1.5">
@@ -797,8 +866,16 @@ export default function TemporaryShiftPage() {
             showActions={false}
             showColumnCustomizer={false}
             enableSelection={true}
-            searchKey="fullNameEn"
             isLoading={loadingEmployees}
+            paginationMode="server"
+            pageIndex={employeePageIndex}
+            pageSize={employeePageSize}
+            pageCount={employeeTotalPages}
+            rowCount={employeeTotalCount}
+            onPaginationChange={({ pageIndex, pageSize }) => {
+              setEmployeePageIndex(pageIndex);
+              setEmployeePageSize(pageSize);
+            }}
             getRowId={(row) => row.id}
             onSelectionChange={(rows) => setSelectedEmployees(rows as EmployeeRow[])}
             className="border-0 shadow-none"
@@ -835,6 +912,15 @@ export default function TemporaryShiftPage() {
             showColumnCustomizer={true}
             enableSelection={false}
             isLoading={loadingAssignments}
+            paginationMode="server"
+            pageIndex={assignmentPageIndex}
+            pageSize={assignmentPageSize}
+            pageCount={assignmentTotalPages}
+            rowCount={assignmentTotalCount}
+            onPaginationChange={({ pageIndex, pageSize }) => {
+              setAssignmentPageIndex(pageIndex);
+              setAssignmentPageSize(pageSize);
+            }}
             getRowId={(row) => row.id}
             className="border-0 shadow-none"
           />

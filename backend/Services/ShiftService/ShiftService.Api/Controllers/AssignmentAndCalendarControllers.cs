@@ -4,6 +4,7 @@ using ShiftService.Api.Models;
 using ShiftService.Application.Features.Shifts.Commands;
 using ShiftService.Application.Features.Shifts.Queries;
 using ShiftService.Application.DTOs;
+using Erp.BuildingBlocks.Contracts.Pagination;
 
 namespace ShiftService.Api.Controllers;
 
@@ -46,14 +47,16 @@ public class TemporaryShiftsController(IMediator mediator) : ControllerBase
     }
 
     [HttpGet("list")]
-    public async Task<ActionResult<ApiResponse<IEnumerable<TemporaryShiftAssignmentDto>>>> List(
+    public async Task<ActionResult<ApiResponse<PagedResult<TemporaryShiftAssignmentDto>>>> List(
         [FromQuery] Guid companyId,
         [FromQuery] DateTime? fromDate,
         [FromQuery] DateTime? toDate,
-        [FromQuery] Guid? employeeId)
+        [FromQuery] Guid? employeeId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
-        var data = await mediator.Send(new ListTemporaryShiftsQuery(companyId, fromDate, toDate, employeeId));
-        return Ok(ApiResponse<IEnumerable<TemporaryShiftAssignmentDto>>.Ok(data, HttpContext.TraceIdentifier));
+        var data = await mediator.Send(new ListTemporaryShiftsQuery(companyId, fromDate, toDate, employeeId, page, pageSize));
+        return Ok(ApiResponse<PagedResult<TemporaryShiftAssignmentDto>>.Ok(data, HttpContext.TraceIdentifier));
     }
 
     [HttpGet]

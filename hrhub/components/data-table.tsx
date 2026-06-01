@@ -90,7 +90,9 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import { toast } from "sonner"
+import { Skeleton } from "@/components/ui/skeleton"
 import { DataTableFacetedFilter } from "./data-table-faceted-filter"
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/lib/pagination/types"
 
 // --- Context ---
 const DataTableContext = React.createContext<{
@@ -153,7 +155,7 @@ export const DraggableRow = React.memo(function DraggableRow({ row, onRowClick }
         <TableCell 
           key={cell.id} 
           className={cn(
-            "align-middle text-left",
+            "align-middle text-left text-foreground",
             ["drag", "select", "sl", "id"].includes(cell.column.id.toLowerCase()) ? "w-16! shrink-0" : "whitespace-normal",
             ["name", "employeename", "fullname", "fullnameen"].includes(cell.column.id.toLowerCase()) && "whitespace-nowrap",
             (cell.column.columnDef.meta as any)?.className
@@ -189,6 +191,14 @@ export function DataTable<TData extends { id?: string | number }>({
   footer,
   onRowClick,
   className,
+  paginationMode = "client",
+  pageIndex: controlledPageIndex,
+  pageSize: controlledPageSize,
+  pageCount,
+  rowCount,
+  getAll = false,
+  onPaginationChange,
+  onSortingChange,
 }: {
   data: TData[]
   columns: ColumnDef<TData>[]
@@ -216,6 +226,19 @@ export function DataTable<TData extends { id?: string | number }>({
   footer?: React.ReactNode
   onRowClick?: (row: TData) => void
   className?: string
+  paginationMode?: "client" | "server"
+  /** 0-based page index for server pagination */
+  pageIndex?: number
+  /** page size (50 when getAll is true) */
+  pageSize?: number
+  /** total pages from server */
+  pageCount?: number
+  /** total rows from server */
+  rowCount?: number
+  /** server mode: all rows loaded; metadata still uses pageSize 50 */
+  getAll?: boolean
+  onPaginationChange?: (next: { pageIndex: number; pageSize: number; getAll?: boolean }) => void
+  onSortingChange?: (sort: { sortBy?: string; sortOrder?: "asc" | "desc" }) => void
 }) {
   const [data, setData] = React.useState(() => initialData)
   const [activeTab, setActiveTab] = React.useState("all")
@@ -254,8 +277,37 @@ export function DataTable<TData extends { id?: string | number }>({
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
-    pageSize: 10,
+    pageSize: paginationMode === "server" ? DEFAULT_PAGE_SIZE : 10,
   })
+
+  const isServerPagination = paginationMode === "server"
+  /** Server fetched full dataset (getAll); paginate 50 rows per page in the browser. */
+  const serverGetAllClientPages = isServerPagination && getAll
+
+  React.useEffect(() => {
+    if (!isServerPagination || serverGetAllClientPages) return
+    if (typeof controlledPageIndex !== "number" || typeof controlledPageSize !== "number") return
+    setPagination((prev) => {
+      if (prev.pageIndex === controlledPageIndex && prev.pageSize === controlledPageSize) return prev
+      return { pageIndex: controlledPageIndex, pageSize: controlledPageSize }
+    })
+  }, [controlledPageIndex, controlledPageSize, isServerPagination, serverGetAllClientPages])
+
+  React.useEffect(() => {
+    if (!serverGetAllClientPages) return
+    setPagination({ pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE })
+  }, [serverGetAllClientPages])
+
+  const handlePaginationChange = React.useCallback(
+    (next: { pageIndex: number; pageSize: number; getAll?: boolean }) => {
+      if (isServerPagination) {
+        onPaginationChange?.(next)
+        return
+      }
+      setPagination({ pageIndex: next.pageIndex, pageSize: next.pageSize })
+    },
+    [isServerPagination, onPaginationChange],
+  )
 
   // Fix for infinite loop: Use ref for onSelectionChange to avoid dependency cycle
   const onSelectionChangeRef = React.useRef(onSelectionChange)
@@ -272,7 +324,7 @@ export function DataTable<TData extends { id?: string | number }>({
       }));
 
       const selectedRows = Object.keys(rowSelection)
-        .map(id => dataMap.get(id))
+        .map((id) => dataMap.get(id))
         .filter(Boolean) as TData[];
 
       onSelectionChangeRef.current(selectedRows);
@@ -307,13 +359,36 @@ export function DataTable<TData extends { id?: string | number }>({
     },
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
-    onSortingChange: setSorting,
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater
+      setSorting(next)
+      if (isServerPagination && onSortingChange) {
+        const first = next[0]
+        onSortingChange(
+          first
+            ? { sortBy: first.id, sortOrder: first.desc ? "desc" : "asc" }
+            : {},
+        )
+      }
+    },
+    manualSorting: isServerPagination,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
-    onPaginationChange: setPagination,
+    onPaginationChange: (updater) => {
+      const next =
+        typeof updater === "function" ? updater(pagination) : updater
+      if (serverGetAllClientPages) {
+        setPagination(next)
+        return
+      }
+      handlePaginationChange(next)
+    },
+    manualPagination: isServerPagination && !serverGetAllClientPages,
+    pageCount: isServerPagination && !serverGetAllClientPages ? pageCount : undefined,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    getPaginationRowModel:
+      serverGetAllClientPages || !isServerPagination ? getPaginationRowModel() : undefined,
     getSortedRowModel: getSortedRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
@@ -321,6 +396,41 @@ export function DataTable<TData extends { id?: string | number }>({
 
   const isFiltered = table.getState().columnFilters.length > 0
 
+  const clientAllModePageCount = React.useMemo(() => {
+    if (!serverGetAllClientPages) return 1
+    const size = pagination.pageSize || DEFAULT_PAGE_SIZE
+    const fromRows = table.getPageCount()
+    const total =
+      typeof rowCount === "number" && rowCount > 0
+        ? rowCount
+        : data.length
+    const fromMeta = total > 0 ? Math.ceil(total / size) : 1
+    return Math.max(fromRows, fromMeta, 1)
+  }, [
+    serverGetAllClientPages,
+    table,
+    pagination.pageSize,
+    rowCount,
+    data.length,
+  ])
+
+  const rowsSelectValue = isServerPagination
+    ? serverGetAllClientPages
+      ? "all"
+      : `${typeof controlledPageSize === "number" ? controlledPageSize : pagination.pageSize}`
+    : `${table.getState().pagination.pageSize}`
+
+  const activePageSize =
+    isServerPagination && typeof controlledPageSize === "number"
+      ? controlledPageSize
+      : pagination.pageSize
+
+  const skeletonRowCount = React.useMemo(() => {
+    if (activePageSize > 0 && activePageSize < 10_000) return activePageSize
+    if (typeof rowCount === "number" && rowCount > 0) return Math.min(rowCount, 100)
+    if (data.length > 0) return Math.min(data.length, 100)
+    return 10
+  }, [activePageSize, rowCount, data.length])
 
   // Handle Tab Filtering
   React.useEffect(() => {
@@ -357,7 +467,7 @@ export function DataTable<TData extends { id?: string | number }>({
           id={sortableId}
         >
           <Table>
-            <TableHeader className="bg-muted/50 sticky top-0 z-10">
+            <TableHeader className="sticky top-0 z-10">
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
@@ -386,13 +496,36 @@ export function DataTable<TData extends { id?: string | number }>({
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {tableColumns.map((col, j) => (
-                      <TableCell key={j} className="py-4">
-                        <div className="h-4 w-full bg-muted animate-pulse rounded" />
-                      </TableCell>
-                    ))}
+                Array.from({ length: skeletonRowCount }).map((_, i) => (
+                  <TableRow key={`skeleton-${i}`}>
+                    {tableColumns.map((col, j) => {
+                      const colId = (col.id ?? "").toLowerCase()
+                      const isCompact =
+                        colId === "select" ||
+                        colId === "drag" ||
+                        colId === "sl" ||
+                        colId === "actions"
+                      return (
+                        <TableCell
+                          key={j}
+                          className={cn(
+                            "py-3",
+                            (col.meta as { className?: string } | undefined)?.className,
+                          )}
+                        >
+                          {isCompact ? (
+                            <Skeleton className="h-4 w-4 rounded-sm" />
+                          ) : (
+                            <Skeleton
+                              className={cn(
+                                "h-4",
+                                j % 3 === 0 ? "w-[85%]" : j % 3 === 1 ? "w-[70%]" : "w-[90%]",
+                              )}
+                            />
+                          )}
+                        </TableCell>
+                      )
+                    })}
                   </TableRow>
                 ))
               ) : table.getRowModel().rows?.length ? (
@@ -421,25 +554,45 @@ export function DataTable<TData extends { id?: string | number }>({
       </div>
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2">
         <div className="text-muted-foreground text-xs sm:text-sm text-center sm:text-left">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
+          {table.getSelectedRowModel().rows.length} of{" "}
+          {isServerPagination
+            ? (rowCount ?? data.length)
+            : table.getFilteredRowModel().rows.length}{" "}
+          row(s) selected.
         </div>
         <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4">
           <div className="flex items-center gap-2">
             <span className="text-xs sm:text-sm text-muted-foreground">Rows:</span>
             <NativeSelect
-              value={`${table.getState().pagination.pageSize}`}
+              value={rowsSelectValue}
               onChange={(e) => {
                 const val = e.target.value;
                 if (val === "all") {
-                  table.setPageSize(data.length || 1000000);
+                  if (isServerPagination) {
+                    handlePaginationChange({
+                      pageIndex: 0,
+                      pageSize: DEFAULT_PAGE_SIZE,
+                      getAll: true,
+                    });
+                  } else {
+                    table.setPageSize(data.length || 1000000);
+                  }
                 } else {
-                  table.setPageSize(Number(val));
+                  const nextSize = Number(val);
+                  if (isServerPagination) {
+                    handlePaginationChange({
+                      pageIndex: 0,
+                      pageSize: nextSize,
+                      getAll: false,
+                    });
+                  } else {
+                    table.setPageSize(nextSize);
+                  }
                 }
               }}
               className="h-8 py-0 min-w-[60px] sm:min-w-[70px] text-xs sm:text-sm"
             >
-              {[10, 20, 30, 40, 50].map((pageSize) => (
+              {PAGE_SIZE_OPTIONS.map((pageSize) => (
                 <option key={pageSize} value={`${pageSize}`}>
                   {pageSize}
                 </option>
@@ -448,7 +601,12 @@ export function DataTable<TData extends { id?: string | number }>({
             </NativeSelect>
           </div>
           <div className="text-xs sm:text-sm font-medium whitespace-nowrap">
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+            Page {table.getState().pagination.pageIndex + 1} of{" "}
+            {serverGetAllClientPages
+              ? clientAllModePageCount
+              : isServerPagination
+                ? (pageCount ?? 1)
+                : table.getPageCount()}
           </div>
           <div className="flex items-center gap-1">
             {!isMobile && (
@@ -456,7 +614,18 @@ export function DataTable<TData extends { id?: string | number }>({
                 variant="outline"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => table.setPageIndex(0)}
+                onClick={() => {
+                  if (serverGetAllClientPages) {
+                    table.setPageIndex(0);
+                  } else if (isServerPagination) {
+                    handlePaginationChange({
+                      pageIndex: 0,
+                      pageSize: pagination.pageSize,
+                    });
+                  } else {
+                    table.setPageIndex(0);
+                  }
+                }}
                 disabled={!table.getCanPreviousPage()}
               >
                 <IconChevronsLeft className="size-4" />
@@ -466,7 +635,16 @@ export function DataTable<TData extends { id?: string | number }>({
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => table.previousPage()}
+              onClick={() => {
+                if (serverGetAllClientPages || !isServerPagination) {
+                  table.previousPage();
+                } else {
+                  handlePaginationChange({
+                    pageIndex: Math.max(0, pagination.pageIndex - 1),
+                    pageSize: pagination.pageSize,
+                  });
+                }
+              }}
               disabled={!table.getCanPreviousPage()}
             >
               <IconChevronLeft className="size-4" />
@@ -475,7 +653,17 @@ export function DataTable<TData extends { id?: string | number }>({
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => table.nextPage()}
+              onClick={() => {
+                if (serverGetAllClientPages || !isServerPagination) {
+                  table.nextPage();
+                } else {
+                  const maxIndex = Math.max(0, (pageCount ?? 1) - 1);
+                  handlePaginationChange({
+                    pageIndex: Math.min(maxIndex, pagination.pageIndex + 1),
+                    pageSize: pagination.pageSize,
+                  });
+                }
+              }}
               disabled={!table.getCanNextPage()}
             >
               <IconChevronRight className="size-4" />
@@ -485,7 +673,17 @@ export function DataTable<TData extends { id?: string | number }>({
                 variant="outline"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                onClick={() => {
+                  if (serverGetAllClientPages || !isServerPagination) {
+                    table.setPageIndex(table.getPageCount() - 1);
+                  } else {
+                    const last = Math.max(0, (pageCount ?? 1) - 1);
+                    handlePaginationChange({
+                      pageIndex: last,
+                      pageSize: pagination.pageSize,
+                    });
+                  }
+                }}
                 disabled={!table.getCanNextPage()}
               >
                 <IconChevronsRight className="size-4" />
@@ -620,8 +818,15 @@ export function getBaseColumns<TData extends { id?: string | number }>(): Column
       id: "select",
       header: ({ table }) => (
         <Checkbox
-          checked={table.getIsAllRowsSelected()}
-          onCheckedChange={v => table.toggleAllRowsSelected(!!v)}
+          checked={
+            table.getIsAllRowsSelected()
+              ? true
+              : table.getIsSomeRowsSelected()
+                ? "indeterminate"
+                : false
+          }
+          onCheckedChange={(v) => table.toggleAllRowsSelected(!!v)}
+          aria-label="Select all rows"
           className="translate-y-[2px]"
         />
       ),

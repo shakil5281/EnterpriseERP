@@ -1,44 +1,60 @@
-using Erp.BuildingBlocks.CommonResponses;
+using Asp.Versioning;
+using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ProductionPlanningService.Application;
+using ProductionPlanningService.Contracts;
 using ProductionPlanningService.Domain;
 
 namespace ProductionPlanningService.API.Controllers;
 
-[ApiController]
-[Route("api/v1/production/line-planning")]
-public sealed class LinePlanningController(LinePlanningStore store) : ControllerBase
+[ApiController, ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/production/line-plans")]
+public sealed class LinePlansController(IMediator mediator) : ControllerBase
 {
-    [HttpGet]
-    public ActionResult<ApiResponse<IReadOnlyList<OrderCapacityPlan>>> Get(
-        [FromQuery] Guid companyId,
-        [FromQuery] Guid? orderId) =>
-        Ok(ApiResponse<IReadOnlyList<OrderCapacityPlan>>.Ok(store.GetByCompany(companyId, orderId), HttpContext.TraceIdentifier));
+    [HttpPost, Authorize(Policy = PlanningPermissions.PlanManage)]
+    public async Task<ActionResult<ApiResponse<LineCapacityPlanDto>>> Create(CreateLineCapacityPlanRequest request, CancellationToken ct) =>
+        Ok(ApiResponse<LineCapacityPlanDto>.Ok(await mediator.Send(new CreateLinePlanCommand(request), ct)));
 
-    [HttpPost]
-    public ActionResult<ApiResponse<OrderCapacityPlan>> Create([FromBody] CreateLinePlanRequest request)
-    {
-        var plan = new OrderCapacityPlan
-        {
-            CompanyId = request.CompanyId,
-            OrderId = request.OrderId,
-            LineCode = request.LineCode.Trim(),
-            LineName = request.LineName.Trim(),
-            PlanDate = request.PlanDate,
-            PlannedQty = request.PlannedQty,
-            DailyCapacity = request.DailyCapacity,
-            Status = request.Status ?? "Planned",
-        };
-        store.Add(plan);
-        return Ok(ApiResponse<OrderCapacityPlan>.Ok(plan, HttpContext.TraceIdentifier));
-    }
+    [HttpGet, Authorize]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<LineCapacityPlanDto>>>> Get([FromQuery] Guid companyId, [FromQuery] Guid? orderId, CancellationToken ct) =>
+        Ok(ApiResponse<IReadOnlyList<LineCapacityPlanDto>>.Ok(await mediator.Send(new GetLinePlansQuery(companyId, orderId), ct)));
+
+    [HttpGet("{id:guid}"), Authorize]
+    public async Task<ActionResult<ApiResponse<LineCapacityPlanDto>>> GetById(Guid id, CancellationToken ct) =>
+        Ok(ApiResponse<LineCapacityPlanDto>.Ok(await mediator.Send(new GetLinePlanByIdQuery(id), ct)));
+
+    [HttpPut("{id:guid}"), Authorize(Policy = PlanningPermissions.PlanManage)]
+    public async Task<ActionResult<ApiResponse<LineCapacityPlanDto>>> Update(Guid id, UpdateLineCapacityPlanRequest request, CancellationToken ct) =>
+        Ok(ApiResponse<LineCapacityPlanDto>.Ok(await mediator.Send(new UpdateLinePlanCommand(id, request), ct)));
+
+    [HttpPatch("{id:guid}/approve"), Authorize(Policy = PlanningPermissions.PlanApprove)]
+    public async Task<ActionResult<ApiResponse<LineCapacityPlanDto>>> Approve(Guid id, CancellationToken ct) =>
+        Ok(ApiResponse<LineCapacityPlanDto>.Ok(await mediator.Send(new ApproveLinePlanCommand(id), ct)));
+
+    [HttpPatch("{id:guid}/cancel"), Authorize(Policy = PlanningPermissions.PlanApprove)]
+    public async Task<ActionResult<ApiResponse<LineCapacityPlanDto>>> Cancel(Guid id, CancellationToken ct) =>
+        Ok(ApiResponse<LineCapacityPlanDto>.Ok(await mediator.Send(new CancelLinePlanCommand(id), ct)));
 }
 
-public sealed record CreateLinePlanRequest(
-    Guid CompanyId,
-    Guid OrderId,
-    string LineCode,
-    string LineName,
-    DateOnly PlanDate,
-    int PlannedQty,
-    int DailyCapacity,
-    string? Status = null);
+[ApiController, ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/production/line-planning")]
+public sealed class PlanningCompatController(IMediator mediator) : ControllerBase
+{
+    [HttpGet]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<LineCapacityPlanDto>>>> GetLegacy([FromQuery] Guid companyId, [FromQuery] Guid? orderId, CancellationToken ct) =>
+        Ok(ApiResponse<IReadOnlyList<LineCapacityPlanDto>>.Ok(await mediator.Send(new GetLinePlansQuery(companyId, orderId), ct)));
+
+    [HttpPost]
+    public async Task<ActionResult<ApiResponse<LineCapacityPlanDto>>> CreateLegacy(CreateLineCapacityPlanRequest request, CancellationToken ct) =>
+        Ok(ApiResponse<LineCapacityPlanDto>.Ok(await mediator.Send(new CreateLinePlanCommand(request), ct)));
+}
+
+[ApiController, ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/production/planning-balances")]
+public sealed class PlanningBalancesController(IMediator mediator) : ControllerBase
+{
+    [HttpGet, Authorize(Policy = PlanningPermissions.BalanceView)]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<PlanningBalanceDto>>>> Get([FromQuery] Guid companyId, [FromQuery] Guid? orderId, CancellationToken ct) =>
+        Ok(ApiResponse<IReadOnlyList<PlanningBalanceDto>>.Ok(await mediator.Send(new GetPlanningBalancesQuery(companyId, orderId), ct)));
+}

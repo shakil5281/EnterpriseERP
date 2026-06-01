@@ -19,16 +19,14 @@ import { format } from "date-fns"
 import { Label } from "@/components/ui/label"
 import { NativeSelect } from "@/components/ui/native-select"
 
-import { companyService } from "@/lib/services/company"
+import { ManagementLegacyCompanySelect } from "@/components/hr/management-legacy-company-select"
 
 export default function IncrementSheetPage() {
     const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>("all")
-    const [companies, setCompanies] = React.useState<any[]>([])
     const [isLoading, setIsLoading] = React.useState(false)
     const [records, setRecords] = React.useState<SalaryIncrement[]>([])
 
     React.useEffect(() => {
-        companyService.getAll().then(setCompanies)
         handleSearch()
     }, [])
 
@@ -115,10 +113,12 @@ export default function IncrementSheetPage() {
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-2">
                                 <Label className="whitespace-nowrap text-sm font-medium">Company</Label>
-                                <NativeSelect value={selectedCompanyId} onChange={(e) => setSelectedCompanyId(e.target.value)} className="h-9 w-40">
-                                    <option value="all">Every Company</option>
-                                    {companies.map(c => <option key={c.id} value={c.id}>{c.companyNameEn}</option>)}
-                                </NativeSelect>
+                                <ManagementLegacyCompanySelect
+                                    value={selectedCompanyId}
+                                    onChange={setSelectedCompanyId}
+                                    allOptionLabel="Every Company"
+                                    className="h-9 w-40"
+                                />
                             </div>
                             <Button size="sm" variant="outline" className="h-9 px-3" onClick={handleSearch} disabled={isLoading}>
                                 {isLoading ? <IconLoader className="size-4 animate-spin mr-2" /> : <IconSearch className="size-4 mr-2" />}

@@ -80,6 +80,8 @@ public sealed class HrDbContext(DbContextOptions<HrDbContext> options) : DbConte
             b.HasKey(x => x.Id);
             b.Property(x => x.WorkLocation).HasMaxLength(150);
             b.HasOne(x => x.Employee).WithMany(x => x.JobInfos).HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.EmployeeId, x.IsCurrent })
+                .HasDatabaseName("IX_EmployeeJobInfos_EmployeeId_IsCurrent");
         });
 
         modelBuilder.Entity<EmployeeSalaryInfo>(b =>

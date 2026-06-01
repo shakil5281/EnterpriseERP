@@ -47,7 +47,7 @@ export default function DailyProductionReportPage() {
         try {
             const params = {
                 date: date ? date.toISOString().split('T')[0] : undefined,
-                lineId: filters.lineId ? parseInt(filters.lineId) : undefined,
+                lineId: filters.lineId || undefined,
                 buyer: filters.buyer || undefined,
                 styleNo: filters.styleNo || undefined,
                 searchTerm: filters.searchTerm || undefined
@@ -83,7 +83,7 @@ export default function DailyProductionReportPage() {
         try {
             const params = {
                 date: date ? date.toISOString().split('T')[0] : undefined,
-                lineId: filters.lineId ? parseInt(filters.lineId) : undefined,
+                lineId: filters.lineId || undefined,
                 buyer: filters.buyer || undefined,
                 styleNo: filters.styleNo || undefined,
                 searchTerm: filters.searchTerm || undefined

@@ -1,5 +1,13 @@
 import api from "../api";
-import { getHttpErrorMessage, unwrapApiData } from "@/lib/api-response";
+import {
+  firstApiErrorMessage,
+  getHttpErrorMessage,
+  unwrapApiData,
+} from "@/lib/api-response";
+import { ensureFullPageItems } from "@/lib/pagination/fetch-all";
+import { buildPaginationParams } from "@/lib/pagination/params";
+import type { LegacyPagedResult } from "@/lib/pagination/types";
+import { toLegacyPagedResult, unwrapPaginatedApiData } from "@/lib/pagination/unwrap";
 import type {
   HrEmployeeDetails,
   HrEmployeeListItem,
@@ -16,7 +24,9 @@ import {
   resolveDesignationGuid,
   resolveGroupGuid,
   resolveSectionGuid,
+  resolveShiftGuid,
 } from "@/lib/services/organogram";
+import { shiftService } from "@/lib/services/shift";
 
 export type {
   HrEmployeeDetails,
@@ -352,6 +362,24 @@ function mapHrDetailsToEmployee(row: HrEmployeeDetails): Employee {
   };
 }
 
+async function enrichEmployeeShift(employee: Employee): Promise<Employee> {
+  if (!employee.entityId || !employee.companyEntityId) return employee;
+
+  try {
+    const assignment = await shiftService.getCurrentAssignment(
+      employee.entityId,
+      employee.companyEntityId,
+    );
+    return {
+      ...employee,
+      shiftId: stableIntFromGuid(assignment.shiftId),
+      shiftName: assignment.shiftName,
+    };
+  } catch {
+    return employee;
+  }
+}
+
 async function upsertAddress(
   employeeId: string,
   existing: HrEmployeeDetails["addresses"],
@@ -391,6 +419,11 @@ async function upsertAddress(
   }
 }
 
+function isServerUploadedEmployeeImage(url: string) {
+  const normalized = url.trim().toLowerCase()
+  return normalized.startsWith("/uploads/employees/")
+}
+
 async function syncEmployeeImageDocuments(
   employeeId: string,
   documents: HrEmployeeDetails["documents"],
@@ -404,6 +437,7 @@ async function syncEmployeeImageDocuments(
       return
     }
     if (existing?.fileUrl === trimmed) return
+    if (existing && isServerUploadedEmployeeImage(existing.fileUrl)) return
     if (existing) await employeeService.deleteDocument(existing.id)
     await employeeService.addDocument(employeeId, {
       documentType,
@@ -503,6 +537,49 @@ async function syncEmployeePlacement(
   });
 }
 
+function normalizeGuid(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+async function syncEmployeeShift(
+  employeeId: string,
+  data: CreateEmployeeDto,
+  options?: { isUpdate?: boolean },
+) {
+  if (!data.shiftId || !data.companyId) return;
+
+  const companyGuid = await resolveCompanyGuid(data.companyId);
+  if (!companyGuid) {
+    throw new Error("Company could not be resolved for shift assignment.");
+  }
+
+  const shiftGuid = await resolveShiftGuid(data.shiftId, data.companyId);
+  if (!shiftGuid) {
+    throw new Error("Selected shift could not be resolved. Please re-select the shift.");
+  }
+
+  const normalizedShiftGuid = normalizeGuid(shiftGuid);
+
+  try {
+    const current = await shiftService.getCurrentAssignment(employeeId, companyGuid);
+    if (normalizeGuid(current.shiftId) === normalizedShiftGuid) return;
+  } catch {
+    // No current shift assignment; create one below.
+  }
+
+  const effectiveFrom = options?.isUpdate
+    ? new Date().toISOString()
+    : data.joinDate || new Date().toISOString();
+
+  await shiftService.assignEmployeeShift({
+    companyId: companyGuid,
+    employeeId,
+    shiftId: shiftGuid,
+    effectiveFrom,
+    effectiveTo: null,
+  });
+}
+
 async function syncEmployeeSubResources(
   employeeId: string,
   data: CreateEmployeeDto,
@@ -548,6 +625,7 @@ async function syncEmployeeSubResources(
   });
 
   await syncEmployeePlacement(employeeId, data, existing);
+  await syncEmployeeShift(employeeId, data, { isUpdate: !!existing });
 
   const hasBank =
     data.bankAccountNo ||
@@ -612,40 +690,90 @@ function needsManpowerListApi(params?: {
 async function fetchHrEmployeesPage(params?: {
   page?: number;
   pageSize?: number;
+  getAll?: boolean;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
   searchTerm?: string;
+  employeeId?: string;
   companyId?: number;
+  companyEntityId?: string;
   departmentId?: number;
+  sectionId?: number;
+  designationId?: number;
+  joinDateFrom?: string;
+  joinDateTo?: string;
   status?: string;
   gender?: string;
   religion?: string;
 }): Promise<PagedResult<HrEmployeeListItem>> {
-  const companyGuid = await resolveCompanyGuid(params?.companyId);
+  const companyGuid =
+    params?.companyEntityId ??
+    (await resolveCompanyGuid(params?.companyId));
   const departmentGuid = params?.departmentId
     ? await resolveDepartmentGuid(params.departmentId)
     : undefined;
+  const sectionGuid = params?.sectionId
+    ? await resolveSectionGuid(params.sectionId)
+    : undefined;
+  const designationGuid = params?.designationId
+    ? await resolveDesignationGuid(params.designationId)
+    : undefined;
+
   const response = await api.get("hr/Employees", {
     params: {
-      page: params?.page ?? 1,
-      pageSize: Math.min(params?.pageSize ?? 200, 200),
-      search: params?.searchTerm,
-      companyId: companyGuid,
-      departmentId: departmentGuid,
-      status:
-        params?.status && params.status.toLowerCase() !== "all"
-          ? params.status
-          : undefined,
-      gender:
-        params?.gender && params.gender.toLowerCase() !== "all"
-          ? params.gender
-          : undefined,
-      religion:
-        params?.religion && params.religion.toLowerCase() !== "all"
-          ? params.religion
-          : undefined,
+      ...buildPaginationParams({
+        page: params?.page,
+        pageSize: params?.pageSize,
+        getAll: params?.getAll,
+        sortBy: params?.sortBy,
+        sortOrder: params?.sortOrder,
+        filters: {
+          search: params?.searchTerm,
+          employeeId: params?.employeeId,
+          companyId: companyGuid,
+          departmentId: departmentGuid,
+          sectionId: sectionGuid,
+          designationId: designationGuid,
+          joinDateFrom: params?.joinDateFrom,
+          joinDateTo: params?.joinDateTo,
+          status:
+            params?.status && params.status.toLowerCase() !== "all"
+              ? params.status
+              : undefined,
+          gender:
+            params?.gender && params.gender.toLowerCase() !== "all"
+              ? params.gender
+              : undefined,
+          religion:
+            params?.religion && params.religion.toLowerCase() !== "all"
+              ? params.religion
+              : undefined,
+        },
+      }),
     },
   });
-  return unwrapApiData<PagedResult<HrEmployeeListItem>>(response.data);
+  const paginated = unwrapPaginatedApiData<HrEmployeeListItem>(response.data);
+  const page = toLegacyPagedResult(paginated);
+
+  if (!params?.getAll) {
+    return page;
+  }
+
+  if (page.items.length >= page.totalCount) {
+    return { ...page, getAll: true };
+  }
+
+  return ensureFullPageItems(page, (nextPage, nextPageSize) =>
+    fetchHrEmployeesPage({
+      ...params,
+      page: nextPage,
+      pageSize: nextPageSize,
+      getAll: false,
+    }),
+  );
 }
+
+export type EmployeePage = PagedResult<Employee>;
 
 export interface Employee {
   id: number;
@@ -777,6 +905,7 @@ export interface CreateEmployeeDto {
   lineId?: number;
   lineName?: string;
   groupId?: number;
+  shiftId?: number;
   status: string;
   joinDate: string;
   email?: string;
@@ -887,13 +1016,29 @@ function mapSummaryBucket(row: HrManpowerSummary["departmentSummary"][number]): 
 
 async function buildManpowerQueryParams(
   params?: ManpowerFilterParams,
-  options?: { paging?: boolean; summary?: boolean },
-): Promise<Record<string, string | number>> {
-  const query: Record<string, string | number> = {};
+  options?: {
+    paging?: boolean;
+    summary?: boolean;
+    page?: number;
+    pageSize?: number;
+    getAll?: boolean;
+    sortBy?: string;
+    sortOrder?: "asc" | "desc";
+  },
+): Promise<Record<string, string | number | boolean>> {
+  const query: Record<string, string | number | boolean> = {};
 
   if (options?.paging !== false) {
-    query.page = 1;
-    query.pageSize = 500;
+    Object.assign(
+      query,
+      buildPaginationParams({
+        page: options?.page,
+        pageSize: options?.pageSize,
+        getAll: options?.getAll,
+        sortBy: options?.sortBy,
+        sortOrder: options?.sortOrder,
+      }),
+    );
   }
 
   if (params?.searchTerm?.trim()) {
@@ -989,6 +1134,95 @@ export interface EmployeeSimple {
 }
 
 export const employeeService = {
+  getEmployeesByEntityIds: async (ids: string[]) => {
+    const unique = Array.from(
+      new Set((ids ?? []).map((x) => String(x).trim()).filter(Boolean)),
+    );
+    if (unique.length === 0) return [];
+
+    const response = await api.post<unknown>("hr/Employees/batch", {
+      ids: unique,
+    });
+    const rows = unwrapApiData<HrEmployeeListItem[]>(response.data) ?? [];
+    return rows.map(mapHrListItemToEmployee);
+  },
+
+  getEmployeesPage: async (params?: {
+    page?: number;
+    pageSize?: number;
+    getAll?: boolean;
+    sortBy?: string;
+    sortOrder?: "asc" | "desc";
+    departmentId?: number;
+    sectionId?: number;
+    designationId?: number;
+    lineId?: number;
+    shiftId?: number;
+    groupId?: number;
+    floorId?: number;
+    status?: string;
+    isActive?: boolean;
+    searchTerm?: string;
+    companyId?: number;
+    companyName?: string;
+    joinDateFrom?: string;
+    joinDateTo?: string;
+    gender?: string;
+    religion?: string;
+    employeeId?: string;
+  }): Promise<EmployeePage> => {
+    const listParams = {
+      page: params?.page ?? 1,
+      pageSize: params?.pageSize,
+      getAll: params?.getAll,
+      sortBy: params?.sortBy,
+      sortOrder: params?.sortOrder,
+      searchTerm: params?.searchTerm,
+      employeeId: params?.employeeId,
+      companyId: params?.companyId,
+      departmentId: params?.departmentId,
+      sectionId: params?.sectionId,
+      designationId: params?.designationId,
+      status: params?.status,
+      gender: params?.gender,
+      religion: params?.religion,
+      joinDateFrom: params?.joinDateFrom,
+      joinDateTo: params?.joinDateTo,
+    };
+
+    if (
+      needsManpowerListApi(listParams) ||
+      listParams.sectionId !== undefined ||
+      listParams.designationId !== undefined
+    ) {
+      const page = await employeeService.getManpowerPage(listParams);
+      return page;
+    }
+
+    const page = await fetchHrEmployeesPage({
+      page: listParams.page,
+      pageSize: listParams.pageSize,
+      getAll: listParams.getAll,
+      sortBy: listParams.sortBy,
+      sortOrder: listParams.sortOrder,
+      searchTerm: listParams.searchTerm,
+      employeeId: listParams.employeeId,
+      companyId: listParams.companyId,
+      departmentId: listParams.departmentId,
+      sectionId: listParams.sectionId,
+      designationId: listParams.designationId,
+      joinDateFrom: listParams.joinDateFrom,
+      joinDateTo: listParams.joinDateTo,
+      status: listParams.status,
+      gender: listParams.gender,
+      religion: listParams.religion,
+    });
+    return {
+      ...page,
+      items: page.items.map(mapHrListItemToEmployee),
+    };
+  },
+
   getEmployeesSimple: async (params?: {
     departmentId?: number;
     sectionId?: number;
@@ -1007,7 +1241,7 @@ export const employeeService = {
       searchTerm: params?.searchTerm,
       companyId: params?.companyId,
       status: params?.status,
-      pageSize: 200,
+      pageSize: 10,
     });
     return page.items.map(mapHrListItemToSimple);
   },
@@ -1024,6 +1258,7 @@ export const employeeService = {
     isActive?: boolean;
     searchTerm?: string;
     companyId?: number;
+    companyEntityId?: string;
     companyName?: string;
     joinDateFrom?: string;
     joinDateTo?: string;
@@ -1049,11 +1284,12 @@ export const employeeService = {
     const page = await fetchHrEmployeesPage({
       searchTerm: params?.searchTerm ?? params?.employeeId,
       companyId: params?.companyId,
+      companyEntityId: params?.companyEntityId,
       departmentId: params?.departmentId,
-      status: params?.status,
+      status: params?.status ?? (params?.isActive ? "Active" : undefined),
       gender: params?.gender,
       religion: params?.religion,
-      pageSize: 200,
+      pageSize: 10,
     });
     return page.items.map(mapHrListItemToEmployee);
   },
@@ -1069,7 +1305,7 @@ export const employeeService = {
   }) => {
     const page = await fetchHrEmployeesPage({
       searchTerm: params?.searchTerm,
-      pageSize: 200,
+      pageSize: 10,
     });
     return page.items.map(mapHrListItemToMini);
   },
@@ -1083,16 +1319,16 @@ export const employeeService = {
 
   getEmployee: async (employeeId: string, companyId: number) => {
     const details = await employeeService.getEmployeeDetails(employeeId, companyId);
-    return mapHrDetailsToEmployee(details);
+    return enrichEmployeeShift(mapHrDetailsToEmployee(details));
   },
 
   getEmployeeById: async (id: number) => {
-    const page = await fetchHrEmployeesPage({ pageSize: 200 });
+    const page = await fetchHrEmployeesPage({ pageSize: 10 });
     const row = page.items.find(
       (employee) => stableIntFromGuid(employee.id) === id,
     );
     if (!row) throw new Error("Employee not found.");
-    return mapHrDetailsToEmployee(await fetchHrEmployeeDetails(row.id));
+    return enrichEmployeeShift(mapHrDetailsToEmployee(await fetchHrEmployeeDetails(row.id)));
   },
 
   createEmployee: async (data: CreateEmployeeDto) => {
@@ -1336,7 +1572,7 @@ export const employeeService = {
       const paged = await employeeService.listTransfers({
         companyId,
         employeeId: id,
-        pageSize: 200,
+        pageSize: 10,
       });
       return paged?.items ?? [];
     }
@@ -1349,22 +1585,48 @@ export const employeeService = {
     toDate?: string;
     page?: number;
     pageSize?: number;
+    getAll?: boolean;
+    sortBy?: string;
+    sortOrder?: "asc" | "desc";
   }) => {
     const companyGuid = params?.companyId
       ? (await companyService.getAll()).find((c) => c.id === params.companyId)
           ?.entityId
       : undefined;
+    const pagination = buildPaginationParams({
+      page: params?.page,
+      pageSize: params?.pageSize,
+      getAll: params?.getAll,
+    });
     const response = await api.get<unknown>("hr/Employees/transfers", {
       params: {
-        page: params?.page ?? 1,
-        pageSize: params?.pageSize ?? 200,
-        companyId: companyGuid,
-        employeeId: params?.employeeId,
-        fromDate: params?.fromDate,
-        toDate: params?.toDate,
+        ...pagination,
+        ...(companyGuid ? { companyId: companyGuid } : {}),
+        ...(params?.employeeId ? { employeeId: params.employeeId } : {}),
+        ...(params?.fromDate ? { fromDate: params.fromDate } : {}),
+        ...(params?.toDate ? { toDate: params.toDate } : {}),
       },
     });
-    return unwrapApiData<PagedResult<HrTransferItem>>(response.data);
+    const body = response.data;
+    try {
+      const paginated = unwrapPaginatedApiData<HrTransferItem>(body);
+      let page: LegacyPagedResult<HrTransferItem> = toLegacyPagedResult(paginated);
+      if (params?.getAll && page.items.length < page.totalCount) {
+        page = await ensureFullPageItems(page, (nextPage, nextPageSize) =>
+          employeeService.listTransfers({
+            ...params,
+            page: nextPage,
+            pageSize: nextPageSize,
+            getAll: false,
+          }),
+        );
+      } else if (params?.getAll) {
+        page = { ...page, getAll: true };
+      }
+      return page;
+    } catch {
+      return unwrapApiData<PagedResult<HrTransferItem>>(body);
+    }
   },
 
   changeStatus: async (
@@ -1570,13 +1832,159 @@ export const employeeService = {
     return { success: true };
   },
 
+  uploadProfilePicture: async (
+    employeeEntityId: string,
+    file: File,
+    companyId?: number,
+  ): Promise<{ success: boolean; message: string; imageUrl?: string }> => {
+    try {
+      const id = await resolveEmployeeGuid(employeeEntityId, companyId);
+      const form = new FormData();
+      form.append("file", file);
+      const res = await api.post(
+        `hr/Employees/${encodeURIComponent(id)}/profile-picture`,
+        form,
+      );
+      const data = unwrapApiData<{ imageUrl: string }>(res.data);
+      return { success: true, message: "Profile picture updated.", imageUrl: data.imageUrl };
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: unknown }; message?: string };
+      return {
+        success: false,
+        message:
+          firstApiErrorMessage(ax.response?.data) ||
+          ax.message ||
+          "Failed to upload profile picture.",
+      };
+    }
+  },
+
+  removeProfilePicture: async (
+    employeeEntityId: string,
+    companyId?: number,
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      const id = await resolveEmployeeGuid(employeeEntityId, companyId);
+      await api.delete(
+        `hr/Employees/${encodeURIComponent(id)}/profile-picture`,
+      );
+      return { success: true, message: "Profile picture removed." };
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: unknown }; message?: string };
+      return {
+        success: false,
+        message:
+          firstApiErrorMessage(ax.response?.data) ||
+          ax.message ||
+          "Failed to remove profile picture.",
+      };
+    }
+  },
+
+  uploadSignature: async (
+    employeeEntityId: string,
+    file: File,
+    companyId?: number,
+  ): Promise<{ success: boolean; message: string; imageUrl?: string }> => {
+    try {
+      const id = await resolveEmployeeGuid(employeeEntityId, companyId);
+      const form = new FormData();
+      form.append("file", file);
+      const res = await api.post(
+        `hr/Employees/${encodeURIComponent(id)}/signature`,
+        form,
+      );
+      const data = unwrapApiData<{ imageUrl: string }>(res.data);
+      return { success: true, message: "Signature updated.", imageUrl: data.imageUrl };
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: unknown }; message?: string };
+      return {
+        success: false,
+        message:
+          firstApiErrorMessage(ax.response?.data) ||
+          ax.message ||
+          "Failed to upload signature.",
+      };
+    }
+  },
+
+  removeSignature: async (
+    employeeEntityId: string,
+    companyId?: number,
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      const id = await resolveEmployeeGuid(employeeEntityId, companyId);
+      await api.delete(`hr/Employees/${encodeURIComponent(id)}/signature`);
+      return { success: true, message: "Signature removed." };
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: unknown }; message?: string };
+      return {
+        success: false,
+        message:
+          firstApiErrorMessage(ax.response?.data) ||
+          ax.message ||
+          "Failed to remove signature.",
+      };
+    }
+  },
+
   getManpower: async (params?: ManpowerFilterParams) => {
     const query = await buildManpowerQueryParams(params, { paging: true });
     const response = await api.get<unknown>("hr/Employees/manpower", {
       params: query,
     });
-    const page = unwrapApiData<PagedResult<HrManpowerListItem>>(response.data);
-    return (page.items ?? []).map(mapHrManpowerToEmployee);
+    const paginated = unwrapPaginatedApiData<HrManpowerListItem>(response.data);
+    return paginated.data.map(mapHrManpowerToEmployee);
+  },
+
+  getManpowerPage: async (
+    params?: ManpowerFilterParams & {
+      page?: number;
+      pageSize?: number;
+      getAll?: boolean;
+      sortBy?: string;
+      sortOrder?: "asc" | "desc";
+    },
+  ) => {
+    const query = await buildManpowerQueryParams(params, {
+      paging: true,
+      page: params?.page ?? 1,
+      pageSize: params?.pageSize,
+      getAll: params?.getAll,
+      sortBy: params?.sortBy,
+      sortOrder: params?.sortOrder,
+    });
+    const response = await api.get<unknown>("hr/Employees/manpower", {
+      params: query,
+    });
+    const paginated = unwrapPaginatedApiData<HrManpowerListItem>(response.data);
+    let page: LegacyPagedResult<HrManpowerListItem> = toLegacyPagedResult(paginated);
+
+    if (params?.getAll && page.items.length < page.totalCount) {
+      page = await ensureFullPageItems(page, async (nextPage, nextPageSize) => {
+        const nextQuery = await buildManpowerQueryParams(params, {
+          paging: true,
+          page: nextPage,
+          pageSize: nextPageSize,
+          getAll: false,
+          sortBy: params?.sortBy,
+          sortOrder: params?.sortOrder,
+        });
+        const nextRes = await api.get<unknown>("hr/Employees/manpower", {
+          params: nextQuery,
+        });
+        return toLegacyPagedResult(
+          unwrapPaginatedApiData<HrManpowerListItem>(nextRes.data),
+        );
+      });
+    } else if (params?.getAll) {
+      page = { ...page, getAll: true };
+    }
+
+    return {
+      ...page,
+      items: page.items.map(mapHrManpowerToEmployee),
+    } as unknown as EmployeePage;
   },
 
   getManpowerSummary: async (params?: ManpowerFilterParams) => {

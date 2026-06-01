@@ -449,6 +449,9 @@ export const sidebarData = {
                         { title: "Stock Out", url: "/store/management/stock-out" },
                         { title: "Current Stock", url: "/store/management/current-stock" },
                         { title: "Reorder Alert", url: "/store/management/reorder-alert" },
+                        { title: "GRN", url: "/store/grn" },
+                        { title: "Inventory", url: "/store/inventory" },
+                        { title: "Ledger", url: "/store/ledger" },
                     ],
                 },
                 {
@@ -493,6 +496,7 @@ export const sidebarData = {
                         { title: "Sample Tracking", url: "/merchandising/samples" },
                         { title: "Costing Analysis", url: "/merchandising/costing" },
                         { title: "Colors", url: "/merchandising/colors" },
+                        { title: "Reference Data", url: "/merchandising/master" },
                     ],
                 },
                 {
@@ -501,6 +505,8 @@ export const sidebarData = {
                     icon: IconClipboardList,
                     items: [
                         { title: "Orders", url: "/merchandising/orders" },
+                        { title: "Import Orders", url: "/merchandising/orders/import" },
+                        { title: "Quotations", url: "/merchandising/quotations" },
                         { title: "Summary", url: "/merchandising/orders/summary" },
                         { title: "BOM Architecture", url: "/merchandising/bom" },
                         { title: "Consumption Matrix", url: "/merchandising/consumption" },
@@ -513,6 +519,7 @@ export const sidebarData = {
                     items: [
                         { title: "Material Bookings", url: "/merchandising/bookings" },
                         { title: "Accessories Summary", url: "/merchandising/accessories/summary" },
+                        { title: "Purchase Requisitions", url: "/merchandising/requisitions" },
                     ],
                 },
                 {
@@ -551,10 +558,71 @@ export const sidebarData = {
                     items: [
                         { title: "Executive Reports", url: "/merchandising/reports" },
                         { title: "Document Vault", url: "/merchandising/documents" },
+                        { title: "Approvals", url: "/merchandising/approvals" },
                     ],
                 },
             ]
-        }
+        },
+        {
+            name: "Security",
+            logo: IconShield,
+            plan: "Module",
+            accessPath: "/security",
+            roles: ["SuperAdmin", "Admin", "SecurityManager", "SecurityOfficer", "GateOfficer", "Viewer"],
+            navMain: [
+                { title: "Gate Control Center", url: "/security/dashboard", icon: IconDashboard },
+            ],
+            navGroup: [
+                {
+                    title: "Master Setup",
+                    url: "#",
+                    icon: IconSettings,
+                    items: [
+                        { title: "Gate Setup", url: "/security/master/gates" },
+                        { title: "Visitor Registry", url: "/security/master/visitors" },
+                        { title: "Vehicle Registry", url: "/security/master/vehicles" },
+                    ],
+                },
+                {
+                    title: "People & Movement",
+                    url: "#",
+                    icon: IconUsers,
+                    items: [
+                        { title: "Visitor Check-In/Out", url: "/security/visitor-entries" },
+                        { title: "Employee Out Pass", url: "/security/employee-out-passes" },
+                        { title: "Vehicle In/Out", url: "/security/vehicle-entries" },
+                    ],
+                },
+                {
+                    title: "Documents",
+                    url: "#",
+                    icon: IconForms,
+                    items: [
+                        { title: "Gate Pass", url: "/security/gate-passes" },
+                        { title: "Returnable Returns", url: "/security/returnable-returns" },
+                        { title: "Chalan", url: "/security/chalans" },
+                        { title: "Bill Entry", url: "/security/bill-entries" },
+                    ],
+                },
+                {
+                    title: "Operations",
+                    url: "#",
+                    icon: IconFingerprint,
+                    items: [
+                        { title: "Security Checks", url: "/security/checks" },
+                        { title: "Daily Register", url: "/security/daily-register" },
+                    ],
+                },
+                {
+                    title: "Reports",
+                    url: "#",
+                    icon: IconReportSearch,
+                    items: [
+                        { title: "Gate Reports", url: "/security/reports" },
+                    ],
+                },
+            ],
+        },
     ],
     navSecondary: [
         { title: "Settings", url: "/settings", icon: IconSettings },

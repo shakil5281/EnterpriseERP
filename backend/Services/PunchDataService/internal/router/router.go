@@ -1,6 +1,8 @@
 package router
 
 import (
+	"net/http"
+
 	"github.com/enterprise-erp/punchdata/internal/handlers"
 	"github.com/enterprise-erp/punchdata/internal/middleware"
 	"github.com/gin-contrib/cors"
@@ -29,6 +31,7 @@ func New(opts Options) *gin.Engine {
 	r.Use(corsMiddleware(opts.AllowedOrigins))
 
 	r.GET("/health", opts.Health.Get)
+	r.GET("/api/v1/punch-data/health", opts.Health.Get)
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	r.GET("/", func(c *gin.Context) { c.Redirect(302, "/swagger/index.html") })
 
@@ -84,6 +87,39 @@ func New(opts Options) *gin.Engine {
 			}
 		}
 	}
+
+	return r
+}
+
+// NewSwaggerOnly exposes health and Swagger docs when the database is unavailable in local Docker.
+func NewSwaggerOnly(allowedOrigins []string) *gin.Engine {
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(middleware.CorrelationID())
+	r.Use(corsMiddleware(allowedOrigins))
+
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status":  "unhealthy",
+			"service": "PunchDataService",
+			"reason":  "database unavailable; Swagger docs are still available",
+		})
+	})
+	r.GET("/api/v1/punch-data/health", func(c *gin.Context) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status":  "unhealthy",
+			"service": "PunchDataService",
+			"reason":  "database unavailable; Swagger docs are still available",
+		})
+	})
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	r.GET("/", func(c *gin.Context) { c.Redirect(http.StatusFound, "/swagger/index.html") })
+
+	gatewaySwagger := ginSwagger.WrapHandler(
+		swaggerFiles.Handler,
+		ginSwagger.URL("/api/v1/punch-data/swagger/doc.json"),
+	)
+	r.GET("/api/v1/punch-data/swagger/*any", gatewaySwagger)
 
 	return r
 }

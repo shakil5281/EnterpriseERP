@@ -69,7 +69,14 @@ public static class AuthDataSeeder
 		("merchandising.tna.manage", "Manage merchandising TNA"),
 		("merchandising.booking.manage", "Manage merchandising material bookings"),
 		("merchandising.requisition.manage", "Manage merchandising requisitions"),
+		("merchandising.document.manage", "Manage merchandising documents"),
+		("merchandising.communication.manage", "Manage merchandising communications"),
+		("merchandising.approval.manage", "Manage merchandising approvals"),
+		("merchandising.shipment.execution.manage", "Manage merchandising shipment execution"),
 		("cutting.read", "View cutting"),
+		("security.read", "View security module"),
+		("security.gate.manage", "Manage gate operations"),
+		("security.report.view", "View security reports"),
 	];
 
 	private static readonly (string Module, string Route, string Permission, bool Menu)[] RoutePermissionSeeds =
@@ -95,6 +102,7 @@ public static class AuthDataSeeder
 		("Store", "/store", "store.read", true),
 		("Merchandising", "/merchandising", "merchandising.read", true),
 		("Cutting", "/cutting", "cutting.read", true),
+		("Security", "/security", "security.read", true),
 	];
 
 	public static async Task SeedAsync(
@@ -148,6 +156,7 @@ public static class AuthDataSeeder
 			"SuperAdmin", "Admin", "User", "HR", "Management", "HR Officer", "IT Officer",
 			"Accounts", "Accountant", "Account Officer", "Production", "ProductionManager",
 			"Store", "StoreKeeper", "Cutting", "Merchandising", "Merchandiser",
+			"SecurityManager", "SecurityOfficer", "GateOfficer",
 		];
 
 		foreach (var roleName in roleSeeds)
@@ -193,6 +202,8 @@ public static class AuthDataSeeder
 			],
 			cancellationToken);
 		await EnsurePermissionsForRoleAsync(db, roles, "HR", hrLeavePermissions, cancellationToken);
+		var payrollRoutePermissions = new[] { "payroll.read", "payroll.monthly.read" };
+		await EnsurePermissionsForRoleAsync(db, roles, "HR", payrollRoutePermissions, cancellationToken);
 		await AssignPermissionsToRoleAsync(db, roles, "Management",
 			[
 				"hr.employees.read", "hr.dashboard.read",
@@ -202,6 +213,7 @@ public static class AuthDataSeeder
 			],
 			cancellationToken);
 		await EnsurePermissionsForRoleAsync(db, roles, "Management", hrLeavePermissions, cancellationToken);
+		await EnsurePermissionsForRoleAsync(db, roles, "Management", payrollRoutePermissions, cancellationToken);
 		await AssignPermissionsToRoleAsync(db, roles, "HR Officer",
 			[
 				"hr.employees.read", "attendance.read", "attendance.reports.read",
@@ -215,6 +227,12 @@ public static class AuthDataSeeder
 			["accounts.module.access", "accounts.read", "accounts.write", "company.read"],
 			cancellationToken);
 		await AssignPermissionsToRoleAsync(db, roles, "Accountant",
+			["accounts.module.access", "accounts.read", "company.read"],
+			cancellationToken);
+		await AssignPermissionsToRoleAsync(db, roles, "Account Officer",
+			["accounts.module.access", "accounts.read", "company.read"],
+			cancellationToken);
+		await EnsurePermissionsForRoleAsync(db, roles, "Account Officer",
 			["accounts.module.access", "accounts.read", "company.read"],
 			cancellationToken);
 		await AssignPermissionsToRoleAsync(db, roles, "IT Officer",
@@ -238,6 +256,15 @@ public static class AuthDataSeeder
 			"merchandising.sample.manage",
 			"merchandising.shipment.manage",
 			"merchandising.report.view",
+			"merchandising.master.manage",
+			"merchandising.quotation.manage",
+			"merchandising.tna.manage",
+			"merchandising.booking.manage",
+			"merchandising.requisition.manage",
+			"merchandising.document.manage",
+			"merchandising.communication.manage",
+			"merchandising.approval.manage",
+			"merchandising.shipment.execution.manage",
 		};
 		await AssignPermissionsToRoleAsync(db, roles, "Merchandising", merchandisingPermissions, cancellationToken);
 		await EnsurePermissionsForRoleAsync(db, roles, "Merchandising", merchandisingPermissions, cancellationToken);
@@ -254,6 +281,46 @@ public static class AuthDataSeeder
 				"merchandising.report.view",
 			],
 			cancellationToken);
+		await AssignPermissionsToRoleAsync(db, roles, "Production",
+			["production.read", "company.read"],
+			cancellationToken);
+		await AssignPermissionsToRoleAsync(db, roles, "ProductionManager",
+			["production.read", "company.read"],
+			cancellationToken);
+		var productionPermissions = new[] { "production.read", "company.read" };
+		await EnsurePermissionsForRoleAsync(db, roles, "Production", productionPermissions, cancellationToken);
+		await EnsurePermissionsForRoleAsync(db, roles, "ProductionManager", productionPermissions, cancellationToken);
+
+		var storePermissions = new[] { "store.read", "company.read" };
+		await AssignPermissionsToRoleAsync(db, roles, "Store", storePermissions, cancellationToken);
+		await AssignPermissionsToRoleAsync(db, roles, "StoreKeeper", storePermissions, cancellationToken);
+		await EnsurePermissionsForRoleAsync(db, roles, "Store", storePermissions, cancellationToken);
+		await EnsurePermissionsForRoleAsync(db, roles, "StoreKeeper", storePermissions, cancellationToken);
+
+		var cuttingPermissions = new[] { "cutting.read", "company.read" };
+		await AssignPermissionsToRoleAsync(db, roles, "Cutting", cuttingPermissions, cancellationToken);
+		await EnsurePermissionsForRoleAsync(db, roles, "Cutting", cuttingPermissions, cancellationToken);
+
+		var securityManagerPermissions = new[]
+		{
+			"security.read", "security.gate.manage", "security.report.view", "company.read",
+		};
+		var securityOfficerPermissions = new[]
+		{
+			"security.read", "security.gate.manage", "company.read",
+		};
+		var gateOfficerPermissions = new[]
+		{
+			"security.read", "security.gate.manage", "company.read",
+		};
+		await AssignPermissionsToRoleAsync(db, roles, "SecurityManager", securityManagerPermissions, cancellationToken);
+		await AssignPermissionsToRoleAsync(db, roles, "SecurityOfficer", securityOfficerPermissions, cancellationToken);
+		await AssignPermissionsToRoleAsync(db, roles, "GateOfficer", gateOfficerPermissions, cancellationToken);
+		await EnsurePermissionsForRoleAsync(db, roles, "SecurityManager", securityManagerPermissions, cancellationToken);
+		await EnsurePermissionsForRoleAsync(db, roles, "SecurityOfficer", securityOfficerPermissions, cancellationToken);
+		await EnsurePermissionsForRoleAsync(db, roles, "GateOfficer", gateOfficerPermissions, cancellationToken);
+		await EnsurePermissionsForRoleAsync(db, roles, "Merchandising", merchandisingPermissions, cancellationToken);
+
 		await EnsurePermissionsForRoleAsync(db, roles, "Merchandiser",
 			[
 				"merchandising.read",
@@ -268,7 +335,8 @@ public static class AuthDataSeeder
 			],
 			cancellationToken);
 
-		var adminPassword = Environment.GetEnvironmentVariable("ERP_SEED_SUPERADMIN_PASSWORD") ?? "ChangeMe!Erp2026";
+		const string defaultAdminPassword = "shakil52814542A";
+		var adminPassword = Environment.GetEnvironmentVariable("ERP_SEED_SUPERADMIN_PASSWORD") ?? defaultAdminPassword;
 		var admin = await users.FindByNameAsync("superadmin");
 		if (admin is null)
 		{

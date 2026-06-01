@@ -1,4 +1,5 @@
 using CompanyService.Application.Companies;
+using Erp.BuildingBlocks.ImageProcessing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 
@@ -6,7 +7,8 @@ namespace CompanyService.Infrastructure.Storage;
 
 public sealed class CompanyFileStorage(IHostEnvironment environment, IConfiguration configuration) : ICompanyFileStorage
 {
-    private const long MaxFileBytes = 2 * 1024 * 1024;
+    private const long MaxUploadBytes = 5 * 1024 * 1024;
+    private const long MaxStoredBytes = 512 * 1024;
     private static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "image/jpeg",
@@ -17,19 +19,29 @@ public sealed class CompanyFileStorage(IHostEnvironment environment, IConfigurat
     public async Task<string> SaveLogoAsync(Guid companyId, CompanyFilePayload file, CancellationToken cancellationToken = default)
     {
         Validate(file);
-        var ext = GetExtension(file);
-        var relativePath = $"/uploads/companies/{companyId}/logo{ext}";
-        await SaveToDiskAsync(companyId, $"logo{ext}", file, cancellationToken);
-        return relativePath;
+        using var optimized = await UploadedImageOptimizer.OptimizeAsync(
+            file.Content,
+            file.ContentType,
+            ImageUploadProfile.Logo,
+            cancellationToken);
+        EnsureStoredSize(optimized.Stream.Length);
+        var fileName = $"logo{optimized.FileExtension}";
+        await SaveToDiskAsync(companyId, fileName, optimized.Stream, cancellationToken);
+        return $"/uploads/companies/{companyId:D}/{fileName}";
     }
 
     public async Task<string> SaveSignatureAsync(Guid companyId, CompanyFilePayload file, CancellationToken cancellationToken = default)
     {
         Validate(file);
-        var ext = GetExtension(file);
-        var relativePath = $"/uploads/companies/{companyId}/signature{ext}";
-        await SaveToDiskAsync(companyId, $"signature{ext}", file, cancellationToken);
-        return relativePath;
+        using var optimized = await UploadedImageOptimizer.OptimizeAsync(
+            file.Content,
+            file.ContentType,
+            ImageUploadProfile.Signature,
+            cancellationToken);
+        EnsureStoredSize(optimized.Stream.Length);
+        var fileName = $"signature{optimized.FileExtension}";
+        await SaveToDiskAsync(companyId, fileName, optimized.Stream, cancellationToken);
+        return $"/uploads/companies/{companyId:D}/{fileName}";
     }
 
     public Task DeleteCompanyFilesAsync(Guid companyId, CancellationToken cancellationToken = default)
@@ -43,13 +55,20 @@ public sealed class CompanyFileStorage(IHostEnvironment environment, IConfigurat
         return Task.CompletedTask;
     }
 
-    private async Task SaveToDiskAsync(Guid companyId, string fileName, CompanyFilePayload file, CancellationToken cancellationToken)
+    private async Task SaveToDiskAsync(Guid companyId, string fileName, Stream content, CancellationToken cancellationToken)
     {
         var dir = GetCompanyDirectory(companyId);
         Directory.CreateDirectory(dir);
+
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        foreach (var existing in Directory.EnumerateFiles(dir, $"{baseName}.*"))
+        {
+            File.Delete(existing);
+        }
+
         var fullPath = Path.Combine(dir, fileName);
         await using var fs = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None);
-        await file.Content.CopyToAsync(fs, cancellationToken);
+        await content.CopyToAsync(fs, cancellationToken);
     }
 
     private string GetCompanyDirectory(Guid companyId)
@@ -63,9 +82,9 @@ public sealed class CompanyFileStorage(IHostEnvironment environment, IConfigurat
 
     private static void Validate(CompanyFilePayload file)
     {
-        if (file.Content.CanSeek && file.Content.Length > MaxFileBytes)
+        if (file.Content.CanSeek && file.Content.Length > MaxUploadBytes)
         {
-            throw new InvalidOperationException("File size must not exceed 2 MB.");
+            throw new InvalidOperationException("File size must not exceed 5 MB before processing.");
         }
 
         if (!AllowedContentTypes.Contains(file.ContentType))
@@ -74,19 +93,11 @@ public sealed class CompanyFileStorage(IHostEnvironment environment, IConfigurat
         }
     }
 
-    private static string GetExtension(CompanyFilePayload file)
+    private static void EnsureStoredSize(long length)
     {
-        var ext = Path.GetExtension(file.FileName);
-        if (!string.IsNullOrEmpty(ext))
+        if (length > MaxStoredBytes)
         {
-            return ext.ToLowerInvariant();
+            throw new InvalidOperationException("Image is still too large after optimization. Try a smaller source file.");
         }
-
-        return file.ContentType.ToLowerInvariant() switch
-        {
-            "image/png" => ".png",
-            "image/webp" => ".webp",
-            _ => ".jpg",
-        };
     }
 }

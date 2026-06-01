@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShiftService.Api.Models;
 using ShiftService.Application.Features.Shifts.Commands;
@@ -9,6 +10,7 @@ namespace ShiftService.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/shifts")]
+[Authorize(Roles = "SuperAdmin,Admin,HR,Management,HR Officer,IT Officer")]
 public class ShiftsController(IMediator mediator) : ControllerBase
 {
     [HttpPost]
@@ -33,6 +35,17 @@ public class ShiftsController(IMediator mediator) : ControllerBase
     {
         var data = await mediator.Send(new EvaluateShiftQuery(companyId, employeeId, date));
         return Ok(ApiResponse<ShiftEvaluationDto>.Ok(data, HttpContext.TraceIdentifier));
+    }
+
+    [HttpPost("evaluation/bulk")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<ShiftEvaluationDto>>>> EvaluateBulk(
+        BulkShiftEvaluationRequest request)
+    {
+        var data = await mediator.Send(new EvaluateManyShiftsQuery(
+            request.CompanyId,
+            request.EmployeeIds,
+            request.Date));
+        return Ok(ApiResponse<IReadOnlyList<ShiftEvaluationDto>>.Ok(data, HttpContext.TraceIdentifier));
     }
 
     [HttpGet("applicable")]
@@ -83,3 +96,8 @@ public class ShiftsController(IMediator mediator) : ControllerBase
         return Ok(ApiResponse<bool>.Ok(success, HttpContext.TraceIdentifier));
     }
 }
+
+public sealed record BulkShiftEvaluationRequest(
+    Guid CompanyId,
+    IReadOnlyCollection<Guid> EmployeeIds,
+    DateTime Date);

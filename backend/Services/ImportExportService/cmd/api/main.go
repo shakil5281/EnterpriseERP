@@ -61,6 +61,14 @@ func main() {
 	dsn := config.NormalizeSQLServerDSN(cfg.ConnectionStrings.ImportExportDb)
 	gdb, err := database.Open(dsn, logger)
 	if err != nil {
+		if strings.EqualFold(os.Getenv("IMPORTEXPORT_SWAGGER_ONLY_ON_DB_FAILURE"), "true") {
+			logger.Warn("db open failed; starting ImportExportService in Swagger-only mode", "error", err)
+			if os.Getenv("GIN_MODE") == "" {
+				gin.SetMode(gin.ReleaseMode)
+			}
+			runSwaggerOnlyServer(cfg.Server.Address, router.NewSwaggerOnly(cfg.Cors.AllowedOrigins), logger)
+			return
+		}
 		logger.Error("db open", "error", err)
 		os.Exit(1)
 	}
@@ -92,13 +100,15 @@ func main() {
 
 	store := storage.LocalStorage{Root: dataRoot}
 	svc := &importsvc.Service{
-		DB:             gdb,
-		CompanyDB:      companyDB,
-		Store:          store,
-		ExportDir:      cfg.Storage.ExportDir,
-		LargeThreshold: cfg.Asynq.ImportLargeRowThreshold,
-		AsynqClient:    asynqClient,
-		HR:             hrclient.New(cfg.Services.HrBaseUrl),
+		DB:                            gdb,
+		CompanyDB:                     companyDB,
+		Store:                         store,
+		ExportDir:                     cfg.Storage.ExportDir,
+		LargeThreshold:                cfg.Asynq.ImportLargeRowThreshold,
+		EmployeeImportBatchSize:       cfg.EmployeeImport.BatchSize,
+		EmployeeImportParallelBatches: cfg.EmployeeImport.ParallelBatches,
+		AsynqClient:                   asynqClient,
+		HR:                            hrclient.New(cfg.Services.HrBaseUrl),
 	}
 
 	if os.Getenv("GIN_MODE") == "" {
@@ -117,7 +127,7 @@ func main() {
 		Address:      &handlers.AddressHandler{Svc: svc, Store: store},
 		Jobs:         &handlers.JobsHandler{Svc: svc},
 		Templates:    &handlers.TemplateHandler{},
-		ReportExport: &handlers.ReportExportHandler{},
+		ReportExport: &handlers.ReportExportHandler{CompanyDB: companyDB},
 	})
 
 	srv := &http.Server{
@@ -155,4 +165,28 @@ func mustWd() string {
 		return "."
 	}
 	return wd
+}
+
+func runSwaggerOnlyServer(address string, engine *gin.Engine, logger *slog.Logger) {
+	srv := &http.Server{
+		Addr:              address,
+		Handler:           engine,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	go func() {
+		logger.Info("ImportExportService Swagger-only listener started", "address", address)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("server", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = srv.Shutdown(ctx)
 }

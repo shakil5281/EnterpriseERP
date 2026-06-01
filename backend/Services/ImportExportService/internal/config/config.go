@@ -14,6 +14,7 @@ type AppConfig struct {
 	Services          ServicesConfig          `json:"Services"`
 	Redis             RedisConfig             `json:"Redis"`
 	Asynq             AsynqConfig             `json:"Asynq"`
+	EmployeeImport    EmployeeImportConfig    `json:"EmployeeImport"`
 	Storage           StorageConfig           `json:"Storage"`
 	Jwt               JwtConfig               `json:"Jwt"`
 	Cors              CorsConfig              `json:"Cors"`
@@ -41,6 +42,11 @@ type RedisConfig struct {
 type AsynqConfig struct {
 	Concurrency             int `json:"Concurrency"`
 	ImportLargeRowThreshold int `json:"ImportLargeRowThreshold"`
+}
+
+type EmployeeImportConfig struct {
+	BatchSize       int `json:"BatchSize"`
+	ParallelBatches int `json:"ParallelBatches"`
 }
 
 type StorageConfig struct {
@@ -153,6 +159,12 @@ func applyDefaults(cfg *AppConfig) {
 	if cfg.Asynq.ImportLargeRowThreshold <= 0 {
 		cfg.Asynq.ImportLargeRowThreshold = 500
 	}
+	if cfg.EmployeeImport.BatchSize <= 0 {
+		cfg.EmployeeImport.BatchSize = 150
+	}
+	if cfg.EmployeeImport.ParallelBatches <= 0 {
+		cfg.EmployeeImport.ParallelBatches = 8
+	}
 	if cfg.Storage.UploadDir == "" {
 		cfg.Storage.UploadDir = "uploads"
 	}
@@ -178,6 +190,18 @@ func projectRoot() (string, error) {
 			break
 		}
 		dir = parent
+	}
+	// Docker / published layout: appsettings.json next to the binary (no go.mod in image).
+	if wd, err := os.Getwd(); err == nil {
+		if _, err := os.Stat(filepath.Join(wd, "appsettings.json")); err == nil {
+			return wd, nil
+		}
+	}
+	if exe, err := os.Executable(); err == nil {
+		root := filepath.Dir(exe)
+		if _, err := os.Stat(filepath.Join(root, "appsettings.json")); err == nil {
+			return root, nil
+		}
 	}
 	return "", fmt.Errorf("go.mod not found")
 }
@@ -207,8 +231,17 @@ func NormalizeSQLServerDSN(cs string) string {
 	database := first(kv, "database", "initial catalog")
 	user := first(kv, "user id", "uid")
 	password := first(kv, "password", "pwd")
+	trusted := strings.EqualFold(kv["trusted_connection"], "true") ||
+		strings.EqualFold(kv["integrated security"], "true") ||
+		strings.EqualFold(kv["integrated security"], "sspi")
 
 	host, instance, port := parseServer(server)
+	// Local instance: prefer named pipe / shared memory (no SQL Browser required).
+	if port == "" && instance != "" && isLocalSQLHost(host) {
+		if dsn := buildLocalInstanceDSN(host, instance, database, trusted, kv); dsn != "" {
+			return dsn
+		}
+	}
 	q := []string{}
 	if database != "" {
 		q = append(q, "database="+esc(database))
@@ -237,6 +270,9 @@ func NormalizeSQLServerDSN(cs string) string {
 	if strings.EqualFold(kv["multipleactiveresultsets"], "true") {
 		q = append(q, "MultipleActiveResultSets=true")
 	}
+	if trusted {
+		q = append(q, "trusted_connection=true")
+	}
 	auth := ""
 	if user != "" {
 		auth = esc(user)
@@ -253,6 +289,150 @@ func NormalizeSQLServerDSN(cs string) string {
 		dsn += "?" + strings.Join(q, "&")
 	}
 	return dsn
+}
+
+func buildLocalInstanceDSN(host, instance, database string, trusted bool, kv map[string]string) string {
+	// Shared memory (lpc) works for local SHAKIL\SQLEXPRESS without SQL Browser/TCP.
+	return buildADO("lpc:"+host+`\`+instance, database, trusted, kv)
+}
+
+func buildLocalURL(instance, database string, trusted bool, kv map[string]string) string {
+	q := []string{
+		"database=" + esc(database),
+		"protocol=np",
+		"pipe=" + esc("MSSQL$"+instance+`\sql\query`),
+		"trustservercertificate=true",
+		"encrypt=disable",
+	}
+	if trusted {
+		q = append(q, "trusted_connection=true")
+	}
+	if strings.EqualFold(kv["multipleactiveresultsets"], "true") {
+		q = append(q, "MultipleActiveResultSets=true")
+	}
+	// Empty user before host enables Windows SSPI (see go-mssqldb docs).
+	return "sqlserver://@localhost/" + esc(instance) + "?" + strings.Join(q, "&")
+}
+
+func buildADO(server, database string, trusted bool, kv map[string]string, extra ...string) string {
+	parts := []string{"server=" + server, "database=" + database, "encrypt=disable", "TrustServerCertificate=true"}
+	if trusted {
+		parts = append(parts, "trusted_connection=true")
+	}
+	parts = append(parts, extra...)
+	if strings.EqualFold(kv["multipleactiveresultsets"], "true") {
+		parts = append(parts, "MultipleActiveResultSets=true")
+	}
+	return strings.Join(parts, ";")
+}
+
+func buildTCPADO(server, port, database, user, password string, trusted bool, kv map[string]string) string {
+	host, instance, _ := parseServer(server)
+	if port == "" {
+		return ""
+	}
+	tcpServer := host
+	if instance != "" {
+		tcpServer = host + "\\" + instance
+	}
+	tcpServer += "," + port
+	parts := []string{"server=" + tcpServer, "database=" + database, "TrustServerCertificate=True"}
+	if trusted {
+		parts = append(parts, "Trusted_Connection=True")
+	} else if user != "" {
+		parts = append(parts, "user id="+user)
+		if password != "" {
+			parts = append(parts, "password="+password)
+		}
+	}
+	if strings.EqualFold(kv["multipleactiveresultsets"], "true") {
+		parts = append(parts, "MultipleActiveResultSets=true")
+	}
+	return strings.Join(parts, ";")
+}
+
+// ConnectionStringCandidates returns DSN variants to try (pipe paths, then TCP).
+func ConnectionStringCandidates(cs string) []string {
+	trimmed := strings.TrimSpace(cs)
+	seen := map[string]struct{}{}
+	var out []string
+	add := func(dsn string) {
+		dsn = strings.TrimSpace(dsn)
+		if dsn == "" {
+			return
+		}
+		if _, ok := seen[dsn]; ok {
+			return
+		}
+		seen[dsn] = struct{}{}
+		out = append(out, dsn)
+	}
+	// Prefer the original ADO string first (same as .NET / sqlcmd).
+	if !strings.HasPrefix(strings.ToLower(trimmed), "sqlserver://") {
+		add(trimmed)
+	}
+	add(NormalizeSQLServerDSN(cs))
+	if strings.HasPrefix(strings.ToLower(trimmed), "sqlserver://") {
+		return out
+	}
+	parts := strings.Split(trimmed, ";")
+	kv := map[string]string{}
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		idx := strings.Index(p, "=")
+		if idx <= 0 {
+			continue
+		}
+		k := strings.ToLower(strings.TrimSpace(p[:idx]))
+		kv[k] = strings.TrimSpace(p[idx+1:])
+	}
+	server := first(kv, "server", "data source")
+	database := first(kv, "database", "initial catalog")
+	user := first(kv, "user id", "uid")
+	password := first(kv, "password", "pwd")
+	trusted := strings.EqualFold(kv["trusted_connection"], "true") ||
+		strings.EqualFold(kv["integrated security"], "true") ||
+		strings.EqualFold(kv["integrated security"], "sspi")
+	host, instance, port := parseServer(server)
+	if port != "" || instance == "" {
+		return out
+	}
+	if !isLocalSQLHost(host) && !strings.EqualFold(host, ".") && !strings.EqualFold(host, "(local)") {
+		return out
+	}
+	alternates := []string{
+		buildLocalURL(instance, "master", trusted, kv),
+		buildADO("lpc:"+host+`\`+instance, database, trusted, kv),
+		buildADO(".", database, trusted, kv, "protocol=np", "pipe=MSSQL$"+instance+`\sql\query`),
+		buildADO(host+`\`+instance, database, trusted, kv),
+	}
+	for _, dsn := range alternates {
+		add(dsn)
+	}
+	for _, tcpPort := range []string{"1433", "49172", "1434"} {
+		add(buildTCPADO(server, tcpPort, database, user, password, trusted, kv))
+	}
+	return out
+}
+
+func isLocalSQLHost(host string) bool {
+	switch strings.ToLower(strings.TrimSpace(host)) {
+	case "", ".", "(local)", "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		// Machine name when connecting to local SQLEXPRESS (e.g. SHAKIL\SQLEXPRESS).
+		if hn, err := os.Hostname(); err == nil && strings.EqualFold(host, hn) {
+			return true
+		}
+		// Common local aliases for Express on the same machine.
+		if strings.Contains(strings.ToUpper(host), "SHAKIL") || strings.Contains(strings.ToUpper(host), "SQLEXPRESS") {
+			return true
+		}
+		return false
+	}
 }
 
 func parseServer(server string) (host, instance, port string) {

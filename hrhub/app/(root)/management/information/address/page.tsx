@@ -376,7 +376,7 @@ export default function AddressManagementPage() {
             <div className="px-4 lg:px-8">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
                     <div className="flex justify-center flex-col items-center">
-                        <div className="bg-white dark:bg-zinc-900 p-0 rounded-full border shadow-sm sticky top-4 z-20 w-full max-w-5xl mx-auto flex items-center h-[44px] overflow-hidden">
+                        <div className="bg-card p-0 rounded-full border shadow-sm sticky top-4 z-20 w-full max-w-5xl mx-auto flex items-center h-[44px] overflow-hidden">
                             <TabsList className="flex w-full h-full p-0 bg-transparent gap-0">
                                 {[
                                     { val: "country", icon: IconWorld, label: "Country" },

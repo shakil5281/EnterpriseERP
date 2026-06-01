@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { IconScale, IconPlus, IconLoader2 } from "@tabler/icons-react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
     Table,
@@ -30,26 +30,28 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import storeService, { StoreUnit } from "@/lib/services/store"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { StoreUnit, CreateStoreUnitRequest } from "@/lib/types/store"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 
-export default function UnitSetupPage() {
+function UnitSetupContent({ companyId }: { companyId: string }) {
     const [units, setUnits] = React.useState<StoreUnit[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
     const [submitting, setSubmitting] = React.useState(false);
-    const [newUnit, setNewUnit] = React.useState<Partial<StoreUnit>>({
+    const [newUnit, setNewUnit] = React.useState<Omit<CreateStoreUnitRequest, "companyId">>({
         unitName: "",
         shortName: "",
-        unitType: "Count"
+        unitType: "Count",
     });
 
     const fetchUnits = async () => {
         try {
-            const data = await storeService.getUnits();
+            const data = await storeService.getUnits(companyId);
             setUnits(data);
-        } catch (error) {
+        } catch {
             toast.error("Failed to load units");
         } finally {
             setLoading(false);
@@ -58,7 +60,7 @@ export default function UnitSetupPage() {
 
     React.useEffect(() => {
         fetchUnits();
-    }, []);
+    }, [companyId]);
 
     const handleAddUnit = async () => {
         if (!newUnit.unitName || !newUnit.shortName) {
@@ -68,12 +70,12 @@ export default function UnitSetupPage() {
 
         setSubmitting(true);
         try {
-            await storeService.addUnit(newUnit);
+            await storeService.addUnit({ ...newUnit, companyId });
             toast.success("Unit created successfully");
             setIsDialogOpen(false);
             setNewUnit({ unitName: "", shortName: "", unitType: "Count" });
             fetchUnits();
-        } catch (error) {
+        } catch {
             toast.error("Failed to create unit");
         } finally {
             setSubmitting(false);
@@ -81,7 +83,7 @@ export default function UnitSetupPage() {
     };
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">
@@ -128,7 +130,7 @@ export default function UnitSetupPage() {
                             <div className="grid gap-2">
                                 <Label>Measurement Type</Label>
                                 <Select
-                                    value={newUnit.unitType}
+                                    value={newUnit.unitType ?? "Count"}
                                     onValueChange={(val) => setNewUnit({ ...newUnit, unitType: val })}
                                 >
                                     <SelectTrigger>
@@ -175,18 +177,18 @@ export default function UnitSetupPage() {
                                     <TableRow>
                                         <TableCell colSpan={4} className="h-40 text-center">
                                             <IconLoader2 className="animate-spin size-8 mx-auto text-amber-500" />
-                                            <p className="mt-2 text-sm text-muted-foreground font-medium text-amber-600">Loading units...</p>
+                                            <p className="mt-2 text-sm font-medium text-amber-600">Loading units...</p>
                                         </TableCell>
                                     </TableRow>
                                 ) : units.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={4} className="h-40 text-center text-muted-foreground font-medium">
-                                            No units defined. Click "Add Unit" to get started.
+                                            No units defined. Click &quot;Add Unit&quot; to get started.
                                         </TableCell>
                                     </TableRow>
                                 ) : (
                                     units.map((unit) => (
-                                        <TableRow key={unit.shortName} className="hover:bg-muted/30 transition-shadow">
+                                        <TableRow key={unit.id} className="hover:bg-muted/30 transition-shadow">
                                             <TableCell className="font-semibold text-foreground">{unit.unitName}</TableCell>
                                             <TableCell>
                                                 <Badge variant="outline" className="font-mono text-amber-700 bg-amber-50 dark:bg-amber-900/10 dark:text-amber-400 border-amber-200 dark:border-amber-900/40">
@@ -209,6 +211,16 @@ export default function UnitSetupPage() {
                     </div>
                 </CardContent>
             </Card>
-        </div>
-    )
+        </>
+    );
+}
+
+export default function UnitSetupPage() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <UnitSetupContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
+    );
 }

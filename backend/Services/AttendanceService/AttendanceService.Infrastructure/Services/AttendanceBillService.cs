@@ -14,6 +14,7 @@ public sealed class AttendanceBillService(IAttendanceDbContext db, IAttendanceEm
     private const decimal DefaultNightAmount = 100m;
     private const decimal DefaultTiffinAmount = 30m;
     private const decimal DefaultIfterAmount = 50m;
+    private const decimal DefaultHolidayAmount = 150m;
 
     public async Task<BillResponseDto> GetAsync(string billType, BillQuery query, CancellationToken cancellationToken = default)
     {
@@ -212,6 +213,8 @@ public sealed class AttendanceBillService(IAttendanceDbContext db, IAttendanceEm
                 (true, DefaultIfterAmount, 0),
             "Ifter" when AttendanceReportHelper.IsPresent(row.Status) && row.WorkingMinutes >= 240 =>
                 (true, DefaultIfterAmount, 0),
+            "Holiday" when row.DayType == DayType.Holiday && AttendanceReportHelper.IsPresent(row.Status) =>
+                (true, DefaultHolidayAmount, 0),
             _ => (false, 0, 0),
         };
     }
@@ -237,6 +240,7 @@ public sealed class AttendanceBillService(IAttendanceDbContext db, IAttendanceEm
             "night" or "nightbill" => "Night",
             "tiffin" or "tiffinbill" => "Tiffin",
             "ifter" or "iftar" or "ifterbill" => "Ifter",
+            "holiday" or "holidaybill" => "Holiday",
             _ => throw new ArgumentException($"Unknown bill type: {billType}"),
         };
 

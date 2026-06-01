@@ -67,6 +67,7 @@ export type EmployeeHrFormValues = CreateEmployeeDto & {
   permanentUpazilaName?: string
   permanentPostOfficeName?: string
   groupName?: string
+  shiftName?: string
 }
 
 const BASE_TABS = [
@@ -179,6 +180,7 @@ export function EmployeeHrForm({
   const [designationId, setDesignationId] = React.useState(initial?.designationId ?? 0)
   const [lineId, setLineId] = React.useState(initial?.lineId ?? 0)
   const [groupId, setGroupId] = React.useState(initial?.groupId ?? 0)
+  const [shiftId, setShiftId] = React.useState(initial?.shiftId ?? 0)
   const [isActive, setIsActive] = React.useState(initial?.isActive ?? true)
   const [isOtEnabled, setIsOtEnabled] = React.useState(initial?.isOtEnabled ?? true)
 
@@ -252,6 +254,9 @@ export function EmployeeHrForm({
   const [groups, setGroups] = React.useState<
     Awaited<ReturnType<typeof organogramService.getGroups>>
   >([])
+  const [shifts, setShifts] = React.useState<
+    Awaited<ReturnType<typeof organogramService.getShifts>>
+  >([])
 
   const bankBranches = React.useMemo(() => getBankBranches(bankName), [bankName])
   const isBankAccount = bankAccountType === "Bank Account"
@@ -280,11 +285,13 @@ export function EmployeeHrForm({
 
   React.useEffect(() => {
     if (selectedCompanyId) {
-      organogramService.getDepartments({ companyId: selectedCompanyId }).then(setDepartments)
-      organogramService.getGroups({ companyId: selectedCompanyId }).then(setGroups)
+      organogramService.getDepartments({ companyId: selectedCompanyId }).then(setDepartments).catch(() => setDepartments([]))
+      organogramService.getGroups({ companyId: selectedCompanyId }).then(setGroups).catch(() => setGroups([]))
+      organogramService.getShifts({ companyId: selectedCompanyId }).then(setShifts).catch(() => setShifts([]))
     } else {
       setDepartments([])
       setGroups([])
+      setShifts([])
     }
     setSections([])
     setDesignations([])
@@ -320,6 +327,12 @@ export function EmployeeHrForm({
     const match = groups.find((group) => group.nameEn === initial.groupName)
     if (match) setGroupId(match.id)
   }, [initial?.groupName, groupId, groups])
+
+  React.useEffect(() => {
+    if (shiftId || !initial?.shiftName || shifts.length === 0) return
+    const match = shifts.find((shift) => shift.nameEn === initial.shiftName)
+    if (match) setShiftId(match.id)
+  }, [initial?.shiftName, shiftId, shifts])
 
   const presentPayload = addressValueToPayload(presentAddress)
   const permanentPayload = addressValueToPayload(permanentAddress)
@@ -362,6 +375,7 @@ export function EmployeeHrForm({
     lineId: lineId || undefined,
     lineName: selectedLine?.nameEn,
     groupId: groupId || undefined,
+    shiftId: shiftId || undefined,
     status,
     joinDate: joinDate?.toISOString() ?? new Date().toISOString(),
     email: email || undefined,
@@ -633,7 +647,7 @@ export function EmployeeHrForm({
                 />
               </div>
               {mode === "edit" && (
-                <div className="grid gap-2 flex items-end">
+                <div className="grid gap-2 items-end">
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -731,7 +745,10 @@ export function EmployeeHrForm({
                 <Label>Company *</Label>
                 <NativeSelect
                   value={selectedCompanyId}
-                  onChange={(e) => setSelectedCompanyId(parseInt(e.target.value, 10))}
+                  onChange={(e) => {
+                    setSelectedCompanyId(parseInt(e.target.value, 10))
+                    setShiftId(0)
+                  }}
                   required
                 >
                   <option value={0}>Select company</option>
@@ -842,6 +859,28 @@ export function EmployeeHrForm({
                   ) : null}
                 </NativeSelect>
               </div>
+              <div className="grid gap-2">
+                <Label>Shift</Label>
+                <NativeSelect
+                  value={shiftId}
+                  disabled={!selectedCompanyId}
+                  onChange={(e) => setShiftId(parseInt(e.target.value, 10))}
+                >
+                  <option value={0}>Select shift</option>
+                  {shifts.map((shift) => (
+                    <option key={shift.id} value={shift.id}>
+                      {shift.nameEn} ({shift.inTime}-{shift.outTime})
+                    </option>
+                  ))}
+                  {initial?.shiftName &&
+                  shiftId === 0 &&
+                  !shifts.some((shift) => shift.nameEn === initial.shiftName) ? (
+                    <option value={0} disabled>
+                      {initial.shiftName} (reload company shifts)
+                    </option>
+                  ) : null}
+                </NativeSelect>
+              </div>
               <div className="grid gap-2 sm:col-span-2">
                 <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
                   <div className="grid gap-0.5">
@@ -882,7 +921,7 @@ export function EmployeeHrForm({
                   min={0}
                   value={grossSalaryInput}
                   onChange={(e) => setGrossSalaryInput(e.target.value)}
-                  placeholder="e.g. 22000"
+                  placeholder="0"
                 />
               </div>
               <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 w-fit min-w-[200px]">
@@ -1168,6 +1207,8 @@ export function EmployeeHrForm({
                 value={profileImageUrl}
                 onChange={setProfileImageUrl}
                 variant="profile"
+                employeeEntityId={employeeEntityId}
+                companyId={selectedCompanyId || undefined}
               />
               <EmployeeImageField
                 label="Signature"
@@ -1175,6 +1216,8 @@ export function EmployeeHrForm({
                 value={signatureImageUrl}
                 onChange={setSignatureImageUrl}
                 variant="signature"
+                employeeEntityId={employeeEntityId}
+                companyId={selectedCompanyId || undefined}
               />
             </CardContent>
           </Card>

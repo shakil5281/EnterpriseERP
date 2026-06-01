@@ -8,9 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { leaveService } from "@/lib/services/leave"
 import { toast } from "sonner"
-import { useCompanyContext } from "@/components/providers/company-context"
 import { useAuth } from "@/components/providers/auth-provider"
-import { LeaveCompanyBar } from "@/components/leave/leave-company-bar"
+import { LeaveAdvancedFilter, type LeaveFilterParams } from "@/components/leave/leave-advanced-filter"
 import { LeavePermissionGate } from "@/components/leave/leave-permission-gate"
 import { LeaveBalanceTable } from "@/components/leave/leave-balance-table"
 import {
@@ -19,9 +18,10 @@ import {
 } from "@/components/leave/employee-leave-picker"
 import { NativeSelect } from "@/components/ui/native-select"
 import { mergeLeaveTypesWithPolicies } from "@/lib/services/leave-helpers"
+import { HrReportExportButtons } from "@/components/reports/hr-report-export-buttons"
 
 export default function LeaveBalancesPage() {
-    const { activeCompanyId } = useCompanyContext()
+    const [selectedCompanyId, setSelectedCompanyId] = React.useState<string | undefined>()
     const { user } = useAuth()
     const [year, setYear] = React.useState(new Date().getFullYear())
     const [employee, setEmployee] = React.useState<EmployeeLeaveSelection | null>(null)
@@ -35,10 +35,10 @@ export default function LeaveBalancesPage() {
     const [isLoading, setIsLoading] = React.useState(false)
 
     React.useEffect(() => {
-        if (!activeCompanyId) return
+        if (!selectedCompanyId) return
         Promise.all([
-            leaveService.listLeaveTypes(activeCompanyId),
-            leaveService.listLeavePolicies(activeCompanyId),
+            leaveService.listLeaveTypes(selectedCompanyId),
+            leaveService.listLeavePolicies(selectedCompanyId),
         ]).then(([types, policies]) => {
             setLeaveTypes(
                 mergeLeaveTypesWithPolicies(types, policies).map((x) => ({
@@ -47,10 +47,10 @@ export default function LeaveBalancesPage() {
                 }))
             )
         })
-    }, [activeCompanyId])
+    }, [selectedCompanyId])
 
     const loadBalances = React.useCallback(async () => {
-        if (!activeCompanyId || !employee?.entityId) {
+        if (!selectedCompanyId || !employee?.entityId) {
             setBalances([])
             return
         }
@@ -58,7 +58,7 @@ export default function LeaveBalancesPage() {
         try {
             setBalances(
                 await leaveService.getEmployeeBalances(employee.entityId, {
-                    companyId: activeCompanyId,
+                    companyId: selectedCompanyId,
                     year,
                 })
             )
@@ -67,17 +67,17 @@ export default function LeaveBalancesPage() {
         } finally {
             setIsLoading(false)
         }
-    }, [activeCompanyId, employee, year])
+    }, [selectedCompanyId, employee, year])
 
     React.useEffect(() => {
         loadBalances()
     }, [loadBalances])
 
     const runGenerateYearly = async () => {
-        if (!activeCompanyId) return
+        if (!selectedCompanyId) return
         try {
             const n = await leaveService.generateYearlyBalances({
-                companyId: activeCompanyId,
+                companyId: selectedCompanyId,
                 yearNo: year,
                 triggeredBy: user?.id ?? null,
             })
@@ -89,10 +89,10 @@ export default function LeaveBalancesPage() {
     }
 
     const runAccrueMonthly = async () => {
-        if (!activeCompanyId) return
+        if (!selectedCompanyId) return
         try {
             const n = await leaveService.accrueMonthlyBalances({
-                companyId: activeCompanyId,
+                companyId: selectedCompanyId,
                 yearNo: year,
                 month: new Date().getMonth() + 1,
                 triggeredBy: user?.id ?? null,
@@ -105,10 +105,10 @@ export default function LeaveBalancesPage() {
     }
 
     const runAdjust = async () => {
-        if (!activeCompanyId || !employee?.entityId || !adjustTypeId) return
+        if (!selectedCompanyId || !employee?.entityId || !adjustTypeId) return
         try {
             await leaveService.adjustLeaveBalance({
-                companyId: activeCompanyId,
+                companyId: selectedCompanyId,
                 employeeId: employee.entityId,
                 leaveTypeId: adjustTypeId,
                 yearNo: year,
@@ -123,10 +123,10 @@ export default function LeaveBalancesPage() {
     }
 
     const lookupDayType = async () => {
-        if (!activeCompanyId || !employee?.entityId || !dayTypeDate) return
+        if (!selectedCompanyId || !employee?.entityId || !dayTypeDate) return
         try {
             const r = await leaveService.getDayType({
-                companyId: activeCompanyId,
+                companyId: selectedCompanyId,
                 employeeId: employee.entityId,
                 date: dayTypeDate,
             })
@@ -141,7 +141,23 @@ export default function LeaveBalancesPage() {
             <h1 className="text-2xl font-bold flex items-center gap-2">
                 <IconScale className="size-7" /> Leave Balances
             </h1>
-            <LeaveCompanyBar year={year} onYearChange={setYear} onRefresh={loadBalances} isLoading={isLoading} />
+            {selectedCompanyId && employee?.entityId && (
+                <HrReportExportButtons
+                    exportUrl="/api/v1/leave/reports/balances"
+                    params={{ companyId: selectedCompanyId, employeeId: employee.entityId, year }}
+                    filePrefix={`leave-balances-${year}`}
+                    disabled={isLoading || balances.length === 0}
+                />
+            )}
+            <LeaveAdvancedFilter
+                showYear
+                onFilterChange={(filters: LeaveFilterParams) => {
+                    setSelectedCompanyId(filters.companyEntityId)
+                    if (filters.year) setYear(filters.year)
+                }}
+                isLoading={isLoading}
+                initialYear={year}
+            />
             <Card>
                 <CardContent className="pt-6">
                     <EmployeeLeavePicker value={employee} onChange={setEmployee} />

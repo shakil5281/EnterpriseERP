@@ -54,7 +54,18 @@ internal sealed class LeaveTypeRepository(LeaveDbContext db) : ILeaveTypeReposit
     public async Task<IReadOnlyList<LeaveType>> ListByCompanyAsync(Guid companyId, CancellationToken cancellationToken = default) =>
         await db.LeaveTypes.AsNoTracking().Where(x => x.CompanyId == companyId).OrderBy(x => x.LeaveCode).ToListAsync(cancellationToken);
 
+    public async Task<LeaveTypeUsageCounts> GetUsageCountsAsync(Guid leaveTypeId, CancellationToken cancellationToken = default)
+    {
+        var applications = await db.LeaveApplications.CountAsync(x => x.LeaveTypeId == leaveTypeId, cancellationToken);
+        var balances = await db.EmployeeLeaveBalances.CountAsync(x => x.LeaveTypeId == leaveTypeId, cancellationToken);
+        var encashments = await db.LeaveEncashments.CountAsync(x => x.LeaveTypeId == leaveTypeId, cancellationToken);
+        var earnPolicies = await db.EarnLeavePolicies.CountAsync(x => x.LeaveTypeId == leaveTypeId, cancellationToken);
+        return new LeaveTypeUsageCounts(applications, balances, encashments, earnPolicies);
+    }
+
     public void Add(LeaveType entity) => db.LeaveTypes.Add(entity);
+
+    public void Remove(LeaveType entity) => db.LeaveTypes.Remove(entity);
 }
 
 internal sealed class LeavePolicyRepository(LeaveDbContext db) : ILeavePolicyRepository
@@ -91,6 +102,18 @@ internal sealed class EmployeeLeaveBalanceRepository(LeaveDbContext db) : IEmplo
             .Where(x => x.CompanyId == companyId && x.YearNo == yearNo)
             .ToListAsync(cancellationToken);
 
+    public async Task<HashSet<(Guid EmployeeId, Guid LeaveTypeId)>> GetExistingBalanceKeysAsync(
+        Guid companyId,
+        int yearNo,
+        CancellationToken cancellationToken = default)
+    {
+        var keys = await db.EmployeeLeaveBalances.AsNoTracking()
+            .Where(x => x.CompanyId == companyId && x.YearNo == yearNo)
+            .Select(x => new { x.EmployeeId, x.LeaveTypeId })
+            .ToListAsync(cancellationToken);
+        return keys.Select(x => (x.EmployeeId, x.LeaveTypeId)).ToHashSet();
+    }
+
     public void Add(EmployeeLeaveBalance entity) => db.EmployeeLeaveBalances.Add(entity);
 }
 
@@ -103,6 +126,41 @@ internal sealed class LeaveApplicationRepository(LeaveDbContext db) : ILeaveAppl
     public async Task<IReadOnlyList<LeaveApplication>> ListByCompanyAsync(Guid companyId, CancellationToken cancellationToken = default) =>
         await db.LeaveApplications.AsNoTracking().Include(x => x.LeaveType)
             .Where(x => x.CompanyId == companyId).OrderByDescending(x => x.AppliedAt).ToListAsync(cancellationToken);
+
+    public async Task<(IReadOnlyList<LeaveApplication> Items, int TotalCount)> ListByCompanyPagedAsync(
+        LeaveApplicationListFilter filter,
+        CancellationToken cancellationToken = default)
+    {
+        var q = db.LeaveApplications.AsNoTracking()
+            .Include(x => x.LeaveType)
+            .Where(x => x.CompanyId == filter.CompanyId);
+
+        if (!string.IsNullOrWhiteSpace(filter.Status) &&
+            !string.Equals(filter.Status, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            q = q.Where(x => x.Status == filter.Status);
+        }
+
+        if (filter.EmployeeId.HasValue)
+            q = q.Where(x => x.EmployeeId == filter.EmployeeId);
+
+        if (filter.FromDate.HasValue)
+            q = q.Where(x => x.ToDate >= filter.FromDate);
+
+        if (filter.ToDate.HasValue)
+            q = q.Where(x => x.FromDate <= filter.ToDate);
+
+        var total = await q.CountAsync(cancellationToken);
+        var ordered = q.OrderByDescending(x => x.AppliedAt);
+        var page = filter.Page < 1 ? 1 : filter.Page;
+        var pageSize = filter.PageSize < 1 ? 50 : filter.PageSize;
+
+        var items = filter.GetAll
+            ? await ordered.ToListAsync(cancellationToken)
+            : await ordered.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+
+        return (items, total);
+    }
 
     public Task<bool> HasOverlappingPendingOrApprovedAsync(Guid companyId, Guid employeeId, DateOnly from, DateOnly to, Guid? excludeApplicationId, CancellationToken cancellationToken = default) =>
         db.LeaveApplications.AnyAsync(a =>
@@ -144,6 +202,25 @@ internal sealed class HolidayRepository(LeaveDbContext db) : IHolidayRepository
             .Where(x => x.CompanyId == companyId && x.HolidayDate.Year == year && x.IsActive)
             .OrderBy(x => x.HolidayDate).ToListAsync(cancellationToken);
 
+    public async Task<(IReadOnlyList<Holiday> Items, int TotalCount)> ListByCompanyYearPagedAsync(
+        HolidayListFilter filter,
+        CancellationToken cancellationToken = default)
+    {
+        var q = db.Holidays.AsNoTracking()
+            .Where(x => x.CompanyId == filter.CompanyId && x.HolidayDate.Year == filter.Year && x.IsActive);
+
+        var total = await q.CountAsync(cancellationToken);
+        var ordered = q.OrderBy(x => x.HolidayDate);
+        var page = filter.Page < 1 ? 1 : filter.Page;
+        var pageSize = filter.PageSize < 1 ? 50 : filter.PageSize;
+
+        var items = filter.GetAll
+            ? await ordered.ToListAsync(cancellationToken)
+            : await ordered.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+
+        return (items, total);
+    }
+
     public async Task<IReadOnlyList<Holiday>> ListActiveBetweenAsync(Guid companyId, DateOnly from, DateOnly to, CancellationToken cancellationToken = default) =>
         await db.Holidays.AsNoTracking()
             .Where(x => x.CompanyId == companyId && x.IsActive && x.HolidayDate >= from && x.HolidayDate <= to)
@@ -157,6 +234,12 @@ internal sealed class WeeklyOffRuleRepository(LeaveDbContext db) : IWeeklyOffRul
 {
     public async Task<IReadOnlyList<WeeklyOffRule>> ListByCompanyAsync(Guid companyId, CancellationToken cancellationToken = default) =>
         await db.WeeklyOffRules.AsNoTracking().Where(x => x.CompanyId == companyId && x.IsActive).ToListAsync(cancellationToken);
+
+    public Task<bool> HasActiveWeeklyOffAsync(Guid companyId, string dayOfWeekName, CancellationToken cancellationToken = default) =>
+        db.WeeklyOffRules.AsNoTracking().AnyAsync(
+            x => x.CompanyId == companyId && x.IsActive &&
+                 x.DayOfWeekName == dayOfWeekName,
+            cancellationToken);
 
     public Task<WeeklyOffRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         db.WeeklyOffRules.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -190,6 +273,29 @@ internal sealed class LeaveEncashmentRepository(LeaveDbContext db) : ILeaveEncas
         }
 
         return await q.OrderByDescending(x => x.CreatedAt).ToListAsync(cancellationToken);
+    }
+
+    public async Task<(IReadOnlyList<LeaveEncashment> Items, int TotalCount)> ListByCompanyYearPagedAsync(
+        LeaveEncashmentListFilter filter,
+        CancellationToken cancellationToken = default)
+    {
+        IQueryable<LeaveEncashment> q = db.LeaveEncashments.AsNoTracking()
+            .Include(x => x.LeaveType)
+            .Where(x => x.CompanyId == filter.CompanyId);
+
+        if (filter.Year.HasValue)
+            q = q.Where(x => x.YearNo == filter.Year.Value);
+
+        var total = await q.CountAsync(cancellationToken);
+        var ordered = q.OrderByDescending(x => x.CreatedAt);
+        var page = filter.Page < 1 ? 1 : filter.Page;
+        var pageSize = filter.PageSize < 1 ? 50 : filter.PageSize;
+
+        var items = filter.GetAll
+            ? await ordered.ToListAsync(cancellationToken)
+            : await ordered.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+
+        return (items, total);
     }
 
     public void Add(LeaveEncashment entity) => db.LeaveEncashments.Add(entity);

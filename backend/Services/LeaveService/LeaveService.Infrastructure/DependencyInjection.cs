@@ -1,4 +1,5 @@
 using Erp.BuildingBlocks.EventBus;
+using Erp.BuildingBlocks.ReportExport;
 using LeaveService.Application.Common.Interfaces;
 using LeaveService.Infrastructure.Caching;
 using LeaveService.Infrastructure.External;
@@ -6,6 +7,7 @@ using LeaveService.Infrastructure.Messaging;
 using LeaveService.Infrastructure.Persistence;
 using LeaveService.Infrastructure.Repositories;
 using LeaveService.Infrastructure.Services;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,23 +30,33 @@ public static class DependencyInjection
         services.AddScoped<ILeaveAuditService, LeaveAuditService>();
         services.AddScoped<IPayrollGate, PayrollGateService>();
 
+        // Leave reference-data cache: in-process by default (fast, no Redis dependency).
+        // Set Leave:UseRedisCache=true only when Redis is running and shared cache is required.
+        services.AddMemoryCache();
+        var useRedisCache = configuration.GetValue("Leave:UseRedisCache", false);
         var redis = configuration.GetConnectionString("Redis");
-        if (string.IsNullOrWhiteSpace(redis))
+        if (useRedisCache && !string.IsNullOrWhiteSpace(redis))
         {
-            services.AddDistributedMemoryCache();
+            var redisConfig = redis.Contains("abortConnect", StringComparison.OrdinalIgnoreCase)
+                ? redis
+                : $"{redis.TrimEnd(',')},abortConnect=false,connectTimeout=1000,syncTimeout=1000";
+            services.AddStackExchangeRedisCache(o => o.Configuration = redisConfig);
+            services.AddSingleton<ILeaveCache, DistributedLeaveCache>();
         }
         else
         {
-            services.AddStackExchangeRedisCache(o => o.Configuration = redis);
+            services.AddSingleton<ILeaveCache, MemoryLeaveCache>();
         }
-
-        services.AddSingleton<ILeaveCache, DistributedLeaveCache>();
 
         services.Configure<RabbitMqPublisherOptions>(configuration.GetSection("RabbitMQ"));
         services.AddSingleton<IIntegrationMessagePublisher, RabbitMqJsonPublisher>();
 
+        services.AddHttpContextAccessor();
+        services.AddTransient<ForwardAuthorizationHandler>();
+
         services.Configure<EmployeeServiceClientOptions>(configuration.GetSection("Services:Hr"));
-        services.AddHttpClient<IEmployeeServiceClient, EmployeeServiceClient>("Leave.IEmployeeServiceClient");
+        services.AddHttpClient<IEmployeeServiceClient, EmployeeServiceClient>("Leave.IEmployeeServiceClient")
+            .AddHttpMessageHandler<ForwardAuthorizationHandler>();
 
         services.Configure<AttendanceServiceClientOptions>(configuration.GetSection("Services:Attendance"));
         services.AddHttpClient<IAttendanceServiceClient, AttendanceServiceClient>("Leave.IAttendanceServiceClient");
@@ -52,9 +64,14 @@ public static class DependencyInjection
         services.Configure<PayrollServiceClientOptions>(configuration.GetSection("Services:Payroll"));
         services.AddHttpClient<IPayrollServiceClient, PayrollServiceClient>("Leave.IPayrollServiceClient");
 
-        services.AddSingleton<INotificationServiceClient, NotificationServiceClient>();
+        services.AddHttpClient<INotificationServiceClient, NotificationServiceClient>("Leave.INotificationServiceClient", c =>
+        {
+            c.BaseAddress = new Uri(configuration["Services:NotificationService"] ?? "http://127.0.0.1:5047/");
+        }).AddHttpMessageHandler<ForwardAuthorizationHandler>();
 
         services.AddHostedService<LeaveIntegrationConsumer>();
+
+        services.AddReportExportClient(configuration, "leave");
 
         return services;
     }

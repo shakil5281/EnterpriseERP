@@ -15,6 +15,11 @@ import {
 } from "@tabler/icons-react"
 import { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/data-table"
+import { HrFilterCard, HrFilterField } from "@/components/hr/hr-filter-card"
+import { HrPageHeader } from "@/components/hr/hr-page-header"
+import { HrPageShell } from "@/components/hr/hr-page-shell"
+import { HrTableCard } from "@/components/hr/hr-table-card"
+import { HrCellText } from "@/components/hr/hr-table-cells"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -31,7 +36,8 @@ import {
 } from "@/components/ui/sheet"
 import { requirementService, type ManpowerRequirement } from "@/lib/services/requirement"
 import { organogramService } from "@/lib/services/organogram"
-import { companyService, type Company } from "@/lib/services/company"
+import { ScopedCompanySelect } from "@/components/hr/scoped-company-select"
+import { useCompanyFilterScope } from "@/hooks/use-company-filter-scope"
 import { NativeSelect } from "@/components/ui/native-select"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -43,7 +49,7 @@ export default function ManpowerRequirementPage() {
     const [isEditing, setIsEditing] = React.useState(false)
     const [currentId, setCurrentId] = React.useState<number | null>(null)
 
-    const [companies, setCompanies] = React.useState<Company[]>([])
+    const { companies } = useCompanyFilterScope()
     const [selectedCompanyEntityId, setSelectedCompanyEntityId] = React.useState("")
     const [filterDepartment, setFilterDepartment] = React.useState("")
     const [searchFilter, setSearchFilter] = React.useState("")
@@ -82,13 +88,6 @@ export default function ManpowerRequirementPage() {
             setIsLoading(false)
         }
     }, [selectedCompanyRow?.id, filterDepartment])
-
-    React.useEffect(() => {
-        companyService.getAll().then((list) => {
-            setCompanies(list)
-            setSelectedCompanyEntityId((c) => c || list[0]?.entityId || "")
-        })
-    }, [])
 
     React.useEffect(() => {
         if (!selectedCompanyRow?.id) return
@@ -236,26 +235,30 @@ export default function ManpowerRequirementPage() {
     ]
 
     return (
-        <div className="flex flex-col gap-6 py-6 bg-muted/20 min-h-screen px-4 lg:px-8 w-full">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-sm border border-primary/20">
-                        <IconChartBar className="size-7" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight">Manpower Requirements</h1>
-                        <p className="text-sm text-muted-foreground">Monitor workforce gaps and target hiring needs.</p>
-                    </div>
-                </div>
-                <Button className="gap-2 shadow-md rounded-xl" onClick={() => {
-                    setIsEditing(false)
-                    setFormData({ departmentId: "", designationId: "", requiredCount: 0, note: "" })
-                    setIsSheetOpen(true)
-                }}>
-                    <IconPlus className="size-4" />
-                    Add Requirement
-                </Button>
-            </div>
+        <HrPageShell>
+            <HrPageHeader
+                icon={<IconChartBar className="size-7" />}
+                title="Manpower Requirements"
+                description="Monitor workforce gaps and target hiring needs."
+                actions={
+                    <Button
+                        className="gap-2 shadow-md rounded-xl"
+                        onClick={() => {
+                            setIsEditing(false)
+                            setFormData({
+                                departmentId: "",
+                                designationId: "",
+                                requiredCount: 0,
+                                note: "",
+                            })
+                            setIsSheetOpen(true)
+                        }}
+                    >
+                        <IconPlus className="size-4" />
+                        Add Requirement
+                    </Button>
+                }
+            />
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="border-none shadow-sm bg-background/60 backdrop-blur-sm">
@@ -283,32 +286,23 @@ export default function ManpowerRequirementPage() {
                 </Card>
             </div>
 
-            <Card className="border shadow-sm">
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <IconFilter className="size-4" /> Advanced filter
-                    </CardTitle>
-                    <CardDescription>Select company and filters, then apply.</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-wrap gap-4 items-end">
-                    <div className="space-y-1.5 min-w-[200px]">
-                        <Label className="text-[10px] font-bold uppercase text-muted-foreground">Company</Label>
-                        <NativeSelect
+            <HrFilterCard
+                recordCount={filteredRequirements.length}
+                isLoading={isLoading}
+                onApply={() => fetchRequirements()}
+                applyLabel="Apply filter"
+            >
+                    <HrFilterField label="Company" className="min-w-[200px]">
+                        <ScopedCompanySelect
                             className="h-10 w-full"
                             value={selectedCompanyEntityId}
-                            onChange={(e) => {
-                                setSelectedCompanyEntityId(e.target.value)
+                            onChange={(entityId) => {
+                                setSelectedCompanyEntityId(entityId)
                                 setFilterDepartment("")
                             }}
-                        >
-                            <option value="">Select company</option>
-                            {companies.map((c) => (
-                                <option key={c.entityId} value={c.entityId}>{c.companyNameEn}</option>
-                            ))}
-                        </NativeSelect>
-                    </div>
-                    <div className="space-y-1.5 min-w-[200px]">
-                        <Label className="text-[10px] font-bold uppercase text-muted-foreground">Department</Label>
+                        />
+                    </HrFilterField>
+                    <HrFilterField label="Department" className="min-w-[200px]">
                         <NativeSelect
                             className="h-10 w-full"
                             value={filterDepartment}
@@ -320,41 +314,27 @@ export default function ManpowerRequirementPage() {
                                 <option key={d.entityId} value={d.id}>{d.nameEn}</option>
                             ))}
                         </NativeSelect>
-                    </div>
-                    <div className="space-y-1.5 min-w-[200px]">
-                        <Label className="text-[10px] font-bold uppercase text-muted-foreground">Search</Label>
+                    </HrFilterField>
+                    <HrFilterField label="Search" className="min-w-[200px]">
                         <Input
                             className="h-10"
                             placeholder="Department or designation"
                             value={searchFilter}
                             onChange={(e) => setSearchFilter(e.target.value)}
                         />
-                    </div>
-                    <Button variant="secondary" className="gap-2" onClick={() => fetchRequirements()} disabled={isLoading}>
-                        {isLoading ? <IconLoader className="size-4 animate-spin" /> : <IconFilter className="size-4" />}
-                        Apply filter
-                    </Button>
-                </CardContent>
-            </Card>
+                    </HrFilterField>
+            </HrFilterCard>
 
-            <Card className="border-none shadow-xl rounded-2xl overflow-hidden bg-background">
-                <CardContent className="p-0">
-                    {isLoading ? (
-                        <div className="flex flex-col items-center justify-center py-20 gap-3">
-                            <IconLoader className="size-8 animate-spin text-primary" />
-                            <p className="text-sm text-muted-foreground animate-pulse">Analyzing workforce requirements...</p>
-                        </div>
-                    ) : (
-                        <DataTable
-                            data={filteredRequirements}
-                            columns={columns}
-                            showActions={false}
-                            showTabs={false}
-                            searchKey="departmentName"
-                        />
-                    )}
-                </CardContent>
-            </Card>
+            <HrTableCard>
+                <DataTable
+                    data={filteredRequirements}
+                    columns={columns}
+                    isLoading={isLoading}
+                    showActions={false}
+                    showTabs={false}
+                    searchKey="departmentName"
+                />
+            </HrTableCard>
 
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                 <SheetContent className="overflow-y-auto sm:max-w-md">
@@ -427,6 +407,6 @@ export default function ManpowerRequirementPage() {
                     </form>
                 </SheetContent>
             </Sheet>
-        </div>
+        </HrPageShell>
     )
 }

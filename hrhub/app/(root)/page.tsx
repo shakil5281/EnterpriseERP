@@ -51,8 +51,12 @@ import {
   UpcomingEvent
 } from "@/lib/services/dashboard"
 import { toast } from "sonner"
+import axios from "axios"
+import { useAuth } from "@/components/providers/auth-provider"
+import { isLogoutInProgress } from "@/lib/logout"
 
 export default function Page() {
+  const { user, isAuthenticated, loading: authLoading } = useAuth()
   const [summary, setSummary] = React.useState<DashboardSummary | null>(null)
   const [attendanceData, setAttendanceData] = React.useState<AttendanceStat[]>([])
   const [deptData, setDeptData] = React.useState<DepartmentStat[]>([])
@@ -61,6 +65,9 @@ export default function Page() {
   const [loading, setLoading] = React.useState(true)
 
   const fetchData = async () => {
+    if (isLogoutInProgress() || !isAuthenticated || !user) {
+      return
+    }
     setLoading(true)
     try {
       const [summaryRes, attendanceRes, deptRes, hiresRes, eventsRes] = await Promise.all([
@@ -81,6 +88,9 @@ export default function Page() {
       setRecentHires(hiresRes)
       setUpcomingEvents(eventsRes)
     } catch (error) {
+      if (isLogoutInProgress() || axios.isCancel(error)) return
+      const status = (error as { response?: { status?: number } })?.response?.status
+      if (status === 401) return
       console.error("Failed to fetch dashboard data", error)
       toast.error("Failed to load dashboard data")
     } finally {
@@ -89,8 +99,12 @@ export default function Page() {
   }
 
   React.useEffect(() => {
-    fetchData()
-  }, [])
+    if (authLoading || !isAuthenticated || !user) {
+      if (!authLoading) setLoading(false)
+      return
+    }
+    void fetchData()
+  }, [user, isAuthenticated, authLoading])
 
   const getEventIcon = (type: string) => {
     switch (type) {

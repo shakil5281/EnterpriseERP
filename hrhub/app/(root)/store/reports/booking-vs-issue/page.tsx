@@ -14,21 +14,23 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import storeService, { StoreBooking } from "@/lib/services/store"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { BookingVsIssueLine } from "@/lib/types/store"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 
-export default function BookingVsIssueReportPage() {
-    const [bookings, setBookings] = React.useState<StoreBooking[]>([]);
+function BookingVsIssueContent({ companyId }: { companyId: string }) {
+    const [lines, setLines] = React.useState<BookingVsIssueLine[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [search, setSearch] = React.useState("");
 
     const fetchReport = async () => {
         setLoading(true);
         try {
-            const data = await storeService.getBookings();
-            setBookings(data);
-        } catch (error) {
+            const data = await storeService.getBookingVsIssueReport(companyId);
+            setLines(data);
+        } catch {
             toast.error("Failed to load booking analysis report");
         } finally {
             setLoading(false);
@@ -37,16 +39,16 @@ export default function BookingVsIssueReportPage() {
 
     React.useEffect(() => {
         fetchReport();
-    }, []);
+    }, [companyId]);
 
-    const filtered = bookings.filter(b =>
+    const filtered = lines.filter(b =>
         b.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
         b.itemName.toLowerCase().includes(search.toLowerCase()) ||
         b.bookingNumber.toLowerCase().includes(search.toLowerCase())
     );
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-white shadow-xl shadow-slate-900/20">
@@ -67,15 +69,10 @@ export default function BookingVsIssueReportPage() {
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                         <div className="relative flex-1 max-w-[500px]">
                             <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-4" />
-                            <Input
-                                placeholder="Search by Order #, Item Name or Booking ID..."
-                                className="pl-10 h-10 border-muted-foreground/20"
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                            />
+                            <Input placeholder="Search by Order #, Item Name or Booking ID..." className="pl-10 h-10 border-muted-foreground/20" value={search} onChange={e => setSearch(e.target.value)} />
                         </div>
                         <Badge variant="outline" className="h-8 px-4 bg-slate-100 text-slate-800 font-bold border-slate-200 uppercase tracking-tight">
-                            Total Records: {bookings.length}
+                            Total Records: {lines.length}
                         </Badge>
                     </div>
                 </CardHeader>
@@ -111,22 +108,19 @@ export default function BookingVsIssueReportPage() {
                                 ) : (
                                     filtered.map((b) => {
                                         const issued = b.issuedQty || 0;
-                                        const booked = b.bookedQuantity || 1; // Prevent div by zero
+                                        const booked = b.bookedQuantity || 1;
                                         const percentage = Math.round((issued / booked) * 100);
-                                        const balance = Math.max(0, booked - issued);
+                                        const balance = b.remaining;
 
                                         return (
-                                            <TableRow key={b.id} className="hover:bg-muted/30 transition-colors">
+                                            <TableRow key={b.bookingId} className="hover:bg-muted/30 transition-colors">
                                                 <TableCell className="font-bold text-sm tracking-tight">{b.orderNumber}</TableCell>
                                                 <TableCell className="font-mono text-[10px] font-black uppercase text-muted-foreground">{b.bookingNumber}</TableCell>
                                                 <TableCell>
-                                                    <div className="flex flex-col">
-                                                        <span className="font-bold text-sm">{b.itemName}</span>
-                                                        <span className="text-[10px] text-muted-foreground uppercase font-mono">{b.itemCode}</span>
-                                                    </div>
+                                                    <span className="font-bold text-sm">{b.itemName}</span>
                                                 </TableCell>
                                                 <TableCell className="text-right font-mono font-medium">
-                                                    {b.bookedQuantity.toLocaleString()} <span className="text-[10px] uppercase">{b.unitName}</span>
+                                                    {b.bookedQuantity.toLocaleString()}
                                                 </TableCell>
                                                 <TableCell className="text-right font-mono font-black text-blue-600 dark:text-blue-400">
                                                     {issued.toLocaleString()}
@@ -154,6 +148,16 @@ export default function BookingVsIssueReportPage() {
                     </div>
                 </CardContent>
             </Card>
-        </div>
-    )
+        </>
+    );
+}
+
+export default function BookingVsIssueReportPage() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <BookingVsIssueContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
+    );
 }

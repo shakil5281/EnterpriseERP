@@ -1,5 +1,6 @@
 import { employeeService } from "@/lib/services/employee";
 import type { HrTransferItem } from "@/lib/services/hr-types";
+import type { LegacyPagedResult } from "@/lib/pagination/types";
 import { organogramService } from "@/lib/services/organogram";
 
 export interface Transfer {
@@ -28,11 +29,13 @@ export interface CreateTransferDto {
 }
 
 function mapHrTransfer(row: HrTransferItem): Transfer {
+  const entityId = row.employeeEntityId ?? row.employeeId ?? "";
+  const code = row.employeeCode ?? row.employeeID ?? "";
   return {
     id: row.id,
-    employeeId: row.employeeId,
+    employeeId: entityId,
     employeeName: row.fullName,
-    employeeCode: row.employeeID,
+    employeeCode: code,
     fromDepartmentId: row.fromDepartmentId ?? undefined,
     fromDepartmentName: row.fromDepartmentName ?? undefined,
     toDepartmentId: row.toDepartmentId ?? undefined,
@@ -43,19 +46,45 @@ function mapHrTransfer(row: HrTransferItem): Transfer {
   };
 }
 
+export type TransferPage = LegacyPagedResult<Transfer>;
+
 export const transferService = {
+  getTransfersPage: async (params?: {
+    companyId?: number;
+    fromDate?: string;
+    toDate?: string;
+    page?: number;
+    pageSize?: number;
+    getAll?: boolean;
+    sortBy?: string;
+    sortOrder?: "asc" | "desc";
+  }): Promise<TransferPage> => {
+    const page = await employeeService.listTransfers({
+      companyId: params?.companyId,
+      fromDate: params?.fromDate,
+      toDate: params?.toDate,
+      page: params?.page,
+      pageSize: params?.pageSize,
+      getAll: params?.getAll,
+      sortBy: params?.sortBy,
+      sortOrder: params?.sortOrder,
+    });
+    return {
+      ...page,
+      items: (page.items ?? []).map(mapHrTransfer),
+    };
+  },
+
   getTransfers: async (params?: {
     companyId?: number;
     fromDate?: string;
     toDate?: string;
   }) => {
-    const page = await employeeService.listTransfers({
-      companyId: params?.companyId,
-      fromDate: params?.fromDate,
-      toDate: params?.toDate,
-      pageSize: 200,
+    const page = await transferService.getTransfersPage({
+      ...params,
+      getAll: true,
     });
-    return (page.items ?? []).map(mapHrTransfer);
+    return page.items;
   },
 
   createTransfer: async (data: CreateTransferDto) => {

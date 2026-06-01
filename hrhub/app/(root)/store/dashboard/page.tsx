@@ -11,11 +11,13 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import storeService, { StockDashboardSummary, StoreItem, StockTransaction } from "@/lib/services/store"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { StockDashboardSummary, StoreItem, StockTransaction } from "@/lib/types/store"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 
-export default function StoreDashboard() {
+function DashboardContent({ companyId }: { companyId: string }) {
     const [summary, setSummary] = React.useState<StockDashboardSummary | null>(null);
     const [lowStock, setLowStock] = React.useState<StoreItem[]>([]);
     const [recentTx, setRecentTx] = React.useState<StockTransaction[]>([]);
@@ -25,9 +27,9 @@ export default function StoreDashboard() {
         const fetchDashboardData = async () => {
             try {
                 const [summaryData, lowStockData, txData] = await Promise.all([
-                    storeService.getDashboardSummary(),
-                    storeService.getLowStock(),
-                    storeService.getTransactions()
+                    storeService.getDashboardSummary(companyId),
+                    storeService.getLowStock(companyId),
+                    storeService.getTransactions(companyId),
                 ]);
                 setSummary(summaryData);
                 setLowStock(lowStockData.slice(0, 5));
@@ -40,11 +42,11 @@ export default function StoreDashboard() {
             }
         };
         fetchDashboardData();
-    }, []);
+    }, [companyId]);
 
     if (loading) {
         return (
-            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 lg:px-6 px-4">
+            <>
                 <div className="flex items-center gap-2">
                     <Skeleton className="h-10 w-10 rounded-lg" />
                     <div className="space-y-2">
@@ -59,12 +61,12 @@ export default function StoreDashboard() {
                     <Skeleton className="col-span-3 h-64 w-full" />
                     <Skeleton className="col-span-4 h-64 w-full" />
                 </div>
-            </div>
+            </>
         );
     }
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 lg:px-6 px-4">
+        <>
             <div className="flex items-center gap-2">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 dark:bg-primary/20">
                     <IconPackages className="size-6 text-primary" />
@@ -133,8 +135,8 @@ export default function StoreDashboard() {
                         {lowStock.length === 0 ? (
                             <p className="text-sm text-muted-foreground text-center py-4">All stock levels are healthy.</p>
                         ) : (
-                            lowStock.map((item, i) => (
-                                <div key={i} className="flex items-center justify-between group">
+                            lowStock.map((item) => (
+                                <div key={item.id} className="flex items-center justify-between group">
                                     <div className="space-y-1">
                                         <p className="text-sm font-medium leading-none group-hover:text-primary transition-colors">{item.itemName}</p>
                                         <p className="text-xs text-muted-foreground">Safety: {item.minimumStockLevel} {item.unitName}</p>
@@ -167,27 +169,40 @@ export default function StoreDashboard() {
                             {recentTx.length === 0 ? (
                                 <p className="text-sm text-muted-foreground text-center py-4">No recent movements recorded.</p>
                             ) : (
-                                recentTx.map((tx, i) => (
-                                    <div key={i} className="flex items-center justify-between border-b dark:border-border pb-4 last:border-0 last:pb-0 hover:bg-muted/50 transition-colors p-2 rounded-lg">
-                                        <div className="flex items-center gap-4">
-                                            <div className={`flex h-9 w-9 items-center justify-center rounded-full border ${tx.type === 'StockIn' ? 'bg-emerald-100 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' : 'bg-blue-100 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'}`}>
-                                                {tx.type === 'StockOut' ? <IconTrendingDown className="h-4 w-4 text-blue-600 dark:text-blue-400" /> : <IconTrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
+                                recentTx.map((tx) => {
+                                    const isIn = tx.transactionType === "In";
+                                    return (
+                                        <div key={tx.id} className="flex items-center justify-between border-b dark:border-border pb-4 last:border-0 last:pb-0 hover:bg-muted/50 transition-colors p-2 rounded-lg">
+                                            <div className="flex items-center gap-4">
+                                                <div className={`flex h-9 w-9 items-center justify-center rounded-full border ${isIn ? 'bg-emerald-100 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' : 'bg-blue-100 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'}`}>
+                                                    {!isIn ? <IconTrendingDown className="h-4 w-4 text-blue-600 dark:text-blue-400" /> : <IconTrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-sm font-medium leading-none">{tx.itemName}</p>
+                                                    <p className="text-xs text-muted-foreground">{tx.transactionNumber} • {new Date(tx.transactionDate).toLocaleDateString()}</p>
+                                                </div>
                                             </div>
-                                            <div className="space-y-1">
-                                                <p className="text-sm font-medium leading-none">{tx.itemName}</p>
-                                                <p className="text-xs text-muted-foreground">{tx.transactionNumber} • {new Date(tx.transactionDate).toLocaleDateString()}</p>
+                                            <div className={`font-mono font-bold ${isIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
+                                                {isIn ? '+' : '-'}{tx.quantity}
                                             </div>
                                         </div>
-                                        <div className={`font-mono font-bold ${tx.type === 'StockIn' ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
-                                            {tx.type === 'StockIn' ? '+' : '-'}{tx.quantity}
-                                        </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     </CardContent>
                 </Card>
             </div>
-        </div>
+        </>
+    );
+}
+
+export default function StoreDashboard() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <DashboardContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
     );
 }

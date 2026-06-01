@@ -4,16 +4,12 @@ import * as React from "react"
 import { format } from "date-fns"
 import {
     IconClock,
-    IconSearch,
     IconUser,
-    IconDownload,
     IconRefresh,
     IconPrinter,
     IconActivity,
     IconChevronDown,
     IconLoader2,
-    IconFileTypePdf,
-    IconFileTypeXls,
     IconArrowLeft
 } from "@tabler/icons-react"
 import { DataTable } from "@/components/data-table"
@@ -26,7 +22,8 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { overtimeService, type DailyOtSheetRow } from "@/lib/services/overtime"
-import { type AttendanceQuery } from "@/lib/services/attendance-api"
+import { type AttendanceQuery, toAttendanceExportParams } from "@/lib/services/attendance-api"
+import { HrReportExportButtons } from "@/components/reports/hr-report-export-buttons"
 import { organogramService } from "@/lib/services/organogram"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -41,8 +38,6 @@ export default function DailyOTSheetPage() {
     const [designation, setDesignation] = React.useState("all")
 
     const [isLoading, setIsLoading] = React.useState(false)
-    const [isExportingExcel, setIsExportingExcel] = React.useState(false)
-    const [isExportingPdf, setIsExportingPdf] = React.useState(false)
     const [activeQuery, setActiveQuery] = React.useState<AttendanceQuery | null>(null)
     const [filteredData, setFilteredData] = React.useState<DailyOtSheetRow[]>([])
     const [totalOT, setTotalOT] = React.useState(0)
@@ -164,29 +159,14 @@ export default function DailyOTSheetPage() {
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={async () => {
-                            setIsExportingExcel(true)
-                            try {
-                                if (activeQuery) await overtimeService.exportDailyOTSheetExcel(activeQuery)
-                                toast.success("Excel exported successfully")
-                            } catch (error) {
-                                toast.error("Export failed")
-                            } finally {
-                                setIsExportingExcel(false)
-                            }
-                        }}
-                        disabled={filteredData.length === 0 || isExportingExcel}
-                    >
-                        {isExportingExcel ? (
-                            <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                            <IconDownload className="mr-2 h-4 w-4" />
-                        )}
-                        Excel
-                    </Button>
+                    {hasSearched && activeQuery && (
+                        <HrReportExportButtons
+                            exportUrl="/api/v1/attendance/reports/daily-ot-sheet"
+                            params={toAttendanceExportParams(activeQuery)}
+                            filePrefix={`daily-ot-sheet-${activeQuery.date ?? activeQuery.fromDate}`}
+                            disabled={isLoading || filteredData.length === 0}
+                        />
+                    )}
                 </div>
             </div>
 

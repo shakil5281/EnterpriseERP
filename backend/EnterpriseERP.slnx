@@ -10,7 +10,9 @@
     <Project Path="BuildingBlocks/Erp.BuildingBlocks.Contracts/Erp.BuildingBlocks.Contracts.csproj" />
     <Project Path="BuildingBlocks/Erp.BuildingBlocks.EventBus/Erp.BuildingBlocks.EventBus.csproj" />
     <Project Path="BuildingBlocks/Erp.BuildingBlocks.Hosting/Erp.BuildingBlocks.Hosting.csproj" />
+    <Project Path="BuildingBlocks/Erp.BuildingBlocks.ImageProcessing/Erp.BuildingBlocks.ImageProcessing.csproj" />
     <Project Path="BuildingBlocks/Erp.BuildingBlocks.SharedKernel/Erp.BuildingBlocks.SharedKernel.csproj" />
+    <Project Path="BuildingBlocks/Erp.BuildingBlocks.ReportExport/Erp.BuildingBlocks.ReportExport.csproj" />
     <Project Path="BuildingBlocks/CommonSecurity/Erp.BuildingBlocks.CommonSecurity.csproj" />
   </Folder>
   <Folder Name="/Services/" />
@@ -59,9 +61,28 @@
     <Project Path="Services/HRService/HRService.Infrastructure/HRService.Infrastructure.csproj" />
     <Project Path="Services/HRService/HRService.Tests/HRService.Tests.csproj" />
   </Folder>
+  <Folder Name="/Services/ShipmentService/">
+    <Project Path="Services/ShipmentService/ShipmentService.API/ShipmentService.API.csproj" />
+    <Project Path="Services/ShipmentService/ShipmentService.Application/ShipmentService.Application.csproj" />
+    <Project Path="Services/ShipmentService/ShipmentService.Contracts/ShipmentService.Contracts.csproj" />
+    <Project Path="Services/ShipmentService/ShipmentService.Domain/ShipmentService.Domain.csproj" />
+    <Project Path="Services/ShipmentService/ShipmentService.Infrastructure/ShipmentService.Infrastructure.csproj" />
+    <Project Path="Services/ShipmentService/ShipmentService.Tests/ShipmentService.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Services/SewingService/">
+    <Project Path="Services/SewingService/SewingService.API/SewingService.API.csproj" />
+    <Project Path="Services/SewingService/SewingService.Application/SewingService.Application.csproj" />
+    <Project Path="Services/SewingService/SewingService.Contracts/SewingService.Contracts.csproj" />
+    <Project Path="Services/SewingService/SewingService.Domain/SewingService.Domain.csproj" />
+    <Project Path="Services/SewingService/SewingService.Infrastructure/SewingService.Infrastructure.csproj" />
+    <Project Path="Services/SewingService/SewingService.Tests/SewingService.Tests.csproj" />
+  </Folder>
   <Folder Name="/Services/ProductionPlanningService/">
     <Project Path="Services/ProductionPlanningService/ProductionPlanningService.API/ProductionPlanningService.API.csproj" />
+    <Project Path="Services/ProductionPlanningService/ProductionPlanningService.Application/ProductionPlanningService.Application.csproj" />
+    <Project Path="Services/ProductionPlanningService/ProductionPlanningService.Contracts/ProductionPlanningService.Contracts.csproj" />
     <Project Path="Services/ProductionPlanningService/ProductionPlanningService.Domain/ProductionPlanningService.Domain.csproj" />
+    <Project Path="Services/ProductionPlanningService/ProductionPlanningService.Infrastructure/ProductionPlanningService.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/Services/MerchandisingService/">
     <Project Path="Services/MerchandisingService/MerchandisingService.API/MerchandisingService.API.csproj" />
@@ -85,6 +106,13 @@
     <Project Path="Services/InventoryService/InventoryService.Domain/InventoryService.Domain.csproj" />
     <Project Path="Services/InventoryService/InventoryService.Infrastructure/InventoryService.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/Services/StoreService/">
+    <Project Path="Services/StoreService/StoreService.API/StoreService.API.csproj" />
+    <Project Path="Services/StoreService/StoreService.Application/StoreService.Application.csproj" />
+    <Project Path="Services/StoreService/StoreService.Contracts/StoreService.Contracts.csproj" />
+    <Project Path="Services/StoreService/StoreService.Domain/StoreService.Domain.csproj" />
+    <Project Path="Services/StoreService/StoreService.Infrastructure/StoreService.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/Services/MicroserviceShells/">
     <Project Path="Services/MicroserviceShells/Erp.Shift.Shell/Erp.Shift.Shell.csproj" />
     <Project Path="Services/MicroserviceShells/Erp.Attendance.Shell/Erp.Attendance.Shell.csproj" />
@@ -97,7 +125,7 @@
     <Project Path="Services/MicroserviceShells/Erp.Cutting.Shell/Erp.Cutting.Shell.csproj" />
     <Project Path="Services/MicroserviceShells/Erp.Bills.Shell/Erp.Bills.Shell.csproj" />
     <Project Path="Services/MicroserviceShells/Erp.Report.Shell/Erp.Report.Shell.csproj" />
-    <Project Path="Services/MicroserviceShells/Erp.Notification.Shell/Erp.Notification.Shell.csproj" />
+
     <Project Path="Services/MicroserviceShells/Erp.Audit.Shell/Erp.Audit.Shell.csproj" />
     <Project Path="Services/MicroserviceShells/Erp.FileStorage.Shell/Erp.FileStorage.Shell.csproj" />
   </Folder>
@@ -144,11 +172,5 @@
     <Project Path="Services/LeaveService/LeaveService.Infrastructure/LeaveService.Infrastructure.csproj" />
     <Project Path="Services/LeaveService/LeaveService.Tests/LeaveService.Tests.csproj" />
   </Folder>
-  <Folder Name="/Services/NotificationService/">
-    <Project Path="Services/NotificationService/NotificationService.Api/NotificationService.Api.csproj" />
-    <Project Path="Services/NotificationService/NotificationService.Application/NotificationService.Application.csproj" />
-    <Project Path="Services/NotificationService/NotificationService.Domain/NotificationService.Domain.csproj" />
-    <Project Path="Services/NotificationService/NotificationService.Infrastructure/NotificationService.Infrastructure.csproj" />
-    <Project Path="Services/NotificationService/NotificationService.Tests/NotificationService.Tests.csproj" />
-  </Folder>
+
 </Solution>

@@ -1,159 +1,143 @@
-"use client"
+"use client";
 
-import {
-    IconBuildingFactory2,
-    IconActivity,
-    IconAlertTriangle,
-    IconChecklist,
-    IconTrendingUp,
-    IconTrendingDown,
-    IconArrowRight,
-    IconPlus,
-    IconFileAnalytics,
-    IconSettings
-} from "@tabler/icons-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { ProductionOverviewChart } from "@/components/production/production-overview-chart"
-import { Badge } from "@/components/ui/badge"
-import Link from "next/link"
+import * as React from "react";
+import Link from "next/link";
+import { IconActivity, IconArrowRight, IconBuildingFactory2, IconLoader2 } from "@tabler/icons-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ProductionCompanyGate } from "@/components/production";
+import { productionLineService } from "@/lib/services/production-line";
+import { productionAssignmentService } from "@/lib/services/production-assignment";
+import { sewingService } from "@/lib/services/production/sewing";
+import { productionService } from "@/lib/services/production";
 
 export default function ProductionDashboard() {
+  return (
+    <ProductionCompanyGate>
+      {(companyId) => <DashboardContent companyId={companyId} />}
+    </ProductionCompanyGate>
+  );
+}
+
+function DashboardContent({ companyId }: { companyId: string }) {
+  const [loading, setLoading] = React.useState(true);
+  const [stats, setStats] = React.useState({
+    activeLines: 0,
+    totalLines: 0,
+    assignments: 0,
+    todayOutput: 0,
+    orderCount: 0,
+    wipUnits: 0,
+  });
+
+  React.useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const [lines, assignments, report, daily, balances, orders] = await Promise.all([
+          productionLineService.getAll(companyId),
+          productionAssignmentService.getAll(companyId),
+          productionService.getReport(companyId),
+          productionAssignmentService.getDailyReport({ date: today }, companyId),
+          sewingService.getBalances(companyId),
+          productionService.getProductions(companyId),
+        ]);
+        const activeLines = lines.filter((l) => l.status === "Active").length;
+        const todayOutput = (daily as { completed?: number }[]).reduce((s, r) => s + Number(r.completed ?? 0), 0);
+        const wipUnits = balances.reduce((s, b) => s + (b.wipQty ?? 0), 0);
+        setStats({
+          activeLines,
+          totalLines: lines.length,
+          assignments: assignments.length,
+          todayOutput,
+          orderCount: orders.length,
+          wipUnits,
+        });
+        void report;
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [companyId]);
+
+  if (loading) {
     return (
-        <div className="flex flex-col gap-4 p-4 md:gap-8 md:p-8">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Production Dashboard</h1>
-                    <p className="text-muted-foreground">Overview of production activities and key performance indicators.</p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="hidden sm:flex">
-                        <IconFileAnalytics className="mr-2 h-4 w-4" />
-                        Download Report
-                    </Button>
-                    <Button size="sm">
-                        <IconPlus className="mr-2 h-4 w-4" />
-                        New Entry
-                    </Button>
-                </div>
-            </div>
+      <div className="p-8 flex justify-center">
+        <IconLoader2 className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
-            {/* Summary Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card className="relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-50">
-                        <IconActivity className="h-16 w-16 text-primary/10 -mr-4 -mt-4 transition-transform group-hover:scale-110" />
-                    </div>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Output</CardTitle>
-                        <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 shadow-none">+20.1%</Badge>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">15,231</div>
-                        <p className="text-xs text-muted-foreground mt-1">Units produced this month</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Lines</CardTitle>
-                        <Badge variant="secondary" className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 shadow-none">Optimal</Badge>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">12/14</div>
-                        <div className="h-2 w-full bg-muted mt-2 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 w-[85%]" />
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">85% operational capacity</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Downtime</CardTitle>
-                        <Badge variant="secondary" className="bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 shadow-none">-15%</Badge>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">2h 14m</div>
-                        <p className="text-xs text-muted-foreground mt-1">Total downtime today</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">QA Pass Rate</CardTitle>
-                        <Badge variant="secondary" className="bg-secondary text-secondary-foreground shadow-none">98.5%</Badge>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">98.5%</div>
-                        <p className="text-xs text-muted-foreground mt-1">Target: 99.0%</p>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
-                {/* Main Chart */}
-                <div className="xl:col-span-2">
-                    <ProductionOverviewChart />
-                </div>
-
-                {/* Right Column: Alerts & Quick Actions */}
-                <div className="space-y-4 md:space-y-8">
-                    {/* Recent Activity / Alerts */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Recent Activity</CardTitle>
-                            <CardDescription>Latest alerts and status updates.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="grid gap-4">
-                            <div className="flex items-start gap-4 p-3 rounded-lg bg-muted/50">
-                                <IconAlertTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
-                                <div className="space-y-1">
-                                    <p className="text-sm font-medium leading-none">Line 3 Maintenance Required</p>
-                                    <p className="text-xs text-muted-foreground">Hydraulic pressure fluctuation detected.</p>
-                                    <p className="text-[10px] text-muted-foreground pt-1">10 mins ago</p>
-                                </div>
-                            </div>
-                            <div className="flex items-start gap-4 p-3 rounded-lg bg-muted/50">
-                                <IconChecklist className="h-5 w-5 text-emerald-500 mt-0.5" />
-                                <div className="space-y-1">
-                                    <p className="text-sm font-medium leading-none">Batch #4092 Completed</p>
-                                    <p className="text-xs text-muted-foreground">2,500 units moved to packaging.</p>
-                                    <p className="text-[10px] text-muted-foreground pt-1">1 hour ago</p>
-                                </div>
-                            </div>
-                            <div className="flex items-start gap-4 p-3 rounded-lg bg-muted/50">
-                                <IconTrendingDown className="h-5 w-5 text-rose-500 mt-0.5" />
-                                <div className="space-y-1">
-                                    <p className="text-sm font-medium leading-none">Efficiency Drop on Line 1</p>
-                                    <p className="text-xs text-muted-foreground">Operator break extended.</p>
-                                    <p className="text-[10px] text-muted-foreground pt-1">2 hours ago</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Quick Access */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Quick Access</CardTitle>
-                        </CardHeader>
-                        <CardContent className="grid gap-2">
-                            <Link href="/production/daily-report">
-                                <Button variant="ghost" className="w-full justify-start">
-                                    <IconFileAnalytics className="mr-2 h-4 w-4" />
-                                    Daily Reports
-                                    <IconArrowRight className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                            </Link>
-                            <Link href="/production/line-assign">
-                                <Button variant="ghost" className="w-full justify-start">
-                                    <IconSettings className="mr-2 h-4 w-4" />
-                                    Line Assignments
-                                    <IconArrowRight className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                            </Link>
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
+  return (
+    <div className="flex flex-col gap-6 p-6">
+      <div className="flex items-center gap-3">
+        <IconBuildingFactory2 className="size-8 text-primary" />
+        <div>
+          <h1 className="text-2xl font-bold">Production Dashboard</h1>
+          <p className="text-muted-foreground text-sm">Live metrics from SewingService and Merchandising orders.</p>
         </div>
-    )
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Active lines</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {stats.activeLines}/{stats.totalLines}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Line assignments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.assignments}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Today&apos;s output</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.todayOutput}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Sewing WIP (units)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.wipUnits}</div>
+          </CardContent>
+        </Card>
+      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <IconActivity className="size-5" />
+            Quick links
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {[
+            { href: "/production/daily-input", label: "Daily input" },
+            { href: "/production/line-assign", label: "Line assign" },
+            { href: "/production/daily-report", label: "Daily report" },
+            { href: "/production/finishing/list", label: "Finishing" },
+            { href: "/production/shipment/list", label: "Shipments" },
+          ].map((link) => (
+            <Button key={link.href} variant="outline" size="sm" asChild>
+              <Link href={link.href}>
+                {link.label}
+                <IconArrowRight className="ml-2 size-4" />
+              </Link>
+            </Button>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }

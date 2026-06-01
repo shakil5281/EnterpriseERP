@@ -26,6 +26,9 @@ export interface AttendanceQuery {
   departmentId?: string;
   sectionId?: string;
   designationId?: string;
+  groupId?: string;
+  lineName?: string;
+  attendanceStatus?: string;
   employeeID?: string;
   searchTerm?: string;
 }
@@ -310,6 +313,21 @@ export interface BulkAdjustResult {
   errors: string[];
 }
 
+export function toAttendanceExportParams(
+  q: AttendanceQuery,
+  extra?: Record<string, string | number | undefined>,
+): Record<string, string | number> {
+  const params = { ...buildReportParams(q) };
+  if (extra) {
+    for (const [key, value] of Object.entries(extra)) {
+      if (value !== undefined && value !== "") {
+        params[key] = String(value);
+      }
+    }
+  }
+  return params;
+}
+
 function buildReportParams(q: AttendanceQuery): Record<string, string> {
   const params: Record<string, string> = {
     companyId: q.companyId,
@@ -320,6 +338,11 @@ function buildReportParams(q: AttendanceQuery): Record<string, string> {
   if (q.departmentId) params.departmentId = q.departmentId;
   if (q.sectionId) params.sectionId = q.sectionId;
   if (q.designationId) params.designationId = q.designationId;
+  if (q.groupId) params.groupId = q.groupId;
+  if (q.lineName?.trim()) params.lineName = q.lineName.trim();
+  if (q.attendanceStatus?.trim() && q.attendanceStatus !== "all") {
+    params.attendanceStatus = q.attendanceStatus.trim();
+  }
   if (q.employeeID?.trim()) params.employeeID = q.employeeID.trim();
   if (q.searchTerm?.trim()) params.searchTerm = q.searchTerm.trim();
   return params;
@@ -616,6 +639,27 @@ export const attendanceApi = {
     downloadBlob(response.data, fileName ?? `daily-report-${q.fromDate}.csv`, "text/csv");
   },
 
+  exportReport: async (
+    reportKey: string,
+    q: AttendanceQuery,
+    format: "xlsx" | "pdf",
+    fileName: string,
+    extraParams?: Record<string, string | number | undefined>,
+  ) => {
+    const response = await api.get(
+      platformApiUrl(`/api/v1/attendance/reports/${reportKey}/export.${format}`),
+      {
+        params: { ...buildReportParams(q), ...extraParams },
+        responseType: "blob",
+      },
+    );
+    downloadBlob(
+      response.data,
+      `${fileName}.${format}`,
+      format === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+  },
+
   exportDailySummaryCsv: async (q: AttendanceQuery, fileName?: string) => {
     const response = await api.get(platformApiUrl("/api/v1/Attendance/daily-summary/export/csv"), {
       params: buildReportParams(q),
@@ -635,6 +679,9 @@ export function toAttendanceQuery(
     departmentId?: string;
     sectionId?: string;
     designationId?: string;
+    groupId?: string;
+    lineName?: string;
+    attendanceStatus?: string;
     searchTerm?: string;
     employeeCard?: number;
   },
@@ -650,6 +697,9 @@ export function toAttendanceQuery(
     departmentId: filters.departmentId,
     sectionId: filters.sectionId,
     designationId: filters.designationId,
+    groupId: filters.groupId,
+    lineName: filters.lineName,
+    attendanceStatus: filters.attendanceStatus,
     searchTerm: filters.searchTerm,
     employeeID: filters.employeeCard ? String(filters.employeeCard) : undefined,
   };

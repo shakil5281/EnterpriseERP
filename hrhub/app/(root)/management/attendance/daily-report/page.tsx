@@ -8,7 +8,6 @@ import {
   IconUserX,
   IconClock,
   IconUsers,
-  IconInfoCircle,
   IconLoader2,
 } from "@tabler/icons-react";
 import { ColumnDef } from "@tanstack/react-table";
@@ -16,8 +15,13 @@ import { DataTable } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { attendanceApi, type AttendanceRecord } from "@/lib/services/attendance-api";
-import { employeeService } from "@/lib/services/employee";
+import {
+  attendanceApi,
+  type AttendanceQuery,
+  type AttendanceRecord,
+  toAttendanceExportParams,
+} from "@/lib/services/attendance-api";
+import { HrReportExportButtons } from "@/components/reports/hr-report-export-buttons";
 import {
   DailyActivityFilters,
   type DailyActivityFilterState,
@@ -30,6 +34,21 @@ import { formatAttendanceDate, formatPunchTime } from "@/lib/format-attendance-t
 type AttendanceRow = AttendanceRecord & {
   sequence: number;
 };
+
+function filtersToAttendanceQuery(filters: DailyActivityFilterState): AttendanceQuery {
+  return {
+    companyId: filters.companyEntityId,
+    fromDate: filters.date,
+    toDate: filters.date,
+    date: filters.date,
+    departmentId: filters.departmentEntityId || undefined,
+    sectionId: filters.sectionEntityId || undefined,
+    groupId: filters.groupEntityId || undefined,
+    lineName: filters.lineName || undefined,
+    attendanceStatus:
+      filters.attendanceStatus !== "all" ? filters.attendanceStatus : undefined,
+  };
+}
 
 interface ReportSummary {
   totalHeadcount: number;
@@ -95,35 +114,6 @@ function statusClass(status: string): string {
   return "bg-muted text-muted-foreground";
 }
 
-function matchesAttendanceStatus(row: AttendanceRecord, filter: string): boolean {
-  if (filter === "all") return true;
-  return row.status.toLowerCase().includes(filter.toLowerCase());
-}
-
-async function filterByLineAndGroup(
-  rows: AttendanceRecord[],
-  filters: DailyActivityFilterState,
-): Promise<AttendanceRecord[]> {
-  const needsLine = filters.legacyLineId !== undefined;
-  const needsGroup = filters.legacyGroupId !== undefined;
-  if (!needsLine && !needsGroup) return rows;
-
-  const employees = await employeeService.getEmployees({
-    companyId: filters.legacyCompanyId,
-    departmentId: filters.legacyDepartmentId,
-    sectionId: filters.legacySectionId,
-    lineId: filters.legacyLineId,
-    groupId: filters.legacyGroupId,
-  });
-
-  const allowed = new Set(
-    employees.map((e) => String(e.employeeId ?? e.id).trim()).filter(Boolean),
-  );
-  if (allowed.size === 0) return [];
-
-  return rows.filter((r) => allowed.has(String(r.employeeId).trim()));
-}
-
 export default function DailyAttendanceReportPage() {
   const [activeFilters, setActiveFilters] = React.useState<DailyActivityFilterState | null>(
     null,
@@ -146,17 +136,7 @@ export default function DailyAttendanceReportPage() {
 
     setIsLoading(true);
     try {
-      let rows = await attendanceApi.getDailyReport({
-        companyId: filters.companyEntityId,
-        fromDate: filters.date,
-        toDate: filters.date,
-        date: filters.date,
-        departmentId: filters.departmentEntityId || undefined,
-        sectionId: filters.sectionEntityId || undefined,
-      });
-
-      rows = await filterByLineAndGroup(rows, filters);
-      rows = rows.filter((r) => matchesAttendanceStatus(r, filters.attendanceStatus));
+      const rows = await attendanceApi.getDailyReport(filtersToAttendanceQuery(filters));
 
       const mapped: AttendanceRow[] = rows.map((row, index) => ({
         ...row,
@@ -391,6 +371,14 @@ export default function DailyAttendanceReportPage() {
             )}
             Refresh
           </Button>
+          {hasSearched && activeFilters?.companyEntityId && (
+            <HrReportExportButtons
+              exportUrl="/api/v1/attendance/reports/daily-report"
+              params={toAttendanceExportParams(filtersToAttendanceQuery(activeFilters))}
+              filePrefix={`daily-report-${activeFilters.date ?? "export"}`}
+              disabled={isLoading || isProcessing}
+            />
+          )}
         </div>
       </div>
 
@@ -442,13 +430,7 @@ export default function DailyAttendanceReportPage() {
       <div className="px-6">
         <Card className="border-none shadow-sm overflow-hidden">
           <CardHeader className="pb-4 border-b">
-            <CardTitle className="text-base font-bold flex items-center justify-between">
-              <span>Detailed Logs</span>
-              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <IconInfoCircle className="size-3.5" />
-                GET /api/v1/Attendance/daily-report
-              </div>
-            </CardTitle>
+            <CardTitle className="text-base font-bold">Detailed Logs</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {!hasSearched && !isLoading ? (

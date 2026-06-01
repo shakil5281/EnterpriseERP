@@ -59,7 +59,7 @@ func New(baseURL string) *Client {
 	return &Client{
 		BaseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"),
 		HTTPClient: &http.Client{
-			Timeout: 60 * time.Second,
+			Timeout: 15 * time.Minute,
 		},
 	}
 }

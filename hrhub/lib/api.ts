@@ -8,6 +8,7 @@ import {
   isSkippableAuthRetryUrl,
   refreshAccessToken,
 } from '@/lib/auth-session';
+import { isLogoutInProgress } from '@/lib/logout';
 
 const api = axios.create({
     baseURL: getPublicApiBaseUrl(),
@@ -19,6 +20,9 @@ const api = axios.create({
 // Add a request interceptor to add the auth token to headers
 api.interceptors.request.use(
   (config) => {
+    if (isLogoutInProgress()) {
+      return Promise.reject(new axios.CanceledError('logout'));
+    }
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type'];
     }
@@ -55,6 +59,9 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    if (isLogoutInProgress() || axios.isCancel(error)) {
+      return Promise.reject(error);
+    }
     const originalRequest = error.config;
     if (
       error.response?.status === 401 &&

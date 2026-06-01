@@ -48,7 +48,7 @@ Go (Gin) microservice for **collecting raw punch logs** from biometric devices, 
 | GET    | `/api/v1/punch-data/remote/collect/preview` | Count remote rows in a time window (no import) |
 | GET    | `/api/v1/punch-data/remote/collect/histories` | Remote collect run history |
 
-Configure `ConnectionStrings.RemoteZktecoDb` in `Configuration/connectionstrings.json` (e.g. `103.87.136.72` / `zkteco` / `sa` / password `12345`, `Encrypt=False` for SQL Server 2008).
+Configure `ConnectionStrings.RemoteZktecoDb` in `Configuration/connectionstrings.json` (local: `SHAKIL\SQLEXPRESS` / database `zkteco`, Windows auth or `sa` with `TrustServerCertificate=True`).
 
 ### Remote collect (2+ months)
 

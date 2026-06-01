@@ -37,6 +37,10 @@ public sealed class AuthDbContext : IdentityDbContext<AppUser, AppRole, Guid>
 		builder.Entity(delegate(EntityTypeBuilder<AppUser> b)
 		{
 			b.Property((AppUser x) => x.FullName).HasMaxLength(256);
+			b.Property((AppUser x) => x.ProfilePictureUrl).HasMaxLength(512);
+			b.Property((AppUser x) => x.Country).HasMaxLength(100);
+			b.Property((AppUser x) => x.City).HasMaxLength(100);
+			b.Property((AppUser x) => x.Bio).HasMaxLength(500);
 			b.Property((AppUser x) => x.Status).HasConversion<int>();
 			b.HasIndex((AppUser x) => x.IsDeleted);
 			b.HasIndex((AppUser x) => x.Status);

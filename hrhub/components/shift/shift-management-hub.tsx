@@ -13,8 +13,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetClose }
 import { NativeSelect } from "@/components/ui/native-select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { useAuth } from "@/components/providers/auth-provider";
-import { companyService, Company } from "@/lib/services/company";
+import { ScopedCompanySelect } from "@/components/hr/scoped-company-select";
+import { useCompanyFilterScope } from "@/hooks/use-company-filter-scope";
 import {
   shiftService,
   Shift,
@@ -57,8 +57,7 @@ function toTimeSpan(v: string) {
 }
 
 export function ShiftManagementHub() {
-  const { user, hasRole, loading: authLoading } = useAuth();
-  const [companies, setCompanies] = React.useState<Company[]>([]);
+  const { companies, isCompanyLocked } = useCompanyFilterScope();
   const [selectedCompany, setSelectedCompany] = React.useState("all");
   const [shifts, setShifts] = React.useState<Shift[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -69,20 +68,12 @@ export function ShiftManagementHub() {
   const [editing, setEditing] = React.useState(false);
   const [form, setForm] = React.useState<Partial<CreateShiftDto & { id?: string }>>({});
 
-  const companyIdParam = React.useMemo(() => {
-    if (selectedCompany !== "all") return selectedCompany;
-    if (user && !hasRole("SuperAdmin") && !hasRole("Admin")) {
-      const ids = user.assignedCompanyIds || [];
-      return ids.length > 0 ? ids[0].toString() : undefined;
-    }
-    return undefined;
-  }, [selectedCompany, user, hasRole]);
+  const companyIdParam = React.useMemo(
+    () => (selectedCompany !== "all" ? selectedCompany : undefined),
+    [selectedCompany],
+  );
 
   const loadShifts = React.useCallback(async () => {
-    if (!companyIdParam && !hasRole("SuperAdmin") && !hasRole("Admin")) {
-      setShifts([]);
-      return;
-    }
     try {
       setLoading(true);
       const list = await shiftService.getShifts({ companyId: companyIdParam });
@@ -93,7 +84,7 @@ export function ShiftManagementHub() {
     } finally {
       setLoading(false);
     }
-  }, [companyIdParam, hasRole, selectedShiftId]);
+  }, [companyIdParam, selectedShiftId]);
 
   const loadPolicyAndBreaks = React.useCallback(async () => {
     if (!selectedShiftId) {
@@ -123,20 +114,8 @@ export function ShiftManagementHub() {
   }, [selectedShiftId, shifts]);
 
   React.useEffect(() => {
-    if (!authLoading && user) {
-      companyService.getAll().then((comps) => {
-        if (hasRole("SuperAdmin") || hasRole("Admin")) setCompanies(comps);
-        else {
-          const ids = user.assignedCompanyIds || [];
-          setCompanies(comps.filter((c) => ids.includes(c.entityId)));
-        }
-      });
-    }
-  }, [authLoading, user, hasRole]);
-
-  React.useEffect(() => {
-    if (!authLoading && user) loadShifts();
-  }, [authLoading, user, loadShifts]);
+    loadShifts();
+  }, [loadShifts]);
 
   React.useEffect(() => {
     loadPolicyAndBreaks();
@@ -275,12 +254,13 @@ export function ShiftManagementHub() {
 
       <div className="w-64">
         <Label className="text-xs font-bold text-muted-foreground">Company</Label>
-        <NativeSelect value={selectedCompany} onChange={(e) => setSelectedCompany(e.target.value)}>
-          {(hasRole("SuperAdmin") || hasRole("Admin")) && <option value="all">All (first assigned)</option>}
-          {companies.map((c) => (
-            <option key={c.id} value={c.entityId}>{c.companyNameEn}</option>
-          ))}
-        </NativeSelect>
+        <ScopedCompanySelect
+          value={selectedCompany === "all" ? "" : selectedCompany}
+          onChange={(entityId) => setSelectedCompany(entityId || "all")}
+          showAllOption={!isCompanyLocked}
+          allOptionLabel="All Companies"
+          className="h-10"
+        />
       </div>
 
       <Tabs defaultValue="shifts">

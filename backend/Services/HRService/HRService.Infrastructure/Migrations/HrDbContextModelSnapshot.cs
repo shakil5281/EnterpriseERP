@@ -504,9 +504,10 @@ namespace HRService.Infrastructure.Migrations
 
                     b.HasIndex("DesignationId");
 
-                    b.HasIndex("EmployeeId");
-
                     b.HasIndex("GradeId");
+
+                    b.HasIndex("EmployeeId", "IsCurrent")
+                        .HasDatabaseName("IX_EmployeeJobInfos_EmployeeId_IsCurrent");
 
                     b.ToTable("EmployeeJobInfos");
                 });

@@ -5,7 +5,6 @@ import { format } from "date-fns";
 import {
   IconId,
   IconPrinter,
-  IconDownload,
   IconChevronLeft,
   IconChevronRight,
   IconFileText,
@@ -27,6 +26,8 @@ import {
   type JobCardFilterState,
 } from "@/components/attendance/job-card-filters";
 import { toast } from "sonner";
+import { toAttendanceQuery, toAttendanceExportParams } from "@/lib/services/attendance-api";
+import { HrReportExportButtons } from "@/components/reports/hr-report-export-buttons";
 
 function isGuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -127,37 +128,6 @@ export default function JobCardPage() {
     void loadPage(activeFilters, page - 1);
   };
 
-  const exportParams = (): (JobCardParams & { employeeCard?: number }) | null => {
-    if (!activeFilters) return null;
-    return {
-      ...toJobCardParams(activeFilters),
-      employeeCard: rosterItem?.employeeCard,
-      employeeID: rosterItem?.employeeId ?? activeFilters.employeeID,
-    };
-  };
-
-  const handleExportExcel = async () => {
-    const params = exportParams();
-    if (!params) return;
-    try {
-      await jobCardService.exportJobCardExcel(params);
-      toast.success("Excel exported successfully");
-    } catch {
-      toast.error("Excel export failed");
-    }
-  };
-
-  const handleExportPdf = async () => {
-    const params = exportParams();
-    if (!params) return;
-    try {
-      await jobCardService.exportJobCardPdf(params);
-      toast.success("PDF exported successfully");
-    } catch {
-      toast.error("PDF export failed");
-    }
-  };
-
   const periodLabel =
     activeFilters?.startDate && activeFilters?.endDate
       ? format(new Date(`${activeFilters.startDate}T00:00:00`), "MMMM yyyy") ===
@@ -174,18 +144,28 @@ export default function JobCardPage() {
           <p className="text-muted-foreground text-sm">Employee Monthly Audit Report</p>
         </div>
         <div className="flex items-center gap-2">
-          {hasSearched && jobCardData && (
+          {hasSearched && activeFilters && jobCardData && (
             <>
-              <div className="flex items-center bg-muted rounded-md p-1 gap-1">
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleExportExcel}>
-                  <IconDownload className="mr-1 size-3 text-emerald-600" />
-                  Excel
-                </Button>
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleExportPdf}>
-                  <IconDownload className="mr-1 size-3 text-blue-600" />
-                  PDF
-                </Button>
-              </div>
+              <HrReportExportButtons
+                exportUrl="/api/v1/attendance/reports/job-card"
+                params={toAttendanceExportParams(
+                  toAttendanceQuery(activeFilters.companyEntityId, {
+                    startDate: activeFilters.startDate,
+                    endDate: activeFilters.endDate,
+                    departmentId: activeFilters.departmentEntityId || undefined,
+                    sectionId: activeFilters.sectionEntityId || undefined,
+                    designationId: activeFilters.designationEntityId || undefined,
+                  }),
+                  {
+                    ...(rosterItem?.employeeCard && rosterItem.employeeCard > 0
+                      ? { employeeCard: rosterItem.employeeCard }
+                      : {}),
+                    employeeId: rosterItem?.employeeId ?? activeFilters.employeeID,
+                  },
+                )}
+                filePrefix={`job-card-${rosterItem?.employeeId ?? "export"}`}
+                disabled={isLoading}
+              />
               <Button variant="outline" size="sm" className="h-9 px-4" onClick={() => window.print()}>
                 <IconPrinter className="mr-2 size-4" />
                 Print

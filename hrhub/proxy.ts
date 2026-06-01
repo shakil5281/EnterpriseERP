@@ -1,91 +1,88 @@
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
-import { canAccessRoute, findMatchingRouteRule } from '@/lib/auth/access-config'
-import { getRedirectUrlForUser } from '@/lib/role-redirect'
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { canAccessRoute, findMatchingRouteRule } from "@/lib/auth/access-config";
+import {
+  extractPermissionsFromPayload,
+  extractRolesFromPayload,
+  isAccessTokenValid,
+  parseJwtPayload,
+} from "@/lib/auth/jwt-claims";
+import { isPublicPath } from "@/lib/auth/route-protection";
+import { getRedirectUrlForUser } from "@/lib/role-redirect";
 
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/unauthorized']
-
-function parseJwtPayload(token: string): Record<string, unknown> | null {
-    try {
-        const base64Url = token.split('.')[1]
-        if (!base64Url) return null
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-        return JSON.parse(atob(base64)) as Record<string, unknown>
-    } catch {
-        return null
-    }
-}
-
-function extractRoles(payload: Record<string, unknown>): string[] {
-    const roleKey = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role'
-    const userRoles = payload[roleKey] ?? payload['role'] ?? []
-    return Array.isArray(userRoles) ? userRoles.map(String) : [String(userRoles)]
-}
-
-function extractPermissions(payload: Record<string, unknown>): string[] {
-    const raw = payload['permission']
-    if (!raw) return []
-    return Array.isArray(raw) ? raw.map(String) : [String(raw)]
+function loginRedirect(request: NextRequest): NextResponse {
+  const { pathname, search } = request.nextUrl;
+  const url = request.nextUrl.clone();
+  url.pathname = "/login";
+  url.search = "";
+  if (pathname !== "/" && pathname !== "/login") {
+    url.searchParams.set("returnUrl", `${pathname}${search}`);
+  }
+  const response = NextResponse.redirect(url);
+  response.cookies.delete("token");
+  return response;
 }
 
 export function proxy(request: NextRequest) {
-    const { pathname } = request.nextUrl
-    const token = request.cookies.get('token')?.value
+  const { pathname } = request.nextUrl;
+  const token = request.cookies.get("token")?.value;
+  const publicRoute = isPublicPath(pathname);
 
-    const isPublicPath = PUBLIC_PATHS.some(path =>
-        pathname === path || pathname.startsWith(`${path}/`)
-    )
-
-    if (token && isPublicPath) {
-        const payload = parseJwtPayload(token)
-        if (payload) {
-            const roles = extractRoles(payload)
-            const returnUrl = request.nextUrl.searchParams.get('returnUrl')
-            const target =
-                returnUrl &&
-                returnUrl.startsWith('/') &&
-                !returnUrl.startsWith('//') &&
-                !returnUrl.startsWith('/login')
-                    ? returnUrl
-                    : getRedirectUrlForUser(roles)
-            return NextResponse.redirect(new URL(target, request.url))
-        }
-        const response = NextResponse.next()
-        response.cookies.delete('token')
-        return response
+  if (token && publicRoute) {
+    if (!isAccessTokenValid(token)) {
+      const response = NextResponse.next();
+      response.cookies.delete("token");
+      return response;
     }
 
-    if (!token && !isPublicPath) {
-        const isNextInternal = pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.includes('.')
-        if (!isNextInternal && pathname !== '/favicon.ico') {
-            const url = request.nextUrl.clone()
-            url.pathname = '/login'
-            url.searchParams.set('returnUrl', pathname)
-            return NextResponse.redirect(url)
-        }
+    const payload = parseJwtPayload(token);
+    if (payload) {
+      const roles = extractRolesFromPayload(payload);
+      if (roles.length > 0) {
+        const returnUrl = request.nextUrl.searchParams.get("returnUrl");
+        const target =
+          returnUrl &&
+          returnUrl.startsWith("/") &&
+          !returnUrl.startsWith("//") &&
+          !returnUrl.startsWith("/login")
+            ? returnUrl
+            : getRedirectUrlForUser(roles);
+        return NextResponse.redirect(new URL(target, request.url));
+      }
+    }
+    const response = NextResponse.next();
+    response.cookies.delete("token");
+    return response;
+  }
+
+  if (!publicRoute) {
+    if (!token || !isAccessTokenValid(token)) {
+      return loginRedirect(request);
     }
 
-    if (token && !isPublicPath && findMatchingRouteRule(pathname)) {
-        const payload = parseJwtPayload(token)
-        if (!payload) {
-            const url = request.nextUrl.clone()
-            url.pathname = '/login'
-            return NextResponse.redirect(url)
-        }
-
-        const roles = extractRoles(payload)
-        const permissions = extractPermissions(payload)
-
-        if (!canAccessRoute(pathname, roles, permissions)) {
-            const url = request.nextUrl.clone()
-            url.pathname = '/unauthorized'
-            return NextResponse.rewrite(url)
-        }
+    const payload = parseJwtPayload(token);
+    if (!payload) {
+      return loginRedirect(request);
     }
 
-    return NextResponse.next()
+    const roles = extractRolesFromPayload(payload);
+    const permissions = extractPermissionsFromPayload(payload);
+
+    if (roles.length === 0) {
+      return loginRedirect(request);
+    }
+
+    const rule = findMatchingRouteRule(pathname);
+    if (rule && !canAccessRoute(pathname, roles, permissions)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/unauthorized";
+      return NextResponse.rewrite(url);
+    }
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
-    matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
-}
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
+};

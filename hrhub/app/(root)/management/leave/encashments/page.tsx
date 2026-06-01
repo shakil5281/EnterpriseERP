@@ -13,20 +13,20 @@ import { leaveService, type LeaveEncashment } from "@/lib/services/leave"
 import { mergeLeaveTypesWithPolicies } from "@/lib/services/leave-helpers"
 import { employeeService } from "@/lib/services/employee"
 import { toast } from "sonner"
-import { useCompanyContext } from "@/components/providers/company-context"
 import { useAuth } from "@/components/providers/auth-provider"
-import { LeaveCompanyBar } from "@/components/leave/leave-company-bar"
+import { LeaveAdvancedFilter, type LeaveFilterParams } from "@/components/leave/leave-advanced-filter"
 import { LeavePermissionGate } from "@/components/leave/leave-permission-gate"
 import { LeaveStatusBadge } from "@/components/leave/leave-status-badge"
 import {
     EmployeeLeavePicker,
     type EmployeeLeaveSelection,
 } from "@/components/leave/employee-leave-picker"
+import { HrReportExportButtons } from "@/components/reports/hr-report-export-buttons"
 
 type EncashmentRow = LeaveEncashment & { employeeCode?: string; leaveTypeName?: string }
 
 export default function LeaveEncashmentsPage() {
-    const { activeCompanyId } = useCompanyContext()
+    const [selectedCompanyId, setSelectedCompanyId] = React.useState<string | undefined>()
     const { user } = useAuth()
     const [year, setYear] = React.useState(new Date().getFullYear())
     const [rows, setRows] = React.useState<EncashmentRow[]>([])
@@ -38,14 +38,14 @@ export default function LeaveEncashmentsPage() {
     const [ratePerDay, setRatePerDay] = React.useState("0")
 
     const load = React.useCallback(async () => {
-        if (!activeCompanyId) return
+        if (!selectedCompanyId) return
         setIsLoading(true)
         try {
             const [list, employees, types, policies] = await Promise.all([
-                leaveService.listLeaveEncashments({ companyId: activeCompanyId, year }),
+                leaveService.listLeaveEncashments({ companyId: selectedCompanyId, year }),
                 employeeService.getEmployees(),
-                leaveService.listLeaveTypes(activeCompanyId),
-                leaveService.listLeavePolicies(activeCompanyId),
+                leaveService.listLeaveTypes(selectedCompanyId),
+                leaveService.listLeavePolicies(selectedCompanyId),
             ])
             const merged = mergeLeaveTypesWithPolicies(types, policies)
             setRows(
@@ -60,29 +60,29 @@ export default function LeaveEncashmentsPage() {
         } finally {
             setIsLoading(false)
         }
-    }, [activeCompanyId, year])
+    }, [selectedCompanyId, year])
 
     React.useEffect(() => {
-        if (!activeCompanyId) return
+        if (!selectedCompanyId) return
         Promise.all([
-            leaveService.listLeaveTypes(activeCompanyId),
-            leaveService.listLeavePolicies(activeCompanyId),
+            leaveService.listLeaveTypes(selectedCompanyId),
+            leaveService.listLeavePolicies(selectedCompanyId),
         ]).then(([types, policies]) => {
             const merged = mergeLeaveTypesWithPolicies(types, policies)
             setLeaveTypes(merged.map((x) => ({ id: x.type.id, name: x.type.leaveName })))
             if (merged[0]) setLeaveTypeId(merged[0].type.id)
         })
-    }, [activeCompanyId])
+    }, [selectedCompanyId])
 
     React.useEffect(() => {
         load()
     }, [load])
 
     const handleCreate = async () => {
-        if (!activeCompanyId || !employee?.entityId || !leaveTypeId) return
+        if (!selectedCompanyId || !employee?.entityId || !leaveTypeId) return
         try {
             await leaveService.createLeaveEncashment({
-                companyId: activeCompanyId,
+                companyId: selectedCompanyId,
                 employeeId: employee.entityId,
                 leaveTypeId,
                 yearNo: year,
@@ -173,7 +173,23 @@ export default function LeaveEncashmentsPage() {
             <h1 className="text-2xl font-bold flex items-center gap-2">
                 <IconCash className="size-7" /> Leave Encashments
             </h1>
-            <LeaveCompanyBar year={year} onYearChange={setYear} onRefresh={load} isLoading={isLoading} />
+            {selectedCompanyId && (
+                <HrReportExportButtons
+                    exportUrl="/api/v1/leave/reports/encashments"
+                    params={{ companyId: selectedCompanyId, year }}
+                    filePrefix={`leave-encashments-${year}`}
+                    disabled={isLoading || rows.length === 0}
+                />
+            )}
+            <LeaveAdvancedFilter
+                showYear
+                onFilterChange={(filters: LeaveFilterParams) => {
+                    setSelectedCompanyId(filters.companyEntityId)
+                    if (filters.year) setYear(filters.year)
+                }}
+                isLoading={isLoading}
+                initialYear={year}
+            />
             <Card>
                 <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">

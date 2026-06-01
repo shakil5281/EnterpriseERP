@@ -8,7 +8,76 @@ namespace HRService.Infrastructure.Services;
 
 public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
 {
-    private static IQueryable<Employee> ApplyManpowerFilters(IQueryable<Employee> q, ManpowerListQuery query)
+    public async Task<IReadOnlyList<EmployeeLookupDto>> ListLookupsByIdsAsync(
+        IReadOnlyList<Guid> ids,
+        Guid? companyId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (ids.Count == 0)
+            return [];
+
+        var q = db.Employees.AsNoTracking().Where(e => !e.IsDeleted && ids.Contains(e.Id));
+        if (companyId.HasValue)
+            q = q.Where(e => e.CompanyId == companyId);
+
+        return await (
+            from e in q
+            join j in db.EmployeeJobInfos.AsNoTracking().Where(x => x.IsCurrent)
+                on e.Id equals j.EmployeeId into jobJoin
+            from j in jobJoin.DefaultIfEmpty()
+            join d in db.Departments.AsNoTracking() on j.DepartmentId equals d.Id into deptJoin
+            from d in deptJoin.DefaultIfEmpty()
+            join des in db.Designations.AsNoTracking() on j.DesignationId equals des.Id into desJoin
+            from des in desJoin.DefaultIfEmpty()
+            select new EmployeeLookupDto
+            {
+                Id = e.Id,
+                EmployeeCode = e.EmployeeID,
+                FullName = e.FullName,
+                DepartmentName = d != null ? d.Name : null,
+                DesignationName = des != null ? des.Name : null,
+            })
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<EmployeeListItemDto>> ListByIdsAsync(
+        IReadOnlyList<Guid> ids,
+        CancellationToken cancellationToken = default)
+    {
+        if (ids.Count == 0)
+            return [];
+
+        return await (
+            from e in db.Employees.AsNoTracking().Where(x => !x.IsDeleted && ids.Contains(x.Id))
+            join j in db.EmployeeJobInfos.AsNoTracking().Where(x => x.IsCurrent)
+                on e.Id equals j.EmployeeId into jobJoin
+            from j in jobJoin.DefaultIfEmpty()
+            join d in db.Departments.AsNoTracking() on j.DepartmentId equals d.Id into deptJoin
+            from d in deptJoin.DefaultIfEmpty()
+            join des in db.Designations.AsNoTracking() on j.DesignationId equals des.Id into desJoin
+            from des in desJoin.DefaultIfEmpty()
+            select new EmployeeListItemDto
+            {
+                Id = e.Id,
+                PunchNumber = e.PunchNumber,
+                EmployeeID = e.EmployeeID,
+                FullName = e.FullName,
+                Email = e.Email,
+                CompanyId = e.CompanyId,
+                Status = e.Status,
+                Gender = e.Gender,
+                Religion = e.Religion,
+                BloodGroup = e.BloodGroup,
+                IsOtEnabled = e.IsOtEnabled,
+                JoinDate = e.JoinDate,
+                Phone = e.Phone,
+                DepartmentName = d != null ? d.Name : null,
+                DesignationName = des != null ? des.Name : null,
+            })
+            .ToListAsync(cancellationToken);
+    }
+
+    private static IQueryable<Employee> ApplyManpowerFilters(IQueryable<Employee> q, EmployeeListQuery query)
     {
         if (query.CompanyId.HasValue)
             q = q.Where(e => e.CompanyId == query.CompanyId);
@@ -45,19 +114,48 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
             q = q.Where(e => e.Religion == query.Religion);
         }
 
-        if (query is ManpowerSummaryQuery summaryQuery)
-        {
-            if (summaryQuery.JoinDateFrom.HasValue)
-                q = q.Where(e => e.JoinDate >= summaryQuery.JoinDateFrom.Value.Date);
+        if (query.JoinDateFrom.HasValue)
+            q = q.Where(e => e.JoinDate >= query.JoinDateFrom.Value.Date);
 
-            if (summaryQuery.JoinDateTo.HasValue)
-            {
-                var end = summaryQuery.JoinDateTo.Value.Date.AddDays(1);
-                q = q.Where(e => e.JoinDate < end);
-            }
+        if (query.JoinDateTo.HasValue)
+        {
+            var end = query.JoinDateTo.Value.Date.AddDays(1);
+            q = q.Where(e => e.JoinDate < end);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.EmployeeId))
+        {
+            var id = query.EmployeeId.Trim();
+            q = q.Where(e => e.EmployeeID == id || e.EmployeeID.StartsWith(id));
         }
 
         return q;
+    }
+
+    private static IQueryable<Employee> ApplyEmployeeListSort(IQueryable<Employee> q, PagedRequest request)
+    {
+        var sortBy = request.SortBy?.Trim().ToLowerInvariant();
+        var desc = request.SortDescending;
+
+        return sortBy switch
+        {
+            "name" or "fullname" or "fullnameen" => desc
+                ? q.OrderByDescending(e => e.FullName)
+                : q.OrderBy(e => e.FullName),
+            "employeeid" or "id" => desc
+                ? q.OrderByDescending(e => e.EmployeeID)
+                : q.OrderBy(e => e.EmployeeID),
+            "joindate" => desc
+                ? q.OrderByDescending(e => e.JoinDate)
+                : q.OrderBy(e => e.JoinDate),
+            "status" => desc
+                ? q.OrderByDescending(e => e.Status)
+                : q.OrderBy(e => e.Status),
+            "createdat" => desc
+                ? q.OrderByDescending(e => e.CreatedAt)
+                : q.OrderBy(e => e.CreatedAt),
+            _ => q.OrderByDescending(e => e.CreatedAt),
+        };
     }
 
     private static decimal Percentage(int count, int total) =>
@@ -86,79 +184,42 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
         string DepartmentName,
         Guid? DesignationId,
         string DesignationName);
-    public async Task<PagedResult<EmployeeListItemDto>> ListAsync(EmployeeListQuery query, CancellationToken cancellationToken = default)
+    public async Task<PaginatedList<EmployeeListItemDto>> ListAsync(
+        EmployeeListQuery query,
+        CancellationToken cancellationToken = default)
     {
-        var q = db.Employees.AsNoTracking().Where(e => !e.IsDeleted);
+        query.Normalize();
 
-        if (query.CompanyId.HasValue)
+        var q = ApplyManpowerFilters(
+            db.Employees.AsNoTracking().Where(e => !e.IsDeleted),
+            query);
+
+        q = ApplyEmployeeListSort(q, query);
+
+        var projected = q.Select(e => new EmployeeListItemDto
         {
-            q = q.Where(e => e.CompanyId == query.CompanyId);
-        }
+            Id = e.Id,
+            PunchNumber = e.PunchNumber,
+            EmployeeID = e.EmployeeID,
+            FullName = e.FullName,
+            Email = e.Email,
+            CompanyId = e.CompanyId,
+            Status = e.Status,
+            Gender = e.Gender,
+            Religion = e.Religion,
+            BloodGroup = e.BloodGroup,
+            IsOtEnabled = e.IsOtEnabled,
+            JoinDate = e.JoinDate,
+            Phone = e.Phone,
+            DepartmentName = e.JobInfos.Where(j => j.IsCurrent)
+                .Select(j => j.Department != null ? j.Department.Name : null)
+                .FirstOrDefault(),
+            DesignationName = e.JobInfos.Where(j => j.IsCurrent)
+                .Select(j => j.Designation != null ? j.Designation.Name : null)
+                .FirstOrDefault(),
+        });
 
-        if (query.DepartmentId.HasValue)
-        {
-            q = q.Where(e => e.JobInfos.Any(j => j.IsCurrent && j.DepartmentId == query.DepartmentId));
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.Status) && !string.Equals(query.Status, "all", StringComparison.OrdinalIgnoreCase))
-        {
-            var status = query.Status.Trim().ToLower();
-            q = q.Where(e => e.Status.ToLower() == status);
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.Search))
-        {
-            var s = query.Search.Trim().ToLower();
-            q = q.Where(e => e.FullName.ToLower().Contains(s)
-                || e.EmployeeID.ToLower().Contains(s)
-                || e.PunchNumber.ToString().Contains(s)
-                || (e.Email != null && e.Email.ToLower().Contains(s)));
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.Gender) &&
-            !string.Equals(query.Gender, "all", StringComparison.OrdinalIgnoreCase))
-        {
-            q = q.Where(e => e.Gender == query.Gender);
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.Religion) &&
-            !string.Equals(query.Religion, "all", StringComparison.OrdinalIgnoreCase))
-        {
-            q = q.Where(e => e.Religion == query.Religion);
-        }
-
-        var total = await q.CountAsync(cancellationToken);
-        var items = await q
-            .OrderBy(e => e.EmployeeID)
-            .Skip((query.Page - 1) * query.PageSize)
-            .Take(query.PageSize)
-            .Select(e => new EmployeeListItemDto
-            {
-                Id = e.Id,
-                PunchNumber = e.PunchNumber,
-                EmployeeID = e.EmployeeID,
-                FullName = e.FullName,
-                Email = e.Email,
-                CompanyId = e.CompanyId,
-                Status = e.Status,
-                Gender = e.Gender,
-                Religion = e.Religion,
-                BloodGroup = e.BloodGroup,
-                IsOtEnabled = e.IsOtEnabled,
-                JoinDate = e.JoinDate,
-                Phone = e.Phone,
-                DepartmentName = e.JobInfos.Where(j => j.IsCurrent).Select(j => j.Department != null ? j.Department.Name : null).FirstOrDefault(),
-                DesignationName = e.JobInfos.Where(j => j.IsCurrent).Select(j => j.Designation != null ? j.Designation.Name : null).FirstOrDefault()
-            })
-            .ToListAsync(cancellationToken);
-
-        return new PagedResult<EmployeeListItemDto>
-        {
-            Items = items,
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+        return await projected.ToPaginatedListAsync(query, cancellationToken);
     }
 
     public async Task<EmployeeDetailsDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -282,15 +343,25 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
         };
     }
 
-    public async Task<PagedResult<ManpowerListItemDto>> ManpowerListAsync(ManpowerListQuery query, CancellationToken cancellationToken = default)
+    public async Task<PaginatedList<ManpowerListItemDto>> ManpowerListAsync(
+        ManpowerListQuery query,
+        CancellationToken cancellationToken = default)
     {
+        query.Normalize();
+
         var q = ApplyManpowerFilters(db.Employees.AsNoTracking().Where(e => !e.IsDeleted), query);
+        q = ApplyEmployeeListSort(q, query);
 
         var total = await q.CountAsync(cancellationToken);
-        var rows = await q
-            .OrderBy(e => e.EmployeeID)
-            .Skip((query.Page - 1) * query.PageSize)
-            .Take(query.PageSize)
+        var page = query.Page;
+        var pageSize = query.PageSize;
+        var getAll = query.GetAll;
+
+        var paged = getAll
+            ? q
+            : q.Skip((page - 1) * pageSize).Take(pageSize);
+
+        var rows = await paged
             .Select(e => new
             {
                 e.Id,
@@ -333,13 +404,8 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
             GrossSalary = r.GrossSalary
         }).ToList();
 
-        return new PagedResult<ManpowerListItemDto>
-        {
-            Items = items,
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+        var pagination = PaginationMetadata.Create(page, pageSize, total, getAll);
+        return PaginatedList<ManpowerListItemDto>.From(items, pagination);
     }
 
     public async Task<ManpowerSummaryDto> ManpowerSummaryAsync(
@@ -426,10 +492,12 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
         return await MapTransfersAsync(rows, cancellationToken);
     }
 
-    public async Task<PagedResult<EmployeeTransferDto>> ListTransfersAsync(
+    public async Task<PaginatedList<EmployeeTransferDto>> ListTransfersAsync(
         EmployeeTransferListQuery query,
         CancellationToken cancellationToken = default)
     {
+        query.Normalize();
+
         var q = db.EmployeeTransfers.AsNoTracking()
             .Where(t => !t.IsDeleted)
             .Join(
@@ -454,22 +522,24 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
         }
 
         var total = await q.CountAsync(cancellationToken);
-        var rows = await q
-            .OrderByDescending(x => x.Transfer.EffectiveDate)
-            .Skip((query.Page - 1) * query.PageSize)
-            .Take(query.PageSize)
+        var page = query.Page;
+        var pageSize = query.PageSize;
+        var getAll = query.GetAll;
+
+        var ordered = q.OrderByDescending(x => x.Transfer.EffectiveDate);
+        var paged = getAll
+            ? ordered
+            : ordered
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize);
+
+        var rows = await paged
             .Select(x => x.Transfer)
             .ToListAsync(cancellationToken);
 
         var items = await MapTransfersAsync(rows, cancellationToken);
-
-        return new PagedResult<EmployeeTransferDto>
-        {
-            Items = items,
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+        var pagination = PaginationMetadata.Create(page, pageSize, total, getAll);
+        return PaginatedList<EmployeeTransferDto>.From(items, pagination);
     }
 
     private async Task<IReadOnlyList<EmployeeTransferDto>> MapTransfersAsync(
@@ -499,18 +569,24 @@ public sealed class EmployeeReadService(HrDbContext db) : IEmployeeReadService
         return rows.Select(t =>
         {
             employees.TryGetValue(t.EmployeeId, out var emp);
-            return new EmployeeTransferDto(
-                t.Id,
-                t.EmployeeId,
-                emp?.EmployeeID ?? string.Empty,
-                emp?.FullName ?? string.Empty,
-                t.FromDepartmentId,
-                t.FromDepartmentId.HasValue ? deptNames.GetValueOrDefault(t.FromDepartmentId.Value) : null,
-                t.ToDepartmentId,
-                t.ToDepartmentId.HasValue ? deptNames.GetValueOrDefault(t.ToDepartmentId.Value) : null,
-                t.EffectiveDate,
-                t.Reason,
-                t.CreatedAt);
+            return new EmployeeTransferDto
+            {
+                Id = t.Id,
+                EmployeeEntityId = t.EmployeeId,
+                EmployeeCode = emp?.EmployeeID ?? string.Empty,
+                FullName = emp?.FullName ?? string.Empty,
+                FromDepartmentId = t.FromDepartmentId,
+                FromDepartmentName = t.FromDepartmentId.HasValue
+                    ? deptNames.GetValueOrDefault(t.FromDepartmentId.Value)
+                    : null,
+                ToDepartmentId = t.ToDepartmentId,
+                ToDepartmentName = t.ToDepartmentId.HasValue
+                    ? deptNames.GetValueOrDefault(t.ToDepartmentId.Value)
+                    : null,
+                EffectiveDate = t.EffectiveDate,
+                Reason = t.Reason,
+                CreatedAt = t.CreatedAt,
+            };
         }).ToList();
     }
 }

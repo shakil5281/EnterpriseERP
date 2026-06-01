@@ -4,13 +4,18 @@ namespace HRService.Application.Employees;
 
 public interface IEmployeeReadService
 {
-    Task<PagedResult<EmployeeListItemDto>> ListAsync(EmployeeListQuery query, CancellationToken cancellationToken = default);
+    Task<PaginatedList<EmployeeListItemDto>> ListAsync(EmployeeListQuery query, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<EmployeeListItemDto>> ListByIdsAsync(IReadOnlyList<Guid> ids, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<EmployeeLookupDto>> ListLookupsByIdsAsync(
+        IReadOnlyList<Guid> ids,
+        Guid? companyId = null,
+        CancellationToken cancellationToken = default);
     Task<EmployeeDetailsDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<PagedResult<ManpowerListItemDto>> ManpowerListAsync(ManpowerListQuery query, CancellationToken cancellationToken = default);
+    Task<PaginatedList<ManpowerListItemDto>> ManpowerListAsync(ManpowerListQuery query, CancellationToken cancellationToken = default);
     Task<ManpowerSummaryDto> ManpowerSummaryAsync(ManpowerSummaryQuery query, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<EmployeeStatusHistoryDto>> GetStatusHistoryAsync(Guid employeeId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<EmployeeTransferDto>> GetEmployeeTransfersAsync(Guid employeeId, CancellationToken cancellationToken = default);
-    Task<PagedResult<EmployeeTransferDto>> ListTransfersAsync(EmployeeTransferListQuery query, CancellationToken cancellationToken = default);
+    Task<PaginatedList<EmployeeTransferDto>> ListTransfersAsync(EmployeeTransferListQuery query, CancellationToken cancellationToken = default);
 }
 
 public class EmployeeTransferListQuery : PagedRequest
@@ -25,22 +30,19 @@ public class EmployeeListQuery : PagedRequest
 {
     public Guid? CompanyId { get; set; }
     public Guid? DepartmentId { get; set; }
+    public Guid? SectionId { get; set; }
+    public Guid? DesignationId { get; set; }
     public string? Status { get; set; }
     public string? Gender { get; set; }
     public string? Religion { get; set; }
-}
-
-public class ManpowerListQuery : EmployeeListQuery
-{
-    public Guid? SectionId { get; set; }
-    public Guid? DesignationId { get; set; }
-}
-
-public class ManpowerSummaryQuery : ManpowerListQuery
-{
+    public string? EmployeeId { get; set; }
     public DateTime? JoinDateFrom { get; set; }
     public DateTime? JoinDateTo { get; set; }
 }
+
+public class ManpowerListQuery : EmployeeListQuery;
+
+public class ManpowerSummaryQuery : ManpowerListQuery;
 
 public sealed class ManpowerSummaryDto
 {
@@ -60,6 +62,15 @@ public sealed class SummaryBucketDto
     public string Name { get; init; } = string.Empty;
     public int Count { get; init; }
     public decimal Percentage { get; init; }
+}
+
+public sealed class EmployeeLookupDto
+{
+    public Guid Id { get; init; }
+    public string EmployeeCode { get; init; } = string.Empty;
+    public string FullName { get; init; } = string.Empty;
+    public string? DepartmentName { get; init; }
+    public string? DesignationName { get; init; }
 }
 
 public sealed class EmployeeListItemDto
@@ -167,18 +178,21 @@ public sealed record EmployeeDocumentItemDto(
 public sealed record EmployeeStatusHistoryDto(
     Guid Id, string Status, DateTime EffectiveFrom, string? Remarks, DateTimeOffset CreatedAt);
 
-public sealed record EmployeeTransferDto(
-    Guid Id,
-    Guid EmployeeId,
-    string EmployeeID,
-    string FullName,
-    Guid? FromDepartmentId,
-    string? FromDepartmentName,
-    Guid? ToDepartmentId,
-    string? ToDepartmentName,
-    DateTime EffectiveDate,
-    string? Reason,
-    DateTimeOffset CreatedAt);
+/// <summary>Transfer list row. Uses EmployeeEntityId + EmployeeCode (not EmployeeId/EmployeeID) to avoid JSON name collisions.</summary>
+public sealed class EmployeeTransferDto
+{
+    public Guid Id { get; init; }
+    public Guid EmployeeEntityId { get; init; }
+    public string EmployeeCode { get; init; } = string.Empty;
+    public string FullName { get; init; } = string.Empty;
+    public Guid? FromDepartmentId { get; init; }
+    public string? FromDepartmentName { get; init; }
+    public Guid? ToDepartmentId { get; init; }
+    public string? ToDepartmentName { get; init; }
+    public DateTime EffectiveDate { get; init; }
+    public string? Reason { get; init; }
+    public DateTimeOffset CreatedAt { get; init; }
+}
 
 public record EmployeeJobInfoDto(
     Guid? DepartmentId, string? DepartmentName,

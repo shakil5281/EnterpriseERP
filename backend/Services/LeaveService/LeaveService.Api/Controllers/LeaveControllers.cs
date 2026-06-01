@@ -1,7 +1,10 @@
 using Erp.BuildingBlocks.CommonResponses;
+using Erp.BuildingBlocks.Contracts.Pagination;
 using LeaveService.Application.Features.LeaveApplications;
 using LeaveService.Application.Features.LeaveTypes;
 using LeaveService.Application.Features.Operational;
+using HolidayListQuery = LeaveService.Application.Features.Operational.HolidayListQuery;
+using LeaveEncashmentListQuery = LeaveService.Application.Features.Operational.LeaveEncashmentListQuery;
 using LeaveService.Contracts.DayTypes;
 using LeaveService.Contracts.EarnLeaves;
 using LeaveService.Contracts.Holidays;
@@ -52,6 +55,14 @@ public sealed class LeaveTypesController(IMediator mediator) : ControllerBase
     [Authorize(Policy = "Permission:LEAVE_TYPE_MANAGE")]
     public async Task<ActionResult<ApiResponse<LeaveTypeDto>>> Deactivate(Guid id, CancellationToken cancellationToken) =>
         Ok(ApiResponse<LeaveTypeDto>.Ok(await mediator.Send(new SetLeaveTypeActiveCommand(id, false, null), cancellationToken), HttpContext.TraceIdentifier));
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "Permission:LEAVE_TYPE_MANAGE")]
+    public async Task<ActionResult<ApiResponse<string>>> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        await mediator.Send(new DeleteLeaveTypeCommand(id, null), cancellationToken);
+        return Ok(ApiResponse<string>.Ok("Leave type deleted.", HttpContext.TraceIdentifier));
+    }
 }
 
 [ApiController]
@@ -111,8 +122,17 @@ public sealed class LeavesController(IMediator mediator) : ControllerBase
         Ok(ApiResponse<LeaveApplicationDto>.Ok(await mediator.Send(new ApplyLeaveCommand(request), cancellationToken), HttpContext.TraceIdentifier));
 
     [HttpGet("applications")]
-    public async Task<ActionResult<ApiResponse<IReadOnlyList<LeaveApplicationDto>>>> Applications([FromQuery] Guid companyId, CancellationToken cancellationToken) =>
-        Ok(ApiResponse<IReadOnlyList<LeaveApplicationDto>>.Ok(await mediator.Send(new ListLeaveApplicationsQuery(companyId), cancellationToken), HttpContext.TraceIdentifier));
+    public async Task<ActionResult<PaginatedApiResponse<LeaveApplicationListItemDto>>> Applications(
+        [FromQuery] LeaveApplicationListQuery query,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ListLeaveApplicationsQuery(query), cancellationToken);
+        return Ok(PaginatedApiResponse<LeaveApplicationListItemDto>.Ok(
+            result.Data,
+            result.Pagination,
+            "Data loaded successfully",
+            HttpContext.TraceIdentifier));
+    }
 
     [HttpGet("applications/{id:guid}")]
     public async Task<ActionResult<ApiResponse<LeaveApplicationDto>>> ApplicationById(Guid id, CancellationToken cancellationToken)
@@ -157,8 +177,17 @@ public sealed class HolidaysController(IMediator mediator) : ControllerBase
         Ok(ApiResponse<HolidayDto>.Ok(await mediator.Send(new CreateHolidayCommand(request), cancellationToken), HttpContext.TraceIdentifier));
 
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<IReadOnlyList<HolidayDto>>>> List([FromQuery] Guid companyId, [FromQuery] int year, CancellationToken cancellationToken) =>
-        Ok(ApiResponse<IReadOnlyList<HolidayDto>>.Ok(await mediator.Send(new GetHolidaysQuery(companyId, year), cancellationToken), HttpContext.TraceIdentifier));
+    public async Task<ActionResult<PaginatedApiResponse<HolidayDto>>> List(
+        [FromQuery] HolidayListQuery query,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetHolidaysQuery(query), cancellationToken);
+        return Ok(PaginatedApiResponse<HolidayDto>.Ok(
+            result.Data,
+            result.Pagination,
+            "Data loaded successfully",
+            HttpContext.TraceIdentifier));
+    }
 
     [HttpPut("{id:guid}")]
     [Authorize(Policy = "Permission:HOLIDAY_MANAGE")]
@@ -222,8 +251,17 @@ public sealed class LeaveEncashmentsController(IMediator mediator) : ControllerB
         Ok(ApiResponse<LeaveEncashmentDto>.Ok(await mediator.Send(new CreateLeaveEncashmentCommand(request), cancellationToken), HttpContext.TraceIdentifier));
 
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<IReadOnlyList<LeaveEncashmentDto>>>> List([FromQuery] Guid companyId, [FromQuery] int? year, CancellationToken cancellationToken) =>
-        Ok(ApiResponse<IReadOnlyList<LeaveEncashmentDto>>.Ok(await mediator.Send(new GetLeaveEncashmentsQuery(companyId, year), cancellationToken), HttpContext.TraceIdentifier));
+    public async Task<ActionResult<PaginatedApiResponse<LeaveEncashmentDto>>> List(
+        [FromQuery] LeaveEncashmentListQuery query,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetLeaveEncashmentsQuery(query), cancellationToken);
+        return Ok(PaginatedApiResponse<LeaveEncashmentDto>.Ok(
+            result.Data,
+            result.Pagination,
+            "Data loaded successfully",
+            HttpContext.TraceIdentifier));
+    }
 
     [HttpPatch("{id:guid}/approve")]
     [Authorize(Policy = "Permission:LEAVE_ENCASHMENT_APPROVE")]

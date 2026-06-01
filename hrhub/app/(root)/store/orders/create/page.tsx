@@ -15,53 +15,54 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import storeService, { StoreOrder, StoreOrderItem, Buyer, StoreItem } from "@/lib/services/store"
+import { StorePageShell, StoreCompanyGate } from "@/components/store"
+import { storeService } from "@/lib/services/store"
+import type { StoreBuyer, StoreItem, CreateStoreOrderLineRequest } from "@/lib/types/store"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
-export default function CreateOrderPage() {
+function CreateOrderContent({ companyId }: { companyId: string }) {
     const router = useRouter();
-    const [buyers, setBuyers] = React.useState<Buyer[]>([]);
+    const [buyers, setBuyers] = React.useState<StoreBuyer[]>([]);
     const [items, setItems] = React.useState<StoreItem[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [submitting, setSubmitting] = React.useState(false);
 
-    // Order State
     const [orderNumber, setOrderNumber] = React.useState(`ORD-${Date.now().toString().slice(-6)}`);
-    const [buyerId, setBuyerId] = React.useState<number>(0);
+    const [buyerId, setBuyerId] = React.useState("");
     const [orderDate, setOrderDate] = React.useState(new Date().toISOString().split('T')[0]);
-    const [orderItems, setOrderItems] = React.useState<Partial<StoreOrderItem>[]>([]);
+    const [lines, setLines] = React.useState<Partial<CreateStoreOrderLineRequest>[]>([]);
 
     React.useEffect(() => {
         const fetchData = async () => {
             try {
                 const [buyersData, itemsData] = await Promise.all([
-                    storeService.getBuyers(),
-                    storeService.getItems()
+                    storeService.getBuyers(companyId),
+                    storeService.getItems(companyId),
                 ]);
                 setBuyers(buyersData);
                 setItems(itemsData);
-            } catch (error) {
+            } catch {
                 toast.error("Failed to load dependency data");
             } finally {
                 setLoading(false);
             }
         };
         fetchData();
-    }, []);
+    }, [companyId]);
 
     const addLine = () => {
-        setOrderItems([...orderItems, { itemId: 0, quantity: 0, unitPrice: 0 }]);
+        setLines([...lines, { itemId: "", quantity: 0, unitPrice: 0 }]);
     };
 
-    const updateLine = (index: number, field: keyof StoreOrderItem, value: any) => {
-        const newList = [...orderItems];
+    const updateLine = (index: number, field: keyof CreateStoreOrderLineRequest, value: string | number) => {
+        const newList = [...lines];
         newList[index] = { ...newList[index], [field]: value };
-        setOrderItems(newList);
+        setLines(newList);
     };
 
     const removeLine = (index: number) => {
-        setOrderItems(orderItems.filter((_, i) => i !== index));
+        setLines(lines.filter((_, i) => i !== index));
     };
 
     const handleSaveOrder = async () => {
@@ -69,28 +70,35 @@ export default function CreateOrderPage() {
             toast.error("Please select a buyer");
             return;
         }
-        if (orderItems.length === 0) {
+        if (lines.length === 0) {
             toast.error("Add at least one item to the order");
             return;
         }
-        if (orderItems.some(i => !i.itemId || !i.quantity)) {
+        if (lines.some(i => !i.itemId || !i.quantity)) {
             toast.error("Please fill in all item details");
             return;
         }
 
         setSubmitting(true);
         try {
-            const order: Partial<StoreOrder> = {
+            await storeService.addOrder({
+                companyId,
                 orderNumber,
                 buyerId,
                 orderDate,
-                status: "Pending",
-                orderItems: orderItems as StoreOrderItem[]
-            };
-            await storeService.addOrder(order);
+                lines: lines.map(l => {
+                    const item = items.find(i => i.id === l.itemId);
+                    return {
+                        itemId: l.itemId!,
+                        quantity: l.quantity!,
+                        unitPrice: l.unitPrice ?? item?.unitPrice ?? 0,
+                        unitName: item?.unitName ?? undefined,
+                    };
+                }),
+            });
             toast.success("Order created successfully!");
             router.push("/store/orders/list");
-        } catch (error) {
+        } catch {
             toast.error("Failed to create order");
         } finally {
             setSubmitting(false);
@@ -106,7 +114,7 @@ export default function CreateOrderPage() {
     }
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400">
@@ -131,13 +139,13 @@ export default function CreateOrderPage() {
                         </div>
                         <div className="space-y-2">
                             <Label>Buyer / Customer</Label>
-                            <Select value={buyerId?.toString()} onValueChange={v => setBuyerId(parseInt(v))}>
+                            <Select value={buyerId} onValueChange={setBuyerId}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select Buyer" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {buyers.map(b => (
-                                        <SelectItem key={b.id} value={b.id.toString()}>{b.buyerName}</SelectItem>
+                                        <SelectItem key={b.id} value={b.id}>{b.buyerName}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
@@ -175,28 +183,28 @@ export default function CreateOrderPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {orderItems.length === 0 ? (
+                                    {lines.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={4} className="h-40 text-center text-muted-foreground italic">
-                                                No items added. Click "Add Line" to start.
+                                                No items added. Click &quot;Add Line&quot; to start.
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        orderItems.map((entry, idx) => {
+                                        lines.map((entry, idx) => {
                                             const selectedItem = items.find(i => i.id === entry.itemId);
                                             return (
                                                 <TableRow key={idx} className="hover:bg-muted/30 transition-colors">
                                                     <TableCell>
                                                         <Select
-                                                            value={entry.itemId?.toString()}
-                                                            onValueChange={v => updateLine(idx, 'itemId', parseInt(v))}
+                                                            value={entry.itemId}
+                                                            onValueChange={v => updateLine(idx, 'itemId', v)}
                                                         >
                                                             <SelectTrigger className="border-none shadow-none focus:ring-0">
                                                                 <SelectValue placeholder="Select Product" />
                                                             </SelectTrigger>
                                                             <SelectContent>
                                                                 {items.map(i => (
-                                                                    <SelectItem key={i.id} value={i.id.toString()}>{i.itemName} ({i.itemCode})</SelectItem>
+                                                                    <SelectItem key={i.id} value={i.id}>{i.itemName} ({i.itemCode})</SelectItem>
                                                                 ))}
                                                             </SelectContent>
                                                         </Select>
@@ -230,7 +238,7 @@ export default function CreateOrderPage() {
                             <Button
                                 className="gap-2 bg-green-600 hover:bg-green-700 text-white border-none px-8"
                                 onClick={handleSaveOrder}
-                                disabled={submitting || orderItems.length === 0}
+                                disabled={submitting || lines.length === 0}
                             >
                                 {submitting ? <IconLoader2 className="animate-spin size-4" /> : <IconDeviceFloppy className="size-4" />}
                                 Complete Order
@@ -239,6 +247,16 @@ export default function CreateOrderPage() {
                     </CardContent>
                 </Card>
             </div>
-        </div>
-    )
+        </>
+    );
+}
+
+export default function CreateOrderPage() {
+    return (
+        <StorePageShell>
+            <StoreCompanyGate>
+                {(companyId) => <CreateOrderContent companyId={companyId} />}
+            </StoreCompanyGate>
+        </StorePageShell>
+    );
 }

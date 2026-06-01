@@ -17,6 +17,14 @@ public sealed class UserProfileResponse
 
 	public string FullName { get; init; } = string.Empty;
 
+	public string? ProfilePictureUrl { get; init; }
+
+	public string? Country { get; init; }
+
+	public string? City { get; init; }
+
+	public string? Bio { get; init; }
+
 	public bool IsActive { get; init; }
 
 	public UserStatus Status { get; init; }

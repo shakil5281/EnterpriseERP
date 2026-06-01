@@ -19,8 +19,8 @@ import {
 import { NativeSelect } from "@/components/ui/native-select"
 import { toast } from "sonner"
 import { organogramService, Group } from "@/lib/services/organogram"
-import { companyService, Company } from "@/lib/services/company"
-import { useAuth } from "@/components/providers/auth-provider"
+import { ScopedCompanySelect } from "@/components/hr/scoped-company-select"
+import { useCompanyFilterScope } from "@/hooks/use-company-filter-scope"
 
 export default function GroupPage() {
     const [data, setData] = React.useState<Group[]>([])
@@ -28,29 +28,14 @@ export default function GroupPage() {
     const [isSheetOpen, setIsSheetOpen] = React.useState(false)
     const [currentGroup, setCurrentGroup] = React.useState<Partial<Group>>({})
     const [isEditing, setIsEditing] = React.useState(false)
-    const [companies, setCompanies] = React.useState<Company[]>([])
     const [selectedCompany, setSelectedCompany] = React.useState<string>("all")
-    const { user, hasRole, loading: authLoading } = useAuth()
+    const { companies, isCompanyLocked } = useCompanyFilterScope()
 
     const fetchGroups = async () => {
         try {
             setLoading(true)
-            let companyIdParam: string | undefined = undefined;
-
-            if (selectedCompany !== "all") {
-                companyIdParam = selectedCompany;
-            } else {
-                if (user && !hasRole("SuperAdmin") && !hasRole("Admin")) {
-                    const assignedIds = user.assignedCompanyIds || [];
-                    if (assignedIds.length > 0) {
-                        companyIdParam = assignedIds[0];
-                    } else {
-                        setData([]);
-                        setLoading(false);
-                        return;
-                    }
-                }
-            }
+            const companyIdParam =
+                selectedCompany !== "all" ? selectedCompany : undefined
 
             const groups = await organogramService.getGroups({
                 companyId: companyIdParam
@@ -64,38 +49,9 @@ export default function GroupPage() {
         }
     }
 
-    const fetchCompanies = async () => {
-        try {
-            const comps = await companyService.getAll()
-            if (hasRole("SuperAdmin") || hasRole("Admin")) {
-                setCompanies(comps)
-            } else {
-                const assignedIds = user?.assignedCompanyIds || []
-                const userCompanies = comps.filter(c => assignedIds.includes(c.entityId))
-                setCompanies(userCompanies)
-
-                if (userCompanies.length > 0) {
-                    if (selectedCompany === "all" || !userCompanies.find(c => c.entityId === selectedCompany)) {
-                        setSelectedCompany(userCompanies[0].entityId)
-                    }
-                }
-            }
-        } catch (error) {
-            console.error(error)
-        }
-    }
-
     React.useEffect(() => {
-        if (!authLoading && user) {
-            fetchCompanies()
-        }
-    }, [authLoading, user])
-
-    React.useEffect(() => {
-        if (!authLoading && user) {
-            fetchGroups()
-        }
-    }, [selectedCompany, authLoading, user])
+        fetchGroups()
+    }, [selectedCompany])
 
     const columns: ColumnDef<Group>[] = [
         {
@@ -195,16 +151,12 @@ export default function GroupPage() {
             <div className="flex items-center gap-4">
                 <div className="w-64">
                     <Label className="text-xs uppercase font-bold text-gray-400 mb-1 block">Filter by Company</Label>
-                    <NativeSelect
-                        value={selectedCompany}
-                        onChange={(e) => setSelectedCompany(e.target.value)}
-                        disabled={(!hasRole("SuperAdmin") && !hasRole("Admin")) && companies.length <= 1}
-                    >
-                        {(hasRole("SuperAdmin") || hasRole("Admin")) && <option value="all">All Companies</option>}
-                        {companies.map(c => (
-                            <option key={c.entityId} value={c.entityId}>{c.companyNameEn}</option>
-                        ))}
-                    </NativeSelect>
+                    <ScopedCompanySelect
+                        value={selectedCompany === "all" ? "" : selectedCompany}
+                        onChange={(entityId) => setSelectedCompany(entityId || "all")}
+                        showAllOption={!isCompanyLocked}
+                        className="h-10"
+                    />
                 </div>
             </div>
 

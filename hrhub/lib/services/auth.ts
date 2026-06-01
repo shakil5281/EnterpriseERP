@@ -5,6 +5,8 @@ import {
   syncActiveCompanyStorage,
   clearActiveCompanyStorage,
 } from "@/lib/active-company-storage";
+import { clearSessionCookie, syncSessionCookieFromLocalStorage } from "@/lib/auth-cookie-sync";
+import { clearLogoutFlag } from "@/lib/logout";
 import type { Company } from "@/lib/services/company";
 
 /** Auth API + HR gateway use camelCase envelopes. */
@@ -28,6 +30,10 @@ interface UserProfileEnvelope {
   email: string;
   phoneNumber?: string | null;
   fullName: string;
+  profilePictureUrl?: string | null;
+  country?: string | null;
+  city?: string | null;
+  bio?: string | null;
   isActive: boolean;
   status: number;
   isLocked: boolean;
@@ -61,6 +67,7 @@ export interface LoginResponse {
   username: string;
   fullName: string;
   roles: string[];
+  permissions?: string[];
   requiresTwoFactor?: boolean;
   pendingTwoFactorToken?: string | null;
 }
@@ -71,8 +78,10 @@ export interface User {
   email: string;
   fullName: string;
   phoneNumber?: string;
+  profilePictureUrl?: string;
   country?: string;
   city?: string;
+  bio?: string;
   isActive: boolean;
   status?: number;
   isLocked?: boolean;
@@ -142,6 +151,7 @@ export interface UserProfileUpdateDto {
   phoneNumber?: string;
   country?: string;
   city?: string;
+  bio?: string;
 }
 
 export interface ChangePasswordDto {
@@ -157,9 +167,10 @@ interface LoginCredentials {
 }
 
 function storeSessionFromLogin(data: LoginEnvelope) {
+  clearLogoutFlag();
   const token = data.accessToken;
-  document.cookie = `token=${token}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax`;
   localStorage.setItem("token", token);
+  document.cookie = `token=${token}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax`;
   localStorage.setItem("refreshToken", data.refreshToken);
   const isSuperAdmin = data.roles?.includes("SuperAdmin") ?? false;
   localStorage.setItem(
@@ -170,6 +181,7 @@ function storeSessionFromLogin(data: LoginEnvelope) {
       email: data.email,
       id: data.userId,
       roles: data.roles,
+      permissions: data.permissions ?? [],
     }),
   );
   syncActiveCompanyStorage({
@@ -177,6 +189,31 @@ function storeSessionFromLogin(data: LoginEnvelope) {
     isSuperAdmin,
     accessToken: token,
   });
+}
+
+function persistUserSession(profile: User) {
+  if (typeof window === "undefined") return;
+  const existing = localStorage.getItem("user");
+  let parsed: Record<string, unknown> = {};
+  if (existing) {
+    try {
+      parsed = JSON.parse(existing) as Record<string, unknown>;
+    } catch {
+      parsed = {};
+    }
+  }
+  localStorage.setItem(
+    "user",
+    JSON.stringify({
+      ...parsed,
+      id: profile.id,
+      username: profile.username,
+      fullName: profile.fullName,
+      email: profile.email,
+      profilePictureUrl: profile.profilePictureUrl ?? null,
+    }),
+  );
+  window.dispatchEvent(new Event("profile-updated"));
 }
 
 function mapProfileToUser(p: UserProfileEnvelope): User {
@@ -193,6 +230,10 @@ function mapProfileToUser(p: UserProfileEnvelope): User {
     email: p.email,
     fullName: p.fullName,
     phoneNumber: p.phoneNumber ?? undefined,
+    profilePictureUrl: p.profilePictureUrl ?? undefined,
+    country: p.country ?? undefined,
+    city: p.city ?? undefined,
+    bio: p.bio ?? undefined,
     isActive: p.isActive,
     status: p.status,
     isLocked: p.isLocked,
@@ -262,6 +303,7 @@ export const authService = {
         username: data.username,
         fullName: data.fullName,
         roles: [...data.roles],
+        permissions: [...(data.permissions ?? [])],
         requiresTwoFactor: false,
         pendingTwoFactorToken: null,
       };
@@ -304,6 +346,7 @@ export const authService = {
         username: data.username,
         fullName: data.fullName,
         roles: [...data.roles],
+        permissions: [...(data.permissions ?? [])],
         requiresTwoFactor: false,
         pendingTwoFactorToken: null,
       };
@@ -562,17 +605,71 @@ export const authService = {
     return unwrapApiData<UserLoginHistory[]>(res.data);
   },
 
-  async updateProfile(_data: UserProfileUpdateDto): Promise<{ success: boolean; message: string }> {
-    return {
-      success: false,
-      message: "Profile update is not implemented on Auth API v1 yet.",
-    };
+  async updateProfile(data: UserProfileUpdateDto): Promise<{ success: boolean; message: string; user?: User }> {
+    try {
+      const res = await api.put("auth/me/profile", data);
+      const p = unwrapApiData<UserProfileEnvelope>(res.data);
+      const user = mapProfileToUser(p);
+      persistUserSession(user);
+      return { success: true, message: "Profile updated.", user };
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: unknown }; message?: string };
+      return {
+        success: false,
+        message:
+          firstApiErrorMessage(ax.response?.data) ||
+          ax.message ||
+          "Failed to update profile.",
+      };
+    }
+  },
+
+  async uploadProfilePicture(file: File): Promise<{ success: boolean; message: string; user?: User }> {
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await api.post("auth/me/profile-picture", form);
+      const p = unwrapApiData<UserProfileEnvelope>(res.data);
+      const user = mapProfileToUser(p);
+      persistUserSession(user);
+      return { success: true, message: "Profile picture updated.", user };
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: unknown }; message?: string };
+      return {
+        success: false,
+        message:
+          firstApiErrorMessage(ax.response?.data) ||
+          ax.message ||
+          "Failed to upload profile picture.",
+      };
+    }
+  },
+
+  async removeProfilePicture(): Promise<{ success: boolean; message: string; user?: User }> {
+    try {
+      const res = await api.delete("auth/me/profile-picture");
+      const p = unwrapApiData<UserProfileEnvelope>(res.data);
+      const user = mapProfileToUser(p);
+      persistUserSession(user);
+      return { success: true, message: "Profile picture removed.", user };
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: unknown }; message?: string };
+      return {
+        success: false,
+        message:
+          firstApiErrorMessage(ax.response?.data) ||
+          ax.message ||
+          "Failed to remove profile picture.",
+      };
+    }
   },
 
   async getProfile(): Promise<User> {
     const res = await api.get("auth/me");
     const p = unwrapApiData<UserProfileEnvelope>(res.data);
-    return mapProfileToUser(p);
+    const user = mapProfileToUser(p);
+    persistUserSession(user);
+    return user;
   },
 
   async enableTwoFactor(): Promise<TwoFactorSetupResponse> {
@@ -601,11 +698,20 @@ export const authService = {
     }
   },
 
-  async changePassword(_data: ChangePasswordDto): Promise<{ success: boolean; message: string }> {
-    return {
-      success: false,
-      message: "Change password is not implemented on Auth API v1 yet.",
-    };
+  async changePassword(data: ChangePasswordDto): Promise<{ success: boolean; message: string }> {
+    try {
+      await api.put("auth/me/password", data);
+      return { success: true, message: "Password changed successfully." };
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: unknown }; message?: string };
+      return {
+        success: false,
+        message:
+          firstApiErrorMessage(ax.response?.data) ||
+          ax.message ||
+          "Failed to change password.",
+      };
+    }
   },
 
   async deleteUser(_userId: string): Promise<{ success: boolean; message: string }> {
@@ -616,19 +722,8 @@ export const authService = {
   },
 
   logout: async () => {
-    try {
-      if (typeof window !== "undefined" && localStorage.getItem("token")) {
-        await api.post("auth/revoke");
-      }
-    } catch {
-      /* ignore */
-    }
-    document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
-    localStorage.removeItem("token");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("user");
-    clearActiveCompanyStorage();
-    window.location.href = "/login";
+    const { performLogout } = await import("@/lib/logout");
+    await performLogout();
   },
 
   getCurrentUser: () => {

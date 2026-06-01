@@ -1,3 +1,4 @@
+using Erp.BuildingBlocks.Contracts.Pagination;
 using Erp.BuildingBlocks.EventBus;
 using LeaveService.Application.Common.Exceptions;
 using LeaveService.Application.Common.Interfaces;
@@ -11,7 +12,17 @@ namespace LeaveService.Application.Features.LeaveApplications;
 
 public sealed record ApplyLeaveCommand(ApplyLeaveRequest Request) : IRequest<LeaveApplicationDto>;
 
-public sealed record ListLeaveApplicationsQuery(Guid CompanyId) : IRequest<IReadOnlyList<LeaveApplicationDto>>;
+public sealed class LeaveApplicationListQuery : PagedRequest
+{
+    public Guid CompanyId { get; set; }
+    public string? Status { get; set; }
+    public Guid? EmployeeId { get; set; }
+    public DateOnly? FromDate { get; set; }
+    public DateOnly? ToDate { get; set; }
+}
+
+public sealed record ListLeaveApplicationsQuery(LeaveApplicationListQuery Query)
+    : IRequest<PaginatedList<LeaveApplicationListItemDto>>;
 
 public sealed record GetLeaveApplicationByIdQuery(Guid Id) : IRequest<LeaveApplicationDto?>;
 
@@ -33,9 +44,17 @@ public sealed class ApplyLeaveCommandHandler(
     public async Task<LeaveApplicationDto> Handle(ApplyLeaveCommand cmd, CancellationToken cancellationToken)
     {
         var r = cmd.Request;
-        if (!await employees.IsEmployeeActiveAsync(r.CompanyId, r.EmployeeId, cancellationToken))
+        var employeeValidation = await employees.ValidateEmployeeAsync(r.CompanyId, r.EmployeeId, cancellationToken);
+        switch (employeeValidation.Status)
         {
-            throw new LeaveBusinessException("Inactive employee cannot apply leave.");
+            case EmployeeValidationStatus.NotFound:
+                throw new LeaveBusinessException("Employee not found.");
+            case EmployeeValidationStatus.WrongCompany:
+                throw new LeaveBusinessException("Employee does not belong to the selected company.");
+            case EmployeeValidationStatus.Inactive:
+                throw new LeaveBusinessException("Inactive employee cannot apply leave.");
+            case EmployeeValidationStatus.Unreachable:
+                throw new LeaveBusinessException("Unable to verify employee status with HR.");
         }
 
         var leaveType = await uow.LeaveTypes.GetByIdAsync(r.LeaveTypeId, cancellationToken)
@@ -178,27 +197,80 @@ public sealed class ApplyLeaveCommandHandler(
             isPaid = leaveType.IsPaid,
         }, cancellationToken);
 
+        var result = await uow.LeaveApplications.GetWithStepsAsync(app.Id, cancellationToken)
+                     ?? throw new LeaveBusinessException("Leave application not found after save.");
+
         if (requiresApproval)
         {
-            var first = await uow.LeaveApplications.GetWithStepsAsync(app.Id, cancellationToken);
-            var step = first?.ApprovalSteps.OrderBy(s => s.ApprovalLevel).FirstOrDefault(s => s.ApproverUserId.HasValue);
+            var step = result.ApprovalSteps.OrderBy(s => s.ApprovalLevel).FirstOrDefault(s => s.ApproverUserId.HasValue);
             if (step?.ApproverUserId is { } uid)
             {
                 await notifications.SendLeaveApprovalNotificationAsync(uid, app.Id, cancellationToken);
             }
         }
 
-        var result = await uow.LeaveApplications.GetWithStepsAsync(app.Id, cancellationToken);
-        return LeaveApplicationDtoFactory.FromEntity(result!);
+        return LeaveApplicationDtoFactory.FromEntity(result);
     }
 }
 
-public sealed class ListLeaveApplicationsQueryHandler(ILeaveUnitOfWork uow) : IRequestHandler<ListLeaveApplicationsQuery, IReadOnlyList<LeaveApplicationDto>>
+public sealed class ListLeaveApplicationsQueryHandler(
+    ILeaveUnitOfWork uow,
+    IEmployeeServiceClient employees) : IRequestHandler<ListLeaveApplicationsQuery, PaginatedList<LeaveApplicationListItemDto>>
 {
-    public async Task<IReadOnlyList<LeaveApplicationDto>> Handle(ListLeaveApplicationsQuery request, CancellationToken cancellationToken)
+    public async Task<PaginatedList<LeaveApplicationListItemDto>> Handle(
+        ListLeaveApplicationsQuery request,
+        CancellationToken cancellationToken)
     {
-        var list = await uow.LeaveApplications.ListByCompanyAsync(request.CompanyId, cancellationToken);
-        return list.Select(a => new LeaveApplicationDto(a.Id, a.CompanyId, a.EmployeeId, a.LeaveTypeId, a.LeaveType?.LeaveCode, a.FromDate, a.ToDate, a.TotalDays, a.IsHalfDay, a.HalfDayType, a.Reason, a.Status, a.AppliedBy, a.AppliedAt, a.ApprovedAt, a.RejectedAt, a.CancelledAt, Array.Empty<LeaveApprovalStepDto>())).ToList();
+        var q = request.Query;
+        q.Normalize();
+
+        var filter = new LeaveApplicationListFilter
+        {
+            CompanyId = q.CompanyId,
+            Status = q.Status,
+            EmployeeId = q.EmployeeId,
+            FromDate = q.FromDate,
+            ToDate = q.ToDate,
+            Page = q.Page,
+            PageSize = q.PageSize,
+            GetAll = q.GetAll,
+        };
+
+        var (items, total) = await uow.LeaveApplications.ListByCompanyPagedAsync(filter, cancellationToken);
+        var employeeIds = items.Select(x => x.EmployeeId).Distinct().ToArray();
+        var lookups = await employees.LookupEmployeesAsync(employeeIds, cancellationToken);
+        var lookupById = lookups.ToDictionary(x => x.Id);
+
+        var data = items.Select(a =>
+        {
+            lookupById.TryGetValue(a.EmployeeId, out var emp);
+            return new LeaveApplicationListItemDto(
+                a.Id,
+                a.CompanyId,
+                a.EmployeeId,
+                emp?.EmployeeCode ?? string.Empty,
+                emp?.FullName ?? string.Empty,
+                emp?.DepartmentName,
+                emp?.DesignationName,
+                a.LeaveTypeId,
+                a.LeaveType?.LeaveCode,
+                a.LeaveType?.LeaveName,
+                a.FromDate,
+                a.ToDate,
+                a.TotalDays,
+                a.IsHalfDay,
+                a.HalfDayType,
+                a.Reason,
+                a.Status,
+                a.AppliedBy,
+                a.AppliedAt,
+                a.ApprovedAt,
+                a.RejectedAt,
+                a.CancelledAt);
+        }).ToList();
+
+        var pagination = PaginationMetadata.Create(q.Page, q.PageSize, total, q.GetAll);
+        return PaginatedList<LeaveApplicationListItemDto>.From(data, pagination);
     }
 }
 
@@ -264,8 +336,7 @@ public sealed class ApproveLeaveCommandHandler(
         {
             await audit.WriteAsync(app.CompanyId, r.ApprovedBy, "LeaveApprovalStepApproved", nameof(LeaveApplication), app.Id, $"Level {current.ApprovalLevel}", cancellationToken);
             await uow.SaveChangesAsync(cancellationToken);
-            var reloaded = await uow.LeaveApplications.GetWithStepsAsync(app.Id, cancellationToken);
-            return LeaveApplicationDtoFactory.FromEntity(reloaded!);
+            return LeaveApplicationDtoFactory.FromEntity(app);
         }
 
         app.Status = "Approved";
@@ -300,8 +371,7 @@ public sealed class ApproveLeaveCommandHandler(
             isPaid = leaveType.IsPaid,
         }, cancellationToken);
 
-        var final = await uow.LeaveApplications.GetWithStepsAsync(app.Id, cancellationToken);
-        return LeaveApplicationDtoFactory.FromEntity(final!);
+        return LeaveApplicationDtoFactory.FromEntity(app);
     }
 }
 

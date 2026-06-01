@@ -1,33 +1,31 @@
-import api from '../api';
+import { sewingService } from "@/lib/services/production/sewing";
+import { ACTIVE_KEY } from "@/lib/active-company-storage";
+import type { Guid } from "@/lib/types/production";
 
 export interface ProductionLine {
-    id: number;
-    sl: number;
-    lineName: string;
-    status: string;
+  id: Guid;
+  sl: number;
+  lineName: string;
+  status: string;
 }
 
-export type CreateProductionLine = Omit<ProductionLine, 'id'>;
+export type CreateProductionLine = { serialNo?: number; sl?: number; lineName: string; status: string };
 
 export const productionLineService = {
-    getAll: async () => {
-        const response = await api.get<ProductionLine[]>('/productionline');
-        return response.data;
-    },
-    getById: async (id: number) => {
-        const response = await api.get<ProductionLine>(`/productionline/${id}`);
-        return response.data;
-    },
-    create: async (data: CreateProductionLine) => {
-        const response = await api.post<ProductionLine>('/productionline', data);
-        return response.data;
-    },
-    update: async (id: number, data: CreateProductionLine) => {
-        const response = await api.put(`/productionline/${id}`, data);
-        return response.data;
-    },
-    delete: async (id: number) => {
-        const response = await api.delete(`/productionline/${id}`);
-        return response.data;
-    },
+  getAll: async (companyId?: Guid): Promise<ProductionLine[]> => {
+    const lines = await sewingService.getLines(companyId);
+    return lines.map((l) => ({ id: l.id, sl: l.serialNo, lineName: l.lineName, status: l.status }));
+  },
+  create: async (data: CreateProductionLine, companyId?: Guid) => {
+    const cid = companyId ?? (typeof window !== "undefined" ? localStorage.getItem(ACTIVE_KEY) ?? "" : "");
+    const serialNo = data.sl ?? data.serialNo ?? 0;
+    const created = await sewingService.createLine({ companyId: cid, serialNo, lineName: data.lineName, status: data.status });
+    return { id: created.id, sl: created.serialNo, lineName: created.lineName, status: created.status };
+  },
+  update: async (id: Guid, data: CreateProductionLine & { sl?: number }) => {
+    await sewingService.updateLine(id, { serialNo: data.sl ?? data.serialNo ?? 0, lineName: data.lineName, status: data.status });
+  },
+  delete: async (id: Guid) => {
+    await sewingService.deleteLine(id);
+  },
 };

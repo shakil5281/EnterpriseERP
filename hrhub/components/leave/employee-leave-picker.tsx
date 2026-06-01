@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 export interface EmployeeLeaveSelection {
   entityId: string;
+  companyEntityId?: string;
   employeeCard: number;
   employeeId: string;
   employeeName: string;
@@ -19,12 +20,14 @@ export interface EmployeeLeaveSelection {
 interface EmployeeLeavePickerProps {
   value: EmployeeLeaveSelection | null;
   onChange: (value: EmployeeLeaveSelection | null) => void;
+  companyEntityId?: string;
   disabled?: boolean;
 }
 
 export function EmployeeLeavePicker({
   value,
   onChange,
+  companyEntityId,
   disabled,
 }: EmployeeLeavePickerProps) {
   const [query, setQuery] = React.useState("");
@@ -39,12 +42,20 @@ export function EmployeeLeavePicker({
 
   const handleSearch = async () => {
     if (!query.trim()) return;
+    if (!companyEntityId) {
+      toast.error("Select a company in filters first");
+      return;
+    }
     setIsSearching(true);
     try {
-      const list = await employeeService.getEmployees({ searchTerm: query.trim() });
+      const list = await employeeService.getEmployees({
+        searchTerm: query.trim(),
+        companyEntityId,
+        status: "Active",
+      });
       setResults(list.slice(0, 8));
       if (list.length === 0) {
-        toast.error("No employees found");
+        toast.error("No active employees found for this company");
       }
     } catch {
       toast.error("Employee search failed");
@@ -60,6 +71,7 @@ export function EmployeeLeavePicker({
     }
     onChange({
       entityId: emp.entityId,
+      companyEntityId: emp.companyEntityId ?? companyEntityId,
       employeeCard: emp.id,
       employeeId: emp.employeeId,
       employeeName: emp.fullNameEn,
@@ -75,20 +87,24 @@ export function EmployeeLeavePicker({
       <Label>Employee</Label>
       <div className="flex gap-2">
         <Input
-          placeholder="Search by ID or name"
+          placeholder={
+            companyEntityId
+              ? "Search by ID or name (this company)"
+              : "Select company in filters first"
+          }
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
             if (value) onChange(null);
           }}
           onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleSearch())}
-          disabled={disabled}
+          disabled={disabled || !companyEntityId}
         />
         <button
           type="button"
           className="inline-flex h-9 w-9 items-center justify-center rounded-md border"
           onClick={handleSearch}
-          disabled={disabled || isSearching}
+          disabled={disabled || isSearching || !companyEntityId}
         >
           {isSearching ? (
             <IconLoader className="size-4 animate-spin" />
