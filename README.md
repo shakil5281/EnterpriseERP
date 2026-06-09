@@ -30,7 +30,7 @@ Key backend areas:
 - **Services/** — Auth, Company, HR, Shift, Attendance, Leave, Payroll, PunchData (Go), ImportExport (Go), and others
 - **MicroserviceShells/** — thin hosts for domains still migrating off the monolith
 
-See [backend/README.md](backend/README.md) and [backend/docs/architecture.md](backend/docs/architecture.md) for service ports, route prefixes, and event-driven integration details.
+See [docs/build-run-and-services.md](docs/build-run-and-services.md) for **full build, run, and service management**. For HR/punch/attendance/leave/payroll/import flows and ERDs, see [docs/hr-domain-architecture.md](docs/hr-domain-architecture.md). See also [backend/README.md](backend/README.md) and [backend/docs/architecture.md](backend/docs/architecture.md) for routing and event-driven integration.
 
 ## Prerequisites
 

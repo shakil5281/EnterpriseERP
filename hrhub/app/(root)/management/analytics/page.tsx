@@ -137,11 +137,15 @@ export default function AnalyticsPage() {
                         <CardTitle className="text-base font-semibold">Attendance Trend</CardTitle>
                         <CardDescription>Present count against workforce target</CardDescription>
                     </CardHeader>
-                    <CardContent className="h-[330px] w-full">
+                    <CardContent className="h-[330px] w-full min-w-0">
                         {isLoading ? (
                             <LoadingPanel />
                         ) : (
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer
+                                width="100%"
+                                height="100%"
+                                initialDimension={{ width: 640, height: 330 }}
+                            >
                                 <BarChart data={attendanceStats}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                                     <XAxis dataKey="date" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
@@ -161,11 +165,15 @@ export default function AnalyticsPage() {
                         <CardDescription>{departmentStats.length} department(s)</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="h-[220px]">
+                        <div className="h-[220px] min-w-0">
                             {isLoading ? (
                                 <LoadingPanel />
                             ) : (
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer
+                                    width="100%"
+                                    height="100%"
+                                    initialDimension={{ width: 320, height: 220 }}
+                                >
                                     <PieChart>
                                         <Pie data={departmentPie} dataKey="value" nameKey="name" innerRadius={55} outerRadius={80} paddingAngle={2}>
                                             {departmentPie.map((entry) => (

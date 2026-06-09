@@ -27,6 +27,7 @@ import {
   MerchTableCard,
 } from "@/components/merchandising"
 import { merchandisingService } from "@/lib/services/merchandising"
+import { firstApiErrorMessage } from "@/lib/api-response"
 import type { Buyer, MasterDataDto } from "@/lib/types/merchandising"
 import { cn } from "@/lib/utils"
 
@@ -117,7 +118,11 @@ function BrandsPageContent({ companyId }: { companyId: string }) {
       fetchData()
     } catch (error) {
       console.error(error)
-      toast.error("Failed to create brand")
+      const msg =
+        (error as { response?: { data?: unknown } })?.response?.data != null
+          ? firstApiErrorMessage((error as { response: { data: unknown } }).response.data)
+          : undefined
+      toast.error(msg || "Failed to create brand")
     }
   }
 

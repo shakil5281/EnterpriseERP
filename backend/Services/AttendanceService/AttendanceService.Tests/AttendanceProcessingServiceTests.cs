@@ -213,6 +213,89 @@ public class AttendanceProcessingServiceTests
         Assert.Equal(record.WorkingMinutes, record.OvertimeMinutes);
     }
 
+    // ── Boundary-based punch classification ──────────────────────────────────
+
+    [Fact]
+    public void DayShift_MultiplePunchesBeforeShiftStart_ShowsOnlyInTime()
+    {
+        // Many early taps (e.g. double-swipe at gate before shift) → InTime = first, no OutTime.
+        var date = new DateTime(2026, 5, 2);
+        var eval = CreateGeneralDayShiftEval(date);
+        var first  = date.AddHours(7).AddMinutes(40);
+        var second = date.AddHours(7).AddMinutes(50);
+        var third  = date.AddHours(7).AddMinutes(55);
+        var record = NewRecord(date);
+
+        _service.Process(
+            record,
+            [new AttendancePunchInput(first), new AttendancePunchInput(second), new AttendancePunchInput(third)],
+            eval);
+
+        Assert.Equal(first, record.InTime);
+        Assert.Null(record.OutTime);
+    }
+
+    [Fact]
+    public void DayShift_MultiplePunchesAfterShiftEnd_ShowsOnlyOutTime()
+    {
+        // Many late taps (e.g. double-swipe at exit after shift) → OutTime = last, no InTime.
+        var date = new DateTime(2026, 5, 2);
+        var eval = CreateGeneralDayShiftEval(date);
+        var first  = date.AddHours(17).AddMinutes(10);
+        var second = date.AddHours(17).AddMinutes(20);
+        var last   = date.AddHours(17).AddMinutes(30);
+        var record = NewRecord(date);
+
+        _service.Process(
+            record,
+            [new AttendancePunchInput(first), new AttendancePunchInput(second), new AttendancePunchInput(last)],
+            eval);
+
+        Assert.Null(record.InTime);
+        Assert.Equal(last, record.OutTime);
+    }
+
+    [Fact]
+    public void DayShift_SinglePunchAfterShiftEnd_ShowsOutTimeOnly()
+    {
+        // A single punch that is after ShiftEnd must be OutTime, not InTime.
+        var date = new DateTime(2026, 5, 2);
+        var eval = CreateGeneralDayShiftEval(date);
+        var latePunch = date.AddHours(17).AddMinutes(15);
+        var record = NewRecord(date);
+
+        _service.Process(record, [new AttendancePunchInput(latePunch)], eval);
+
+        Assert.Null(record.InTime);
+        Assert.Equal(latePunch, record.OutTime);
+    }
+
+    [Fact]
+    public void DayShift_PunchesOnBothSides_PicksFirstBeforeAndLastAfter()
+    {
+        // Multiple pre-shift AND post-shift punches → InTime = earliest pre-shift, OutTime = latest post-shift.
+        var date = new DateTime(2026, 5, 2);
+        var eval = CreateGeneralDayShiftEval(date);
+        var earlyFirst  = date.AddHours(7).AddMinutes(40);
+        var earlySecond = date.AddHours(7).AddMinutes(52);
+        var lateFirst   = date.AddHours(17).AddMinutes(15);
+        var lateLast    = date.AddHours(17).AddMinutes(40);
+        var record = NewRecord(date);
+
+        _service.Process(
+            record,
+            [
+                new AttendancePunchInput(earlyFirst),
+                new AttendancePunchInput(earlySecond),
+                new AttendancePunchInput(lateFirst),
+                new AttendancePunchInput(lateLast),
+            ],
+            eval);
+
+        Assert.Equal(earlyFirst, record.InTime);
+        Assert.Equal(lateLast, record.OutTime);
+    }
+
     [Fact]
     public void WorkingDay_NoPunches_RemainsAbsent()
     {

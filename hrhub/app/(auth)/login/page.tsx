@@ -12,6 +12,7 @@ export default function Page() {
           src="https://images.unsplash.com/photo-1590069261209-f8e9b8642343?ixlib=rb-4.0.3&auto=format&fit=crop&w=1376&q=80"
           alt="Login background"
           fill
+          sizes="(max-width: 1023px) 0vw, 50vw"
           priority
           className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
         />

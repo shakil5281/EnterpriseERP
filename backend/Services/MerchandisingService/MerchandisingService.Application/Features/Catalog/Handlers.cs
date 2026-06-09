@@ -78,7 +78,11 @@ public sealed class CatalogCommandHandlers(
 
         await uow.Styles.AddAsync(style, cancellationToken);
         await uow.SaveChangesAsync(cancellationToken);
-        await cache.RemoveAsync(CacheKeys.Styles(request.CompanyId, request.BuyerId), cancellationToken);
+        foreach (var key in CacheKeys.StyleListInvalidationKeys(request.CompanyId, request.BuyerId))
+        {
+            await cache.RemoveAsync(key, cancellationToken);
+        }
+
         await publisher.PublishAsync(new StyleCreated(style.CompanyId, style.Id, style.BuyerId, style.StyleNo), cancellationToken);
         return mapper.Map<StyleDto>(style);
     }
@@ -94,7 +98,11 @@ public sealed class CatalogCommandHandlers(
         style.FabricDescription = command.Request.FabricDescription;
         style.UpdatedAt = BusinessTime.Now;
         await uow.SaveChangesAsync(cancellationToken);
-        await cache.RemoveAsync(CacheKeys.Styles(style.CompanyId, style.BuyerId), cancellationToken);
+        foreach (var key in CacheKeys.StyleListInvalidationKeys(style.CompanyId, style.BuyerId))
+        {
+            await cache.RemoveAsync(key, cancellationToken);
+        }
+
         return mapper.Map<StyleDto>(style);
     }
 }
@@ -121,7 +129,7 @@ public sealed class CatalogQueryHandlers(IUnitOfWork uow, IMapper mapper, IRedis
     {
         var key = CacheKeys.Styles(query.CompanyId, query.BuyerId);
         var cached = await cache.GetAsync<IReadOnlyList<StyleDto>>(key, cancellationToken);
-        if (cached is not null)
+        if (cached is { Count: > 0 })
         {
             return cached;
         }

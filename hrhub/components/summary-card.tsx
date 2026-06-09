@@ -77,8 +77,12 @@ export function SummaryCard({
         </div>
 
         {chartData && (
-          <div className="h-16 w-full -mt-2">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-16 w-full min-w-0 -mt-2">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+              initialDimension={{ width: 320, height: 64 }}
+            >
               <LineChart data={chartData}>
                 <YAxis hide domain={['dataMin - 5', 'dataMax + 5']} />
                 <Line

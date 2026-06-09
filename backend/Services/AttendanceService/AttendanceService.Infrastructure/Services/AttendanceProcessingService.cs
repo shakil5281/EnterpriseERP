@@ -147,75 +147,92 @@ public class AttendanceProcessingService : IAttendanceProcessingService
         ShiftEvaluationDto eval)
     {
         var orderedPunches = punches.OrderBy(p => p.PunchTime).ToList();
+
         if (orderedPunches.Count == 0)
         {
             if (!record.IsManualIn)
             {
+                record.InTime = null;
                 record.InPunchId = null;
             }
 
             if (!record.IsManualOut)
-            {
+            {  
+                record.OutTime = null;
                 record.OutPunchId = null;
             }
 
             return;
         }
 
-        if (orderedPunches.Count == 1)
-        {
-            if (!record.IsManualIn)
-            {
-                ApplyInPunch(record, orderedPunches[0]);
-            }
-
-            if (!record.IsManualOut)
-            {
-                record.OutPunchId = null;
-            }
-
-            return;
-        }
-
+        // Cross-day shifts: chronological first = IN, last = OUT.
         if (eval.IsCrossDay)
         {
             if (!record.IsManualIn)
-            {
                 ApplyInPunch(record, orderedPunches[0]);
-            }
 
             if (!record.IsManualOut)
-            {
                 ApplyOutPunch(record, orderedPunches[^1]);
-            }
 
             return;
         }
 
+        // Day shifts — classify every punch by its position relative to the shift boundaries.
+        //
+        //   Pre-shift  (PunchTime < ShiftStart) → InTime candidates only.
+        //     One or many early punches: the FIRST (earliest) is the actual arrival time.
+        //
+        //   Post-shift (PunchTime > ShiftEnd)   → OutTime candidates only.
+        //     One or many late punches: the LAST is the actual departure / OT end time.
+        //
+        //   During-shift punches fill in only when no boundary punch exists on that side.
         var shiftStart = eval.ShiftStart;
         var shiftEnd = eval.ShiftEnd;
 
+        var beforeShift = orderedPunches.Where(p => p.PunchTime < shiftStart).ToList();
+        var afterShift  = orderedPunches.Where(p => p.PunchTime > shiftEnd).ToList();
+        var duringShift = orderedPunches
+            .Where(p => p.PunchTime >= shiftStart && p.PunchTime <= shiftEnd)
+            .ToList();
+
         if (!record.IsManualIn)
         {
-            var inPunch = orderedPunches
-                .OrderBy(p => Math.Abs((p.PunchTime - shiftStart).TotalMinutes))
-                .First();
-            ApplyInPunch(record, inPunch);
+            if (beforeShift.Count > 0)
+                // One or many pre-shift punches → use the FIRST (actual arrival).
+                ApplyInPunch(record, beforeShift[0]);
+            else if (duringShift.Count > 0)
+                ApplyInPunch(record, duringShift[0]);
+            else
+            {
+                // All punches are post-shift → no InTime for this record.
+                record.InTime = null;
+                record.InPunchId = null;
+            }
         }
 
         if (!record.IsManualOut)
         {
-            var inTime = record.InTime ?? orderedPunches[0].PunchTime;
-            var afterIn = orderedPunches.Where(p => p.PunchTime > inTime).ToList();
-            if (afterIn.Count == 0)
+            if (afterShift.Count > 0)
             {
-                record.OutPunchId = null;
-                return;
+                // One or many post-shift punches → use the LAST (actual departure).
+                ApplyOutPunch(record, afterShift[^1]);
             }
+            else
+            {
+                // No post-shift punches: look for the latest during-shift punch after InTime.
+                var inTime = record.InTime;
+                var outCandidates = duringShift
+                    .Where(p => !inTime.HasValue || p.PunchTime > inTime.Value)
+                    .ToList();
 
-            var earlyOutThreshold = shiftEnd.AddMinutes(-eval.Policy.EarlyOutBeforeMinutes);
-            var outCandidates = afterIn.Where(p => p.PunchTime >= earlyOutThreshold).ToList();
-            ApplyOutPunch(record, outCandidates.Count > 0 ? outCandidates[^1] : afterIn[^1]);
+                if (outCandidates.Count > 0)
+                    ApplyOutPunch(record, outCandidates[^1]);
+                else
+                {
+                    record.OutTime = null;
+                    record.OutPunchId = null;
+                }
+            }
         }
     }
 

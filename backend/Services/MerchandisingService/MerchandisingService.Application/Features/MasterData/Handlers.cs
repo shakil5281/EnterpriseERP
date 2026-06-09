@@ -34,7 +34,7 @@ public sealed class MasterDataCommandHandlers(IMerchandisingDbContext db) :
     {
         var request = command.Request;
         var entity = CreateEntity(command.Resource, request.CompanyId, request.Code.Trim(), request.Name.Trim(), request.Extra);
-        db.Add(entity);
+        AddEntity(db, entity);
         await db.SaveChangesAsync(cancellationToken);
         return MasterDataMapper.Map(command.Resource, entity);
     }
@@ -55,9 +55,45 @@ public sealed class MasterDataCommandHandlers(IMerchandisingDbContext db) :
     public async Task<Unit> Handle(DeleteMasterDataCommand command, CancellationToken cancellationToken)
     {
         var entity = await GetEntityAsync(command.Resource, command.Id, cancellationToken) ?? throw new KeyNotFoundException("Master data record not found.");
-        db.Remove(entity);
+        RemoveEntity(db, entity);
         await db.SaveChangesAsync(cancellationToken);
         return Unit.Value;
+    }
+
+    private static void AddEntity(IMerchandisingDbContext db, object entity)
+    {
+        switch (entity)
+        {
+            case ColorMaster c: db.Add(c); break;
+            case SizeMaster s: db.Add(s); break;
+            case SizeRatioTemplate t: db.Add(t); break;
+            case UnitMaster u: db.Add(u); break;
+            case CurrencyMaster cur: db.Add(cur); break;
+            case FabricTypeMaster f: db.Add(f); break;
+            case TrimsTypeMaster tr: db.Add(tr); break;
+            case SupplierMaster sup: db.Add(sup); break;
+            case Brand b: db.Add(b); break;
+            case GarmentCategory g: db.Add(g); break;
+            default: throw new InvalidOperationException("Invalid master data resource.");
+        }
+    }
+
+    private static void RemoveEntity(IMerchandisingDbContext db, object entity)
+    {
+        switch (entity)
+        {
+            case ColorMaster c: db.Remove(c); break;
+            case SizeMaster s: db.Remove(s); break;
+            case SizeRatioTemplate t: db.Remove(t); break;
+            case UnitMaster u: db.Remove(u); break;
+            case CurrencyMaster cur: db.Remove(cur); break;
+            case FabricTypeMaster f: db.Remove(f); break;
+            case TrimsTypeMaster tr: db.Remove(tr); break;
+            case SupplierMaster sup: db.Remove(sup); break;
+            case Brand b: db.Remove(b); break;
+            case GarmentCategory g: db.Remove(g); break;
+            default: throw new InvalidOperationException("Invalid master data resource.");
+        }
     }
 
     private static object CreateEntity(string resource, Guid companyId, string code, string name, string? extra) => resource.ToLowerInvariant() switch
@@ -87,7 +123,7 @@ public sealed class MasterDataCommandHandlers(IMerchandisingDbContext db) :
             case FabricTypeMaster f: f.FabricTypeName = name; f.IsActive = isActive; break;
             case TrimsTypeMaster tr: tr.TrimsTypeName = name; tr.IsActive = isActive; break;
             case SupplierMaster sup: sup.SupplierName = name; sup.IsActive = isActive; break;
-            case Brand b: b.BrandName = name; b.IsActive = isActive; break;
+            case Brand b: b.BrandName = name; b.IsActive = isActive; if (extra is not null && Guid.TryParse(extra, out var buyerId)) b.BuyerId = buyerId; break;
             case GarmentCategory g: g.CategoryName = name; g.IsActive = isActive; break;
         }
     }

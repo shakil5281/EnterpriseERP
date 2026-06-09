@@ -195,8 +195,12 @@ export default function Page() {
                 </div>
                 <SelectGroup />
               </CardHeader>
-              <CardContent className="h-[350px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
+              <CardContent className="h-[350px] w-full min-w-0">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  initialDimension={{ width: 640, height: 350 }}
+                >
                   <AreaChart data={attendanceData.map(d => ({ name: d.date, present: d.presentCount, target: d.targetCount }))}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} dy={10} />
@@ -230,8 +234,12 @@ export default function Page() {
                   <CardTitle className="text-base font-bold">Workforce Allocation</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col items-center">
-                  <div className="h-[220px] w-full relative flex items-center justify-center">
-                    <ResponsiveContainer width="100%" height="100%">
+                  <div className="h-[220px] w-full min-w-0 relative flex items-center justify-center">
+                    <ResponsiveContainer
+                      width="100%"
+                      height="100%"
+                      initialDimension={{ width: 320, height: 220 }}
+                    >
                       <PieChart>
                         <Pie
                           data={deptData.map(d => ({ name: d.departmentName, value: d.employeeCount, color: d.color }))}
