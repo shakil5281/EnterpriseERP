@@ -89,7 +89,10 @@ export function LeaveAdvancedFilter({
   }, []);
 
   const onFilterChangeRef = React.useRef(onFilterChange);
-  onFilterChangeRef.current = onFilterChange;
+
+  React.useEffect(() => {
+    onFilterChangeRef.current = onFilterChange;
+  }, [onFilterChange]);
 
   React.useEffect(() => {
     if (companiesLoading || initialized || companies.length === 0) return;

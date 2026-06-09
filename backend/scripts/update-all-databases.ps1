@@ -12,13 +12,13 @@ $EfServices = @(
     @{ Name = "Leave";       Api = "Services\LeaveService\LeaveService.Api";         Project = "Services\LeaveService\LeaveService.Infrastructure";         Context = "LeaveDbContext" },
     @{ Name = "Shift";       Api = "Services\ShiftService\ShiftService.Api";         Project = "Services\ShiftService\ShiftService.Infrastructure";         Context = "ShiftDbContext" },
     @{ Name = "Payroll";     Api = "Services\PayrollService\PayrollService.Api";     Project = "Services\PayrollService\PayrollService.Infrastructure";     Context = "PayrollDbContext" },
-    @{ Name = "Notification"; Api = "Services\NotificationService\NotificationService.Api"; Project = "Services\NotificationService\NotificationService.Infrastructure"; Context = "NotificationDbContext" },
     @{ Name = "Quality";     Api = "Services\QualityService\QualityService.API";     Project = "Services\QualityService\QualityService.Infrastructure";     Context = "QualityDbContext" },
     @{ Name = "Finishing";   Api = "Services\FinishingService\FinishingService.API";   Project = "Services\FinishingService\FinishingService.Infrastructure";   Context = "FinishingDbContext" },
     @{ Name = "Security";    Api = "Services\SecurityService\SecurityService.API";    Project = "Services\SecurityService\SecurityService.Infrastructure";    Context = "SecurityDbContext" },
     @{ Name = "Accounts";    Api = "Services\AccountsService\AccountsService.API";    Project = "Services\AccountsService\AccountsService.Infrastructure";    Context = "AccountsDbContext" },
     @{ Name = "Cutting";     Api = "Services\CuttingService\CuttingService.API";     Project = "Services\CuttingService\CuttingService.Infrastructure";     Context = "CuttingDbContext" },
     @{ Name = "Merchandising"; Api = "Services\MerchandisingService\MerchandisingService.API"; Project = "Services\MerchandisingService\MerchandisingService.Infrastructure"; Context = "MerchandisingDbContext" },
+    @{ Name = "Procurement"; Api = "Services\ProcurementService\ProcurementService.API"; Project = "Services\ProcurementService\ProcurementService.Infrastructure"; Context = "ProcurementDbContext" },
     @{ Name = "Inventory"; Api = "Services\InventoryService\InventoryService.API"; Project = "Services\InventoryService\InventoryService.Infrastructure"; Context = "InventoryDbContext" },
     @{ Name = "Store"; Api = "Services\StoreService\StoreService.API"; Project = "Services\StoreService\StoreService.Infrastructure"; Context = "StoreDbContext" }
 )
@@ -29,6 +29,10 @@ Write-Step "Applying EF Core migrations"
 foreach ($svc in $EfServices) {
     $apiPath = Join-Path $Backend $svc.Api
     $projPath = Join-Path $Backend $svc.Project
+    if (-not (Test-Path $apiPath) -or -not (Test-Path $projPath)) {
+        Write-Warning "Skip $($svc.Name): project path not found"
+        continue
+    }
     $projFile = Get-ChildItem -Path $projPath -Filter "*.csproj" | Select-Object -First 1
     $apiFile = Get-ChildItem -Path $apiPath -Filter "*.csproj" | Select-Object -First 1
     if (-not $projFile -or -not $apiFile) {

@@ -20,6 +20,9 @@ public sealed class MerchandisingServiceClient(HttpClient httpClient) : IMerchan
 
 public sealed class ReportExportClient(HttpClient httpClient) : IReportExportClient
 {
-    public Task<ReportExportFile> ExportAsync(string title, string format, IReadOnlyList<string> columns, IReadOnlyList<IReadOnlyList<string>> rows, string? bearerToken, CancellationToken cancellationToken = default) =>
-        Task.FromResult(new ReportExportFile([], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{title}.xlsx"));
+    public Task<ReportExportFile> ExportAsync(string title, string format, IReadOnlyList<string> columns, IReadOnlyList<IReadOnlyList<string>> rows, string? bearerToken, CancellationToken cancellationToken = default)
+    {
+        _ = httpClient;
+        return Task.FromResult(new ReportExportFile([], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{title}.xlsx"));
+    }
 }

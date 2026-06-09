@@ -56,7 +56,7 @@ function PaymentSheetPageContent({ companyId }: { companyId: string }) {
           const buyer = buyerMap.get(order.buyerId);
           let paymentTerms = buyer?.paymentTerms ?? "—";
           let incoterms = "—";
-          let lcBank = "—";
+          const lcBank = "—";
 
           try {
             const details: OrderDetails = await merchandisingService.getOrderDetails(

@@ -302,8 +302,8 @@ public sealed class PayrollExportsController(IMediator mediator, IReportExportCl
             response.Data,
             [
                 new ReportColumn<FestivalBonusBankSheetRowDto>("Employee ID", r => r.EmployeeId.ToString()),
-                new ReportColumn<FestivalBonusBankSheetRowDto>("Bank Account", r => r.BankAccountNo),
-                new ReportColumn<FestivalBonusBankSheetRowDto>("Bank Name", r => r.BankName),
+                new ReportColumn<FestivalBonusBankSheetRowDto>("Bank Account", r => r.BankAccountNo ?? string.Empty),
+                new ReportColumn<FestivalBonusBankSheetRowDto>("Bank Name", r => r.BankName ?? string.Empty),
                 new ReportColumn<FestivalBonusBankSheetRowDto>("Bonus Amount", r => r.NetPayable.ToString("0.00")),
             ],
             PeriodMeta(companyId, yearNo, monthNo));

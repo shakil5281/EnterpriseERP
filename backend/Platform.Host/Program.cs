@@ -50,7 +50,6 @@ using Erp.BuildingBlocks.Hosting;
 using Erp.BuildingBlocks.CommonSecurity;
 using AuthService.Application.Abstractions.CompanyAccess;
 using EnterpriseERP.Platform.Host.ImportExport;
-using EnterpriseERP.Platform.Host.Middleware;
 using EnterpriseERP.Platform.Host.Services;
 using Asp.Versioning;
 using FinishingService.API.Controllers;

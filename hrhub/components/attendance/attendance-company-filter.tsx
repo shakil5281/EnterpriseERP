@@ -146,7 +146,10 @@ export function AttendanceCompanyFilter({
   ]);
 
   const applyFiltersRef = React.useRef(applyFilters);
-  applyFiltersRef.current = applyFilters;
+
+  React.useEffect(() => {
+    applyFiltersRef.current = applyFilters;
+  }, [applyFilters]);
 
   React.useEffect(() => {
     if (!companyEntityId) return;

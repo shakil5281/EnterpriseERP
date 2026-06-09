@@ -41,8 +41,12 @@ export function useNotificationStream({
   enabled = true,
 }: UseNotificationStreamOptions) {
   const abortRef = useRef<AbortController | null>(null);
+  const reconnectRef = useRef<(() => void) | null>(null);
   const onNotifRef = useRef(onNotification);
-  onNotifRef.current = onNotification;
+
+  useEffect(() => {
+    onNotifRef.current = onNotification;
+  }, [onNotification]);
 
   const connect = useCallback(async () => {
     if (!recipientId || !enabled || typeof window === "undefined") return;
@@ -88,9 +92,15 @@ export function useNotificationStream({
     } catch (err) {
       if (controller.signal.aborted) return;
       // Reconnect after drop
-      setTimeout(connect, 5000);
+      setTimeout(() => reconnectRef.current?.(), 5000);
     }
   }, [recipientId, enabled]);
+
+  useEffect(() => {
+    reconnectRef.current = () => {
+      void connect();
+    };
+  }, [connect]);
 
   useEffect(() => {
     connect();
